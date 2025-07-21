@@ -1,0 +1,5 @@
+recursive-include devify *.so
+recursive-include devify *.mo
+recursive-exclude samples *
+
+recursive-include devify *

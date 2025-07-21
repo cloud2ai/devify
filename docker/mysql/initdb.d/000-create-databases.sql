@@ -1,0 +1,4 @@
+CREATE DATABASE IF NOT EXISTS devify;
+CREATE USER 'devify'@'%' IDENTIFIED BY 'devifyPass';
+GRANT ALL PRIVILEGES ON devify.* TO 'devify'@'%';
+FLUSH PRIVILEGES;

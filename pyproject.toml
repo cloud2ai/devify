@@ -1,0 +1,48 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "devify"
+version = "0.1.0"
+description = "Django starter template"
+authors = [
+    {name = "Ray Sun", email = "xiaoquqi@gmail.com"}
+]
+requires-python = ">=3.10"
+dependencies = [
+    "django==5.1.4",
+    "djangorestframework==3.15.2",
+    "djangorestframework_simplejwt==5.3.1",
+    "djangorestframework-camel-case==1.4.2",
+    "dj-rest-auth==7.0.0",
+    "dj-rest-auth[with_social]",
+    "drf-spectacular",
+    "python-dotenv",
+    "dj_database_url==2.3.0",
+    "mysqlclient==2.1.1",
+    "celery==5.3.1",
+    "django-celery-beat==2.7.0",
+    "django_celery_results",
+    "flower==2.0.1",
+    "redis",
+    "gunicorn==20.1.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "ipdb==0.13.13",
+    "ipython==8.29.0",
+    "mkdocs==1.6.1",
+    "flake8==7.1.1",
+    "mock==5.1.0",
+    "factory-boy==3.3.1",
+    "pytest-django==4.9.0",
+    "coverage==7.6.8",
+]
+
+[tool.setuptools]
+packages = ["devify"]
+
+[project.scripts]
+devify-manager = "devify.manage:main"

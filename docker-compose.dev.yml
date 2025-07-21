@@ -1,0 +1,122 @@
+version: "3.8"
+
+services:
+  devify-api:
+    image: devify:latest
+    container_name: devify-api
+    restart: unless-stopped
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    env_file:
+      - ./.env
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-mysql://$MYSQL_USER:$MYSQL_PASSWORD@mysql:$MYSQL_PORT/$MYSQL_DATABASE}
+    volumes:
+      - ./data/django/staticfiles:/opt/devify/core/staticfiles
+      - ./data/logs/api:/var/log/gunicorn
+      - ./devify:/opt/devify
+    networks:
+      - devify_network
+    depends_on:
+      - mysql
+    command: development
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:8000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+
+  devify-worker:
+    image: devify:latest
+    container_name: devify-worker
+    restart: unless-stopped
+    env_file:
+      - ./.env
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-mysql://$MYSQL_USER:$MYSQL_PASSWORD@mysql:$MYSQL_PORT/$MYSQL_DATABASE}
+    volumes:
+      - ./cache:/opt/cache
+      - ./data/logs/worker:/var/log/celery
+      - ./devify:/opt/devify
+    networks:
+      - devify_network
+    depends_on:
+      devify-api:
+        condition: service_started
+      mysql:
+        condition: service_started
+      redis:
+        condition: service_started
+    command: celery
+
+  devify-scheduler:
+    image: devify:latest
+    container_name: devify-scheduler
+    restart: unless-stopped
+    env_file:
+      - ./.env
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-mysql://$MYSQL_USER:$MYSQL_PASSWORD@mysql:$MYSQL_PORT/$MYSQL_DATABASE}
+    volumes:
+      - ./data/logs/scheduler:/var/log/celery
+      - ./devify:/opt/devify
+    networks:
+      - devify_network
+    depends_on:
+      devify-api:
+        condition: service_started
+      mysql:
+        condition: service_started
+      redis:
+        condition: service_started
+    command: celery-beat
+
+  mysql:
+    image: mariadb:11.6
+    container_name: devify-mariadb
+    restart: unless-stopped
+    env_file:
+      - ./.env
+    volumes:
+      - ./docker/mysql/etc/my.cnf:/etc/mysql/my.cnf
+      - ./docker/mysql/initdb.d:/docker-entrypoint-initdb.d
+      - ./data/mysql/data:/var/lib/mysql
+      - ./data/logs/mysql:/var/log/mysql
+    networks:
+      - devify_network
+
+  redis:
+    image: redis:alpine
+    container_name: devify-redis
+    restart: unless-stopped
+    command: redis-server
+    volumes:
+      - ./data/redis:/data
+      - ./data/logs/redis:/var/log/redis
+    networks:
+      - devify_network
+
+  flower:
+    image: devify:latest
+    container_name: devify-flower
+    restart: unless-stopped
+    env_file:
+      - ./.env
+    ports:
+      - "5555:5555"
+    depends_on:
+      devify-api:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    networks:
+      - devify_network
+    command: flower
+
+networks:
+  devify_network:
+    driver: bridge

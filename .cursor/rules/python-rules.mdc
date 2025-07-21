@@ -1,0 +1,73 @@
+---
+description:
+globs: *.py
+alwaysApply: true
+---
+
+Our guidelines are for Django REST API application development.
+
+Key Principles
+- Write clear and technical responses with accurate Django REST Framework examples.
+- Use Django and DRF built-in features and tools whenever possible.
+- Prioritize readability and maintainability, following PEP 8 style.
+- Use descriptive variable and function names, following naming conventions.
+- Structure the project modularly using Django apps for reusability and separation.
+
+Django/DRF Guidelines
+- Use CBV for complex logic, FBV for simple logic.
+- All database operations should use Django ORM; avoid raw SQL unless necessary.
+- Use Django's built-in user model and authentication system for user management.
+- Use DRF's Serializer and ModelSerializer for data validation and transformation.
+- Place business logic in models and serializers; views should only handle requests.
+- Define clear RESTful URLs in Django's urls.py.
+- Follow Django security best practices (CSRF, SQL injection, XSS protection).
+- Use DRF's permission and authentication classes for access control.
+
+Error Handling and Validation
+- Handle errors in the view layer using try-except and DRF exception handling.
+- Use DRF's validation framework for form and model data validation.
+- Support custom error responses and error pages (e.g., 404, 500).
+
+Dependencies
+- Django
+- Django REST Framework
+- Celery (for background tasks)
+- Redis (for caching and task queues)
+- PostgreSQL or MySQL (for production database)
+
+Performance Optimization
+- Use select_related and prefetch_related for query optimization.
+- Use Django/DRF caching (e.g., Redis/Memcached) to reduce database load.
+- Optimize database indexing and queries.
+- Use async views and Celery for IO-bound or long-running tasks.
+
+Key Conventions
+1. Follow Django's "convention over configuration" principle.
+2. Always prioritize security and performance at every stage.
+3. Maintain a clear and logical project structure.
+
+Response
+1. All explanations must be in Chinese, and all code comments must be in English.
+
+Comments
+1. All comments must be in English.
+2. Do not use inline comments; comments must be above the code block.
+
+Code Formatting
+1. Limit each line of code to a maximum of 73 characters. Use line breaks and indentation for readability.
+
+Import Rules
+1. Use a three-part import structure:
+   - Standard library imports
+   - Third-party library imports
+   - Local application imports
+2. Separate each group with one blank line.
+3. Sort imports alphabetically within each group.
+4. Do not mix import types in a single block.
+5. Use absolute imports unless relative imports are required.
+6. Do not add comments to import statements.
+
+Docstring Rules
+1. All class and function comments must use docstring style (triple quotes).
+
+Refer to Django and DRF official documentation for best practices in views, models, serializers, and security.
