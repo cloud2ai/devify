@@ -114,11 +114,16 @@ INSTALLED_APPS = [
     # A Django app that stores the results of Celery tasks in the database,
     # allowing for easy retrieval and management of task outcomes.
     'django_celery_results',
+
+    # A Django app that provides a JSON editor widget for Django admin,
+    # allowing users to edit JSON data in a more user-friendly way.
+    'django_json_widget',
 ]
 
 # Project-Specific Apps
 INSTALLED_APPS += [
     'accounts',
+    'v1.sample',
     'v1.jirabot',
 ]
 

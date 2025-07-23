@@ -14,10 +14,12 @@ services:
       - ./.env
     environment:
       DATABASE_URL: ${DATABASE_URL:-mysql://$MYSQL_USER:$MYSQL_PASSWORD@mysql:$MYSQL_PORT/$MYSQL_DATABASE}
+      EMAIL_ATTACHMENT_STORAGE_PATH: /opt/email_attachments
     volumes:
       - ./data/django/staticfiles:/opt/devify/core/staticfiles
       - ./data/logs/api:/var/log/gunicorn
       - ./devify:/opt/devify
+      - ./data/email_attachments:/opt/email_attachments
     networks:
       - devify_network
     depends_on:
@@ -38,10 +40,12 @@ services:
       - ./.env
     environment:
       DATABASE_URL: ${DATABASE_URL:-mysql://$MYSQL_USER:$MYSQL_PASSWORD@mysql:$MYSQL_PORT/$MYSQL_DATABASE}
+      EMAIL_ATTACHMENT_STORAGE_PATH: /opt/email_attachments
     volumes:
       - ./cache:/opt/cache
       - ./data/logs/worker:/var/log/celery
       - ./devify:/opt/devify
+      - ./data/email_attachments:/opt/email_attachments
     networks:
       - devify_network
     depends_on:

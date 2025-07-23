@@ -35,11 +35,11 @@ RUN curl -LsSf https://astral.sh/uv/install.sh | sh && \
     export PATH="/root/.local/bin:$PATH"
 
 # Set working directory
-WORKDIR /opt/mito
+WORKDIR /opt/devify
 
 # Copy project files
-COPY mito /opt/mito
-COPY pyproject.toml /opt/mito/
+COPY devify /opt/devify
+COPY pyproject.toml /opt/devify/
 
 # Install project dependencies
 RUN . /root/.bashrc && \
@@ -47,7 +47,7 @@ RUN . /root/.bashrc && \
     uv pip install --system -r requirements.txt
 
 # Create necessary directories
-RUN mkdir -p /var/log/gunicorn /var/log/celery /var/cache/mito
+RUN mkdir -p /var/log/gunicorn /var/log/celery /var/cache/devify
 
 # Copy entrypoint script
 COPY docker/entrypoint.sh /entrypoint.sh

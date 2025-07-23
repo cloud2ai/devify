@@ -37,11 +37,13 @@ services:
       DJANGO_SUPERUSER_USERNAME: ${DJANGO_SUPERUSER_USERNAME:-admin}
       DJANGO_SUPERUSER_EMAIL: ${DJANGO_SUPERUSER_EMAIL:-admin@example.com}
       DJANGO_SUPERUSER_PASSWORD: ${DJANGO_SUPERUSER_PASSWORD:-adminpassword}
+      EMAIL_ATTACHMENT_STORAGE_PATH: /opt/email_attachments
     volumes:
       - ./data/django/staticfiles:/opt/devify/core/staticfiles
       - ./cache:/opt/cache
       - ./data/logs/api:/var/log/gunicorn
       - ./devify:/opt/devify
+      - ./data/email_attachments:/opt/email_attachments
     networks:
       - devify_network
     depends_on:
@@ -73,10 +75,12 @@ services:
       OSS_REGION: ${OSS_REGION}
       OSS_USE_VIRTUAL_STYLE: ${OSS_USE_VIRTUAL_STYLE:-False}
       CELERY_LOG_LEVEL: ${CELERY_LOG_LEVEL:-DEBUG}
+      EMAIL_ATTACHMENT_STORAGE_PATH: /opt/email_attachments
     volumes:
       - ./cache:/opt/cache
       - ./data/logs/worker:/var/log/celery
       - ./devify:/opt/devify
+      - ./data/email_attachments:/opt/email_attachments
     networks:
       - devify_network
     depends_on:
