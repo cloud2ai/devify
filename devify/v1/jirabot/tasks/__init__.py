@@ -3,3 +3,5 @@ from .summary import llm_process_email
 from .jira import submit_issue_to_jira
 from .scheduler import schedule_email_processing_tasks
 from .stuck_rollback import reset_stuck_processing_emails
+from .email_fetch import scan_user_emails
+from .email_fetch import scan_all_users_emails

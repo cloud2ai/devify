@@ -1,4 +1,5 @@
 import base64
+import hashlib
 import logging
 import os
 import uuid
@@ -8,6 +9,7 @@ from typing import Dict, Generator, Optional
 import imaplib
 import mailparser
 from email_validator import validate_email, EmailNotValidError
+from django.utils import timezone
 
 logger = logging.getLogger(__name__)
 
@@ -52,6 +54,21 @@ class EmailClient:
         self._use_ssl = None
         self._folder = None
         self._search_criteria = None
+
+    def _generate_stable_message_id(self, mail, received_at) -> str:
+        """
+        Generate a stable unique message_id using key email fields.
+        """
+        subject = mail.subject or ''
+        sender = mail.from_[0][1] if mail.from_ else ''
+        recipients = ','.join(
+            to[1] for to in mail.to
+        ) if mail.to else ''
+        base = f"{subject}|{sender}|{recipients}|{received_at.isoformat()}"
+        msg_hash = hashlib.sha256(
+            base.encode('utf-8')
+        ).hexdigest()[:16]
+        return f"email_{msg_hash}"
 
     @property
     def client(self):
@@ -170,12 +187,21 @@ class EmailClient:
             for f in filters
             for c in self._process_filter_item(f)
         ]
-        max_age_days = self.email_filter_config.get('max_age_days')
-        if max_age_days:
-            since_date = self._get_since_date(max_age_days)
+
+        # Priority: use 'since' from config, then 'max_age_days'
+        since_date = self.email_filter_config.get('since')
+        if since_date:
             criteria.append(
                 f'{self.SEARCH_CRITERIA_SINCE} "{since_date}"'
             )
+        else:
+            max_age_days = self.email_filter_config.get('max_age_days')
+            if max_age_days:
+                since_date = self._get_since_date(max_age_days)
+                criteria.append(
+                    f'{self.SEARCH_CRITERIA_SINCE} "{since_date}"'
+                )
+
         self._search_criteria = (
             ' '.join(criteria) if criteria else self.SEARCH_CRITERIA_ALL
         )
@@ -257,25 +283,46 @@ class EmailClient:
         return payload.decode('utf-8', errors='ignore')
 
     def parse_email_with_mail_parser(
-        self, email_data: bytes, message_id: str
+        self, email_data: bytes
     ) -> Optional[Dict]:
         """
         Parse email using mail-parser library.
         """
+        # First stage: parse email data
         try:
             mail = mailparser.parse_from_bytes(email_data)
-            text_content, html_content = self._extract_email_body(mail, email_data)
+        except Exception as e:
+            preview = email_data[:100].decode('utf-8', errors='ignore')
+            logger.error(
+                f"Failed to parse email data - Error: {e}, Preview: {preview}"
+            )
+            return None
+
+        # Second stage: process parsed email
+        try:
+            text_content, html_content = self._extract_email_body(
+                mail, email_data)
             logger.debug(f"[Extracted Text] {text_content[:200]}")
             logger.debug(f"[Extracted HTML] {html_content[:200]}")
             raw_content = email_data.decode('utf-8', errors='ignore')
             attachments = self._process_attachments(mail)
             logger.debug(f"Found {len(attachments)} attachments")
+
+            # Generate stable message_id based on email content
+            received_at = mail.date or timezone.now()
+            # Ensure received_at has timezone info
+            if received_at and timezone.is_naive(received_at):
+                received_at = timezone.make_aware(received_at)
+            stable_message_id = self._generate_stable_message_id(
+                mail, received_at)
+            recipients = ', '.join(to[1] for to in mail.to) if mail.to else ''
+
             return {
-                'message_id': message_id,
+                'message_id': stable_message_id,
                 'subject': mail.subject or '',
                 'sender': mail.from_[0][1] if mail.from_ else '',
-                'recipients': ', '.join([to[1] for to in mail.to]) if mail.to else '',
-                'received_at': mail.date or datetime.now(),
+                'recipients': recipients,
+                'received_at': received_at,
                 'raw_content': raw_content,
                 'html_content': html_content,
                 'text_content': text_content,
@@ -283,7 +330,20 @@ class EmailClient:
                 'attachments': attachments
             }
         except Exception as e:
-            logger.error(f"Error parsing email message {message_id}: {e}")
+            subject = (
+                getattr(mail, 'subject', 'Unknown Subject')
+                or 'Unknown Subject'
+            )
+            sender = 'Unknown Sender'
+            try:
+                if hasattr(mail, 'from_') and mail.from_:
+                    sender = mail.from_[0][1]
+            except (IndexError, AttributeError):
+                pass
+            logger.error(
+                f"Error processing parsed email - Subject: {subject}, "
+                f"Sender: {sender}, Error: {e}"
+            )
             return None
 
     def _process_attachments(self, mail) -> list:
@@ -415,9 +475,8 @@ class EmailClient:
                         )
                         continue
                     raw_email = email_data[0][1]
-                    message_id = f"{self.folder}_{message_number.decode()}"
                     parsed_email = self.parse_email_with_mail_parser(
-                        raw_email, message_id
+                        raw_email
                     )
                     if parsed_email:
                         yield parsed_email

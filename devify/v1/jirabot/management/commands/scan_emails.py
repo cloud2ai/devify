@@ -10,7 +10,7 @@ from django.contrib.auth.models import User
 from django.utils import timezone
 
 from v1.jirabot.models import Settings, EmailTask
-from v1.jirabot.tasks import scan_user_emails, schedule_email_scans
+from v1.jirabot.tasks import scan_user_emails
 
 # Initialize logger for this module
 logger = logging.getLogger(__name__)
