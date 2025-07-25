@@ -189,7 +189,7 @@ class EmailMessage(models.Model):
 
     # Summarization results
     summary_title = models.CharField(
-        max_length=200,
+        max_length=500,
         blank=True,
         verbose_name=_('Summary Title')
     )
