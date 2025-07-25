@@ -30,6 +30,14 @@ def remove_emoji(text):
     )
     return emoji_pattern.sub('', text)
 
+def clean_jira_summary(summary):
+    """
+    Remove all line breaks and trim spaces for JIRA summary.
+    """
+    if summary is None:
+        return ''
+    return summary.replace('\n', ' ').replace('\r', ' ').strip()
+
 @shared_task(bind=True)
 def submit_issue_to_jira(self, email_message_id):
     """
@@ -71,8 +79,9 @@ def submit_issue_to_jira(self, email_message_id):
     today_str = datetime.datetime.now().strftime('%Y%m%d')
     summary = f"[AI][{today_str}]{summary}"
 
-    # Remove emoji from summary
-    summary = remove_emoji(summary)[:255]
+    # Remove line breaks and emoji from summary
+    summary = clean_jira_summary(summary)
+    summary = remove_emoji(summary)[:500]
 
     # Build comprehensive description with summary and LLM
     # content (with OCR inline)
