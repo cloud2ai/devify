@@ -9,6 +9,27 @@ from ..utils.jira_handler import JiraHandler
 
 logger = logging.getLogger(__name__)
 
+def remove_emoji(text):
+    """
+    Remove emoji characters from text for JIRA compatibility.
+    """
+    if not text:
+        return ''
+    # Remove emoji
+    emoji_pattern = re.compile(
+        "["
+        "\U0001F600-\U0001F64F"
+        "\U0001F300-\U0001F5FF"
+        "\U0001F680-\U0001F6FF"
+        "\u2600-\u26FF"
+        "\u2700-\u27BF"
+        "\U0001F900-\U0001F9FF"
+        "\U0001FA70-\U0001FAFF"
+        "]+",
+        flags=re.UNICODE
+    )
+    return emoji_pattern.sub('', text)
+
 @shared_task(bind=True)
 def submit_issue_to_jira(self, email_message_id):
     """
@@ -49,6 +70,9 @@ def submit_issue_to_jira(self, email_message_id):
     # Build JIRA summary with [AI] and today's date in [YYYYMMDD] format
     today_str = datetime.datetime.now().strftime('%Y%m%d')
     summary = f"[AI][{today_str}]{summary}"
+
+    # Remove emoji from summary
+    summary = remove_emoji(summary)[:255]
 
     # Build comprehensive description with summary and LLM
     # content (with OCR inline)
@@ -99,6 +123,8 @@ def submit_issue_to_jira(self, email_message_id):
         description_parts.append(llm_content_with_ocr)
 
     description = "\n\n".join(description_parts)
+    # Remove emoji from description
+    description = remove_emoji(description)[:10000]
     try:
         handler = JiraHandler(jira_url, username, password)
         issue_key = handler.create_issue(
