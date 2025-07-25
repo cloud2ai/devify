@@ -34,10 +34,6 @@ urlpatterns = [
     # v1.auth.urls (no trailing slash)
     path('', include('v1.auth.urls')),
 
-    # API routes for the cloud_platform application
-    # Includes the URLs for APIs under the 'v1/sample' app.
-    path('', include('v1.sample.urls')),
-
     # FIXME(Ray): Implement this method according to real project
     # Simulates WeChat mini-program login functionality
     # Endpoint for WeChat authentication

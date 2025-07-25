@@ -11,7 +11,6 @@ services:
     env_file:
       - ./.env
     environment:
-      DATABASE_URL: ${DATABASE_URL:-mysql://$MYSQL_USER:$MYSQL_PASSWORD@mysql:$MYSQL_PORT/$MYSQL_DATABASE}
       DJANGO_DEBUG: ${DJANGO_DEBUG:-False}
       DJANGO_LOG_LEVEL: ${DJANGO_LOG_LEVEL:-INFO}
       CELERY_BROKER_URL: ${CELERY_BROKER_URL:-redis://redis:6379/0}
@@ -63,7 +62,6 @@ services:
     env_file:
       - ./.env
     environment:
-      DATABASE_URL: ${DATABASE_URL:-mysql://$MYSQL_USER:$MYSQL_PASSWORD@mysql:$MYSQL_PORT/$MYSQL_DATABASE}
       DJANGO_DEBUG: ${DJANGO_DEBUG:-False}
       DJANGO_LOG_LEVEL: ${DJANGO_LOG_LEVEL:-INFO}
       CELERY_BROKER_URL: ${CELERY_BROKER_URL:-redis://redis:6379/0}
@@ -99,7 +97,6 @@ services:
     env_file:
       - ./.env
     environment:
-      DATABASE_URL: ${DATABASE_URL:-mysql://$MYSQL_USER:$MYSQL_PASSWORD@mysql:$MYSQL_PORT/$MYSQL_DATABASE}
       CELERY_LOG_LEVEL: ${CELERY_LOG_LEVEL:-DEBUG}
     volumes:
       - ./data/logs/scheduler:/var/log/celery

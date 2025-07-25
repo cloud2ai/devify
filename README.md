@@ -124,27 +124,48 @@ docker-compose -f docker-compose.yml up -d
 
 ### Settings
 
-Before using this project to enhance your development with AI, you need to pre-configure certain settings at the database level. You can complete these configurations through the Django Admin page.
+Before using Jirabot features, you should initialize the required settings for all users. This can be done via a management command inside the API container. The command will automatically create default records for all necessary JIRABOT settings (`email_config`, `email_filter_config`, `jira_config`, `prompt_config`) for each user if they do not already exist.
 
-1. **Log in to Django Admin**
+To simplify configuration, all required settings should be added here. Below are the key-value pairs you need to set before using the system. The table describes the key design, and the values should be saved in JSON format.
+
+| Key                  | Description                                                      | Required | Example Key Fields/Notes                |
+|----------------------|------------------------------------------------------------------|----------|-----------------------------------------|
+| email_config         | Email server connection and authentication settings               | Yes      | See below                              |
+| email_filter_config  | Email filtering and processing rules                              | Yes      | See below                              |
+| jira_config          | JIRA integration and default issue creation settings              | Yes      | See below                              |
+| prompt_config        | AI prompt templates for email/attachment/summary processing       | Yes      | See below                              |
+
+> **Note:**
+> All values must be valid JSON.
+> If you add new fields to the models or settings, update this table accordingly.
+
+**How to initialize JIRABOT settings:**
+
+1. **Enter the API container:**
+
+   ```bash
+   docker exec -it devify-api python manager.py init_jirabot_settings --user admin
+   ```
+
+**Note:**
+- The initialization command is idempotent and safe to run multiple times.
+- All values are stored in JSON format and should be customized according to your actual email, JIRA, and AI integration requirements.
+
+2. **Edit the settings in Django Admin:**
+
+   After initialization, log in to the Django Admin panel and navigate to the **Settings** section. You can then edit the values for each key (`email_config`, `email_filter_config`, `jira_config`, `prompt_config`) as needed for your environment.
+
+   > **Tip:**
+   > You can also update these settings directly in the database if required.
+
+3. **Log in to Django Admin**
    - Visit [http://localhost:8000/admin](http://localhost:8000/admin) in your browser.
    - Log in with your admin credentials.
    - Username: admin
    - Password: adminpassword
 
-2. **Navigate to the Settings Model**
+4. **Navigate to the Settings Model**
    - In the sidebar, find and click on **Settings** under JIRABOT
-
-To simplify configuration, all required settings should be added here. Below are the key-value pairs you need to set before using the system. The table describes the key design, and the values should be saved in JSON format.
-
-| Key                  | Description                                                      |
-|----------------------|------------------------------------------------------------------|
-| email_config         | Email server connection and authentication settings               |
-| email_filter_config  | Email filtering and processing rules                              |
-| jira_config          | JIRA integration and default issue creation settings              |
-| prompt_config        | AI prompt templates for email/attachment/summary processing       |
-
-Please refer to the detailed sections below for the required fields and example values for each setting.
 
 #### Email Configuration(email_config)
 
@@ -178,14 +199,38 @@ Please refer to the detailed sections below for the required fields and example 
 | Key              | Type     | Description                                                        | Example                |
 |------------------|----------|--------------------------------------------------------------------|------------------------|
 | folder           | string   | The email folder to fetch messages from, usually "INBOX"           | "INBOX"                |
-| filters          | array    | List of filter rules to apply when fetching emails                 | []                     |
+| filters          | array    | List of IMAP search criteria to apply when fetching emails         | ["UNSEEN", "SINCE \"24-Jul-2025\""] |
 | exclude_patterns | array    | Patterns to exclude emails, e.g., subjects containing keywords     | ["spam", "newsletter"] |
 | max_age_days     | integer  | Maximum age of emails to process, in days                          | 7                      |
 
-```
+**Available IMAP Search Criteria for `filters` array:**
 
+| Category         | Criteria                    | Description                                    | Example                                    |
+|------------------|-----------------------------|------------------------------------------------|--------------------------------------------|
+| **Time-based**   | `SINCE`                     | Emails received after specified date          | `"SINCE \"24-Jul-2025\""`                  |
+|                  | `BEFORE`                    | Emails received before specified date         | `"BEFORE \"25-Jul-2025\""`                 |
+|                  | `ON`                        | Emails received on specified date             | `"ON \"24-Jul-2025\""`                     |
+| **Status**       | `UNSEEN`                    | Unread emails                                 | `"UNSEEN"`                                 |
+|                  | `SEEN`                      | Read emails                                   | `"SEEN"`                                   |
+|                  | `FLAGGED`                   | Flagged emails                                | `"FLAGGED"`                                |
+|                  | `UNFLAGGED`                 | Unflagged emails                              | `"UNFLAGGED"`                              |
+| **Sender/Recipient** | `FROM`                  | Emails from specific sender                   | `"FROM \"sender@example.com\""`            |
+|                  | `TO`                        | Emails to specific recipient                  | `"TO \"recipient@example.com\""`           |
+|                  | `CC`                        | Emails CC'd to specific address               | `"CC \"cc@example.com\""`                  |
+| **Content**      | `SUBJECT`                   | Emails with subject containing keyword        | `"SUBJECT \"important\""`                  |
+|                  | `BODY`                      | Emails with body containing keyword           | `"BODY \"urgent\""`                        |
+|                  | `TEXT`                      | Emails with subject or body containing keyword | `"TEXT \"meeting\""`                       |
+
+**Example configuration:**
+
+```json
 {
-  "filters": [],
+  "folder": "INBOX",
+  "filters": [
+    "UNSEEN",
+    "SINCE \"24-Jul-2025\"",
+    "FROM \"admin@example.com\""
+  ],
   "exclude_patterns": [
     "spam",
     "newsletter"
@@ -193,6 +238,11 @@ Please refer to the detailed sections below for the required fields and example 
   "max_age_days": 7
 }
 ```
+
+**Note:**
+- The `filters` array can contain multiple IMAP search criteria (combined with AND logic)
+- Date format should be "DD-MMM-YYYY" (e.g., "24-Jul-2025")
+- The system automatically adds time-based filtering using `last_email_fetch_time` for incremental fetching
 
 ### JIRA Config(jira_config)
 
@@ -209,6 +259,7 @@ Please refer to the detailed sections below for the required fields and example 
 
 ```
 {
+  "url": "your-jira-url",
   "username": "your-jira-username",
   "api_token": "your-api-token-or-password",
   "project_key": "your-project-key",
@@ -219,23 +270,22 @@ Please refer to the detailed sections below for the required fields and example 
 }
 ```
 
-#### Prompt Config(prompt_config)
+## Prompt Config (prompt_config)
 
-| Config Key              | Description                                                                                   |
-|------------------------|-----------------------------------------------------------------------------------------------|
-| `email_content_prompt` | Organizes email content (such as chat logs) in chronological order and formats messages and images for further processing. |
-| `ocr_prompt`           | Processes OCR text from images, extracts key information, and summarizes relevant context and issues. |
-| `summary_prompt`       | Summarizes email content for JIRA, including main issues, analysis, and action items, with attention to OCR content if present. |
-| `summary_title_prompt` | Generates a structured and concise JIRA issue title following the required format, highlighting the core issue or requirement. |
+| Config Key              | Description                                                                                   | Required |
+|------------------------|-----------------------------------------------------------------------------------------------|----------|
+| `email_content_prompt` | Organizes email/chat content for LLM processing.                                              | Yes      |
+| `ocr_prompt`           | Processes OCR text from images for LLM summarization.                                         | Yes      |
+| `summary_prompt`       | Summarizes email and attachment content for JIRA issue creation.                              | Yes      |
+| `summary_title_prompt` | Generates a structured and concise JIRA issue title.                                          | Yes      |
 
-Below are the English versions of the prompts:
-
-```
+**Example:**
+```json
 {
-  "email_content_prompt": "Sort the chat logs in chronological order (oldest to newest). Format each message as: [Time] [Sender]: Message Content. Place each image on a separate line using JIRA markup (e.g., !image-filename.png!). Preserve the original time, nickname, and content. Supplement semantics if necessary, but do not alter the original meaning.",
-  "ocr_prompt": "Extract key information from the raw OCR text, remove irrelevant or redundant content, supplement semantics, and organize it into a concise and complete description. Highlight operational context, abnormal phenomena, and error messages to facilitate issue localization and documentation.",
-  "summary_prompt": "You are a professional product manager for HyperBDR (Disaster Recovery) and HyperMotion (Migration). Based on the chat logs, background information, user feedback, and screenshots, clarify task ownership (migration or disaster recovery), identify source and target platforms, determine where the issue occurred (client, control, or target), and perform issue classification and analysis. Output three parts: (1) phenomenon description and preliminary cause analysis (including environment info, issue phenomenon, and reproduction process, referencing screenshots and chat for completeness; mark any assumptions clearly), (2) TODO list of core issues and potential requirements (mark assumptions), (3) if the input contains '--- ATTACHMENT OCR CONTENT ---', be sure to analyze the OCR content, as it may contain key error messages or configuration info. If information is unclear, mark as 'To be confirmed' and strictly summarize based on the provided content.",
-  "summary_title_prompt": "Based on the following chat logs and background information, extract a structured and concise JIRA issue title. Strictly follow this format and keep the structure consistent, with each field enclosed in square brackets [] in the following order: [Project Name][Source/Target][Scenario Type][Issue Category] Title Content. Field explanations: - [Project Name]: Identify from chat or group name, usually at the beginning; - [Source/Target]: Format as 'Source Platform/Target Platform', e.g., 'VMware/Huawei Cloud', extract from background or user description; - [Scenario Type]: Determine if 'Migration' or 'Disaster Recovery', if unclear, use 'Scenario Unclear'; - [Issue Category]: Determine if the issue is mainly on 'Source', 'Target', or 'Control', if unclear, mark as 'To be confirmed'; - Title Content: Use a concise verb-object structure to state the core issue or requirement, e.g., 'Restore Failed', 'Validation Stuck', 'Task Unresponsive', 'Need to Support Log Download', avoid vague expressions. Requirements: 1. All fields must be present and structured (if unclear, keep the field and fill with 'To be confirmed'); 2. Title content must be concise and use a clear verb-object structure; 3. No more than 200 characters for easy creation, identification, and retrieval in JIRA; 4. Accurately reflect the core issue or requirement, avoid generic terms like 'Experience Optimization' or 'Feedback'."
+  "email_content_prompt": "Sort chat logs in chronological order (oldest to newest). Format each message as: [Time] [Sender]: Message Content. Place each image on a separate line using markup (e.g., !image-filename.png!). Keep the original time, sender, and content. Supplement semantics if necessary, but do not change the original meaning.",
+  "ocr_prompt": "Extract key information from raw OCR text, remove irrelevant or redundant content, supplement semantics, and organize it into a concise and complete description. Highlight operational context, abnormal phenomena, and error messages to help locate and document issues.",
+  "summary_prompt": "Based on chat logs, background information, user feedback, and screenshots, clarify task responsibilities, determine where the issue occurred, and perform issue classification and analysis. Output three parts: (1) phenomenon description and preliminary cause analysis (including environment information, issue phenomenon, and reproduction process; reference screenshots and chat for completeness; clearly mark any assumptions), (2) TODO list of core issues and potential requirements (mark assumptions), (3) if the input contains '--- ATTACHMENT OCR CONTENT ---', analyze the OCR content, as it may contain key error messages or configuration information. If information is unclear, mark as 'To be confirmed' and strictly summarize based on the provided content.",
+  "summary_title_prompt": "Summarize a clear and specific issue title based on the provided chat logs and background information. The title should directly reflect the main problem to be solved or the key requirement, using a concise verb-object structure. Avoid vague or generic terms. Focus on what needs to be addressed or resolved. Limit the title to 200 characters for clarity and easy identification."
 }
 ```
 
@@ -266,12 +316,43 @@ To enable automated email processing and JIRA issue creation, you need to config
 > You must configure the following two periodic tasks in Django Admin (Periodic Tasks section):
 >
 > 1. **schedule_email_processing_tasks**
->    - This is the main scheduler task. It periodically polls the email/message status and triggers the appropriate processing tasks (such as OCR, LLM summarization, and JIRA submission) based on the current state.
+>    - This is the main scheduler task. It periodically polls the email/message status and triggers the appropriate processing tasks (such as OCR, LLM summarization, and JIRA submission) based on the current state machine.
 >
-> 2. **reset_stuck_processing_email**
+> 2. **reset_stuck_processing_emails**
 >    - This task is responsible for detecting and resetting any email/message tasks that have been stuck in a pending or processing state for too long (timeout recovery). It helps ensure the system can recover from unexpected failures or timeouts.
 >
 > Both tasks are essential for robust, automated email-to-JIRA processing. Make sure both are scheduled to run at appropriate intervals (e.g., every 5 minutes for the main scheduler, every 10-30 minutes for the stuck task reset).
+
+## Required Periodic Tasks
+
+You **must** configure the following periodic tasks in Django Admin (**Periodic Tasks** section, provided by `django-celery-beat`):
+
+1. **schedule_scan_all_users_emails**
+   - Periodically fetches new emails for all users with active email_config.
+   - Triggers the scan and storage of new emails into the system, enabling downstream processing (OCR, LLM, JIRA, etc.).
+   - **Recommended interval:** every 5 minutes.
+
+2. **schedule_email_processing_tasks**
+   - Main scheduler task. Periodically polls the status of all emails and triggers the appropriate processing tasks (OCR, LLM summarization, JIRA submission) based on the current state machine.
+   - **Recommended interval:** every 5 minutes.
+
+3. **reset_stuck_processing_emails**
+   - Detects and resets any email/message tasks that have been stuck in a pending or processing state for too long (timeout recovery).
+   - **Recommended interval:** every 10–30 minutes.
+
+> **Tip:**
+> You can edit, disable, or delete these tasks at any time in the **Periodic Tasks** section.
+
+## EmailMessage State Machine & Exception Handling
+
+- The `EmailMessage` model uses a single state field to track the processing stage:
+  - `FETCHED`, `OCR_PROCESSING`, `OCR_SUCCESS`, `OCR_FAILED`, `SUMMARY_PROCESSING`, `SUMMARY_SUCCESS`, `SUMMARY_FAILED`, `JIRA_PROCESSING`, `JIRA_SUCCESS`, `JIRA_FAILED`
+- Each processing task (OCR, LLM, JIRA) will only execute if the previous stage is successful.
+- If any required content is missing (e.g., OCR result, LLM content), the task will raise an exception and set the status to `*_FAILED`.
+- The scheduler will retry or reset failed/stuck tasks as needed.
+
+> **Best Practice:**
+> Always keep your prompt templates, periodic task names, and state machine logic in sync with the codebase. If you add new settings or change the structure of any config, update the README accordingly.
 
 ## Reference
 The foundational framework of this project is based on the

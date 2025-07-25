@@ -11,6 +11,11 @@ import mailparser
 from email_validator import validate_email, EmailNotValidError
 from django.utils import timezone
 
+# Disable mailparser debug logs in this file
+logging.getLogger('mailparser').setLevel(logging.WARNING)
+logging.getLogger('mailparser.mailparser').setLevel(logging.WARNING)
+logging.getLogger('mailparser.utils').setLevel(logging.WARNING)
+
 logger = logging.getLogger(__name__)
 
 
@@ -21,7 +26,6 @@ class EmailClient:
     """
     IMAP_SSL_DEFAULT_PORT = 993
     IMAP_DEFAULT_PORT = 143
-    SMTP_TO_IMAP_HOST_REPLACE = ('smtp.', 'imap.')
     DEFAULT_EMAIL_FOLDER = 'INBOX'
     SEARCH_CRITERIA_UNSEEN = 'UNSEEN'
     SEARCH_CRITERIA_FROM = 'FROM'
@@ -48,11 +52,8 @@ class EmailClient:
         self.email_config = email_config
         self.email_filter_config = email_filter_config
         self.attachment_storage_path = attachment_storage_path
-        self._client = None
-        self._imap_host = None
-        self._imap_port = None
-        self._use_ssl = None
-        self._folder = None
+        self._imap_client = None
+
         self._search_criteria = None
 
     def _generate_stable_message_id(self, mail, received_at) -> str:
@@ -71,15 +72,16 @@ class EmailClient:
         return f"email_{msg_hash}"
 
     @property
-    def client(self):
+    def imap_client(self):
         """
         Get or initialize IMAP client connection.
         """
-        if self._client is None:
-            self._client = self._connect_and_login()
-        return self._client
+        if self._imap_client is None:
+            self._imap_client = self._connect_and_login_imap()
 
-    def _connect_and_login(self):
+        return self._imap_client
+
+    def _connect_and_login_imap(self):
         """
         Internal method to connect and login to IMAP server.
         """
@@ -101,76 +103,64 @@ class EmailClient:
             return client
         except Exception as e:
             logger.error(
-                f"Failed to connect to IMAP server: {e}"
+                f"Failed to connect to IMAP server due to: {e}"
             )
-            return None
+            raise
 
     def connect(self) -> bool:
         """
         Connect to IMAP server and login (for compatibility).
         """
-        if self._client is None:
-            self._client = self._connect_and_login()
-        return self._client is not None
+        if self._imap_client is None:
+            self._imap_client = self._connect_and_login_imap()
+        return self._imap_client is not None
 
     def disconnect(self):
         """
         Disconnect from IMAP server.
         """
-        if self._client:
+        if self._imap_client:
             try:
-                self._client.logout()
+                self._imap_client.logout()
                 logger.info("Disconnected from IMAP server")
             except Exception as e:
                 logger.error(f"Error disconnecting from IMAP server: {e}")
-            self._client = None
+            self._imap_client = None
 
     @property
     def imap_host(self) -> str:
         """
-        Get IMAP host from configuration.
+        Return IMAP host from configuration directly.
         """
-        if self._imap_host is None:
-            self._imap_host = self.email_config.get('imap_host')
-            if not self._imap_host:
-                self._imap_host = self.email_config.get('host', '').replace(
-                    *self.SMTP_TO_IMAP_HOST_REPLACE
-                )
-        return self._imap_host
+        return self.email_config.get('imap_host')
 
     @property
     def imap_port(self) -> int:
         """
         Get IMAP port from configuration.
         """
-        if self._imap_port is None:
-            self._imap_port = self.email_config.get(
-                'imap_ssl_port', self.IMAP_SSL_DEFAULT_PORT
-            )
-        return self._imap_port
+        return self.email_config.get(
+            'imap_ssl_port', self.IMAP_SSL_DEFAULT_PORT
+        )
 
     @property
     def use_ssl(self) -> bool:
         """
         Determine if SSL should be used.
         """
-        if self._use_ssl is None:
-            self._use_ssl = (
-                self.imap_port == self.IMAP_SSL_DEFAULT_PORT or
-                self.email_config.get('use_ssl', True)
-            )
-        return self._use_ssl
+        return (
+            self.imap_port == self.IMAP_SSL_DEFAULT_PORT or
+            self.email_config.get('use_ssl', True)
+        )
 
     @property
     def folder(self) -> str:
         """
         Get the email folder to scan.
         """
-        if self._folder is None:
-            self._folder = self.email_filter_config.get(
-                'folder', self.DEFAULT_EMAIL_FOLDER
-            )
-        return self._folder
+        return self.email_filter_config.get(
+            'folder', self.DEFAULT_EMAIL_FOLDER
+        )
 
     @property
     def search_criteria(self) -> str:
@@ -302,12 +292,8 @@ class EmailClient:
         try:
             text_content, html_content = self._extract_email_body(
                 mail, email_data)
-            logger.debug(f"[Extracted Text] {text_content[:200]}")
-            logger.debug(f"[Extracted HTML] {html_content[:200]}")
             raw_content = email_data.decode('utf-8', errors='ignore')
             attachments = self._process_attachments(mail)
-            logger.debug(f"Found {len(attachments)} attachments")
-
             # Generate stable message_id based on email content
             received_at = mail.date or timezone.now()
             # Ensure received_at has timezone info
@@ -369,17 +355,9 @@ class EmailClient:
         """
         Process a single email attachment.
         """
-        logger.debug(
-            f"Processing attachment: type={type(attachment)}, "
-            f"filename={getattr(attachment, 'filename', None)}"
-        )
-
         try:
-            # Extract attachment info based on type
             if isinstance(attachment, dict):
-                # Handle dict type attachments (from mailparser)
                 filename = attachment.get('filename', 'unknown')
-                # Try different content type field names
                 content_type = (
                     attachment.get('content-type') or
                     attachment.get('mail_content_type') or
@@ -387,49 +365,35 @@ class EmailClient:
                 )
                 payload = attachment.get('payload', '')
                 binary = attachment.get('binary', False)
-
-                # Decode content
                 if payload and binary:
-                    import base64
                     try:
                         content = base64.b64decode(payload)
                     except Exception as e:
-                        logger.error(f"Failed to decode base64 payload: {e}")
+                        logger.error(
+                            f"Failed to decode base64 payload: {e}"
+                        )
                         content = payload.encode('utf-8', errors='ignore')
                 else:
                     content = payload.encode('utf-8', errors='ignore')
             else:
-                # Handle mailparser attachment objects
                 filename = attachment.filename
                 content_type = attachment.content_type
                 content = attachment.content
-
-            # Create storage directory
             os.makedirs(self.attachment_storage_path, exist_ok=True)
-            logger.debug(f"Ensured attachment storage path exists: "
-                         f"{self.attachment_storage_path}")
-
-            # Generate unique filename and save file
             unique_id = str(uuid.uuid4())[:8]
             safe_filename = f"{unique_id}_{filename}"
-            file_path = os.path.join(self.attachment_storage_path,
-                                     safe_filename)
-
-            logger.info(f"Saving attachment '{filename}' to '{file_path}'")
-            logger.debug(f"Storage path: {self.attachment_storage_path}")
-            logger.debug(f"Safe filename: {safe_filename}")
-            logger.debug(f"Full file path: {file_path}")
-
+            file_path = os.path.join(
+                self.attachment_storage_path, safe_filename)
+            logger.info(
+                f"Saving attachment '{filename}' to '{file_path}'"
+            )
             with open(file_path, 'wb') as f:
                 f.write(content)
-            logger.info(f"Attachment '{filename}' saved successfully, "
-                        f"size={len(content)} bytes")
-
-            # Determine if it's an image
+            logger.info(
+                f"Attachment '{filename}' saved successfully, "
+                f"size={len(content)} bytes"
+            )
             is_image = content_type.startswith(self.IMAGE_CONTENT_TYPE_PREFIX)
-            logger.debug(f"Attachment '{filename}' content_type="
-                         f"{content_type}, is_image={is_image}")
-
             return {
                 'filename': filename,
                 'content_type': content_type,
@@ -437,36 +401,38 @@ class EmailClient:
                 'file_path': file_path,
                 'is_image': is_image
             }
-
         except Exception as e:
-            filename = getattr(attachment, 'filename',
-                               attachment.get('filename', str(attachment)))
-            logger.error(f"Error processing attachment {filename}: {e}",
-                         exc_info=True)
+            filename = getattr(
+                attachment, 'filename',
+                attachment.get('filename', str(attachment))
+            )
+            logger.error(
+                f"Error processing attachment {filename}: {e}",
+                exc_info=True
+            )
             return None
 
     def scan_emails(self) -> Generator[Dict, None, None]:
         """
         Scan emails from IMAP server using mail-parser.
         """
-        if not self.connect():
-            logger.error("Failed to connect to IMAP server")
-            return
         try:
-            logger.info(f"Selecting folder: {self.folder}")
-            self.client.select(self.folder)
+            logger.info(f"Search email from folder: {self.folder}")
+            self.imap_client.select(self.folder)
             logger.info(f"Search criteria: {self.search_criteria}")
-            status, message_numbers = self.client.search(
+            status, message_numbers = self.imap_client.search(
                 None, self.search_criteria
             )
             if status != 'OK':
                 logger.error(f"Failed to search emails: {status}")
                 return
             message_number_list = message_numbers[0].split()
-            logger.info(f"Found {len(message_number_list)} emails to process")
+            logger.info(
+                f"Found {len(message_number_list)} emails to process"
+            )
             for message_number in message_number_list:
                 try:
-                    status, email_data = self.client.fetch(
+                    status, email_data = self.imap_client.fetch(
                         message_number, '(RFC822)'
                     )
                     if status != 'OK':
@@ -481,7 +447,9 @@ class EmailClient:
                     if parsed_email:
                         yield parsed_email
                 except Exception as e:
-                    logger.error(f"Error processing email {message_number}: {e}")
+                    logger.error(
+                        f"Error processing email {message_number}: {e}"
+                    )
                     continue
         except Exception as e:
             logger.error(f"Error scanning emails: {e}")

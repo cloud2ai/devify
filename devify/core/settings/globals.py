@@ -9,6 +9,8 @@ import os
 # Email attachment storage configuration
 EMAIL_ATTACHMENT_STORAGE_PATH = os.getenv(
     'EMAIL_ATTACHMENT_STORAGE_PATH', '/tmp/attachments')
+TMP_EMAIL_ATTACHMENT_STORAGE_PATH = os.getenv(
+    'TMP_EMAIL_ATTACHMENT_STORAGE_PATH', '/tmp/tmp_attachments')
 
 # Azure OpenAI configuration
 AZURE_OPENAI_CONFIG = {
@@ -26,10 +28,7 @@ AZURE_OPENAI_CONFIG = {
     'temperature': float(os.getenv('AZURE_OPENAI_TEMPERATURE', '0.5')),
 }
 
-"""
-Azure OCR configuration dictionary.
-"""
-
+# Azure OCR configuration dictionary.
 AZURE_OCR_CONFIG = {
     # The API key for Azure Document Intelligence
     'api_key': os.getenv('AZURE_DOCUMENT_INTELLIGENCE_KEY'),

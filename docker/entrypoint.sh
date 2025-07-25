@@ -1,93 +1,85 @@
 #!/bin/bash
-
-# Recommended: For 2-core 2GB server, set WORKERS=1 and THREADS=1 to avoid resource contention.
-# Exit immediately if a command exits with a non-zero status
 set -e
 
-# Set environment variables
-export PYTHONPATH=/opt/mito
+# -----------------------------------------------------------------------------
+# Project Entrypoint Script
+# -----------------------------------------------------------------------------
+# This script manages database health checks, migrations, static collection,
+# and process startup for Django, Celery, Gunicorn, etc.
+# -----------------------------------------------------------------------------
+
+# --- Global Variables ---
+export PYTHONPATH=/opt/devify
 export DJANGO_SETTINGS_MODULE=core.settings
 
-# Log file paths
 LOG_BASE_DIR="/var/log/gunicorn"
 ACCESS_LOG="${LOG_BASE_DIR}/gunicorn_access.log"
 ERROR_LOG="${LOG_BASE_DIR}/gunicorn_error.log"
 CELERY_LOG="/var/log/celery/celery.log"
 
-# Ensure the log directory exists and is writable
-mkdir -p $LOG_BASE_DIR /var/log/celery
-chmod -R 755 $LOG_BASE_DIR /var/log/celery
-
-# Use environment variables or defaults
 WORKERS=${WORKERS:-1}
 THREADS=${THREADS:-1}
 CELERY_CONCURRENCY=${CELERY_CONCURRENCY:-1}
-
-# Flower Configurations
-REDIS_URL=${REDIS_URL:-redis://redis:6379/0}  # Use environment variable for Redis URL
+REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
 FLOWER_PORT=5555
+DB_ENGINE=${DB_ENGINE:-sqlite}
 
-echo "Using $WORKERS workers and $THREADS threads. (Default: 1 worker, 1 thread)"
-echo "Celery auto-reload: $CELERY_AUTORELOAD"
+# --- Ensure log directories exist ---
+mkdir -p $LOG_BASE_DIR /var/log/celery
+chmod -R 755 $LOG_BASE_DIR /var/log/celery
 
-# Function to wait for database
+# --- Logging Helper ---
+log() { echo -e "\033[1;36m[entrypoint]\033[0m $*"; }
+
+# --- Database Health Check ---
 wait_for_db() {
-    echo "Waiting for database..."
-    # Begin to check database connection
-    DB_TYPE=$(echo "$DATABASE_URL" | awk -F: '{print $1}')
-    HOST=$(echo "$DATABASE_URL" | sed -E 's#^[^:]+://[^@]+@([^:/]+).*#\1#')
-    PORT=$(echo "$DATABASE_URL" | sed -E 's#.*:([0-9]+).*#\1#')
-
-    echo "Detected DB_TYPE: $DB_TYPE, HOST: $HOST, PORT: ${PORT:-default}"
-
-    while true; do
-        case "$DB_TYPE" in
-            mysql)
-                if mysqladmin ping -h "$HOST" --silent; then
-                    echo "MySQL is ready!"
-                    break
-                fi
-                ;;
-            postgres)
-                if pg_isready -h "$HOST" -p "${PORT:-5432}" > /dev/null 2>&1; then
-                    echo "PostgreSQL is ready!"
-                    break
-                fi
-                ;;
-            *)
-                echo "Use SQLite by default and SQLite does not require a health check."
-                break
-                ;;
-        esac
-        echo "Waiting for $DB_TYPE at $HOST:$PORT..."
-        sleep 2
-    done
+    log "Waiting for database engine: $DB_ENGINE"
+    case "$DB_ENGINE" in
+        mysql)
+            HOST=${MYSQL_HOST:-localhost}
+            PORT=${MYSQL_PORT:-3306}
+            log "Waiting for MySQL at $HOST:$PORT..."
+            until mysqladmin ping -h "$HOST" -P "$PORT" --silent; do
+                sleep 2
+            done
+            log "MySQL is ready!"
+            ;;
+        postgresql|postgres)
+            HOST=${POSTGRES_HOST:-localhost}
+            PORT=${POSTGRES_PORT:-5432}
+            log "Waiting for PostgreSQL at $HOST:$PORT..."
+            until pg_isready -h "$HOST" -p "$PORT" > /dev/null 2>&1; do
+                sleep 2
+            done
+            log "PostgreSQL is ready!"
+            ;;
+        *)
+            log "Using SQLite (no health check required)."
+            ;;
+    esac
 }
 
-# Function to run migrations
+# --- Django Management Tasks ---
 run_migrations() {
-    echo "Running migrations..."
+    log "Running Django migrations..."
     python manage.py migrate --noinput
-
-    # Check if a superuser exists, create one if not
-    echo "Checking if superuser exists..."
-    DJANGO_SUPERUSER_USERNAME=${DJANGO_SUPERUSER_USERNAME:-admin} \
-    DJANGO_SUPERUSER_EMAIL=${DJANGO_SUPERUSER_EMAIL:-admin@example.com} \
-    DJANGO_SUPERUSER_PASSWORD=${DJANGO_SUPERUSER_PASSWORD:-adminpassword} \
-    python manage.py createsuperuser --noinput || echo "Superuser already exists."
+    log "Ensuring superuser exists..."
+    DJANGO_SUPERUSER_USERNAME=${DJANGO_SUPERUSER_USERNAME:-admin}
+    DJANGO_SUPERUSER_EMAIL=${DJANGO_SUPERUSER_EMAIL:-admin@example.com}
+    DJANGO_SUPERUSER_PASSWORD=${DJANGO_SUPERUSER_PASSWORD:-adminpassword}
+    python manage.py createsuperuser --noinput || log "Superuser already exists."
 }
 
-# Function to collect static files
 collect_static() {
-    echo "Collecting static files..."
+    log "Collecting static files..."
     python manage.py collectstatic --noinput
 }
 
-# Function to start gunicorn
+# --- Process Starters ---
 start_gunicorn() {
-    echo "Starting Gunicorn..."
+    log "Starting Gunicorn..."
     exec gunicorn core.wsgi:application \
-        --name liangyi \
+        --name app \
         --bind 0.0.0.0:8000 \
         --workers $WORKERS \
         --threads $THREADS \
@@ -97,13 +89,8 @@ start_gunicorn() {
         --error-logfile $ERROR_LOG
 }
 
-# Function to start celery worker
 start_celery_worker() {
-        echo "Starting Celery worker..."
-
-    # Note: Auto-reload functionality has been removed in Celery 5.x
-    # For development, consider using watchfiles or similar tools
-    echo "Starting Celery worker (auto-reload not available in Celery 5.x)"
+    log "Starting Celery worker..."
     exec celery -A core worker \
         --loglevel=${CELERY_LOG_LEVEL:-INFO} \
         --concurrency=${CELERY_CONCURRENCY} \
@@ -112,21 +99,15 @@ start_celery_worker() {
         --logfile=/var/log/celery/worker.log
 }
 
-# Function to start celery beat
 start_celery_beat() {
-        echo "Starting Celery beat..."
-
-    # Note: Auto-reload functionality has been removed in Celery 5.x
-    # For development, consider using watchfiles or similar tools
-    echo "Starting Celery beat (auto-reload not available in Celery 5.x)"
+    log "Starting Celery beat..."
     exec celery -A core beat \
         --loglevel=${CELERY_LOG_LEVEL:-INFO} \
         --logfile=/var/log/celery/beat.log
 }
 
-# Function to start flower
 start_flower() {
-    echo "Starting Flower..."
+    log "Starting Flower..."
     exec celery -A core flower \
         --port=$FLOWER_PORT \
         --address=0.0.0.0 \
@@ -135,13 +116,12 @@ start_flower() {
         --logfile=/var/log/celery/flower.log
 }
 
-# Function to start Django development server (runserver)
 start_development() {
-    echo "Starting Django development server (runserver)..."
+    log "Starting Django development server (runserver)..."
     exec python manage.py runserver 0.0.0.0:8000
 }
 
-# Main execution
+# --- Main Entrypoint ---
 case "$1" in
     gunicorn)
         wait_for_db

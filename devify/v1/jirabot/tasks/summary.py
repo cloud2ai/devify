@@ -11,6 +11,7 @@ logger = logging.getLogger(__name__)
 def llm_process_email(self, email_id, force=False):
     """
     Use LLM to organize, enrich, and summarize an email and its attachments.
+    Only execute if email status is OCR_SUCCESS.
     """
     try:
         email = EmailMessage.objects.select_related('user').get(id=email_id)
@@ -20,6 +21,18 @@ def llm_process_email(self, email_id, force=False):
         raise ValueError(f"EmailMessage id {email_id} does not exist")
 
     logger.info(f"LLM processing email: {email.subject}")
+
+    # Check that the email status is OCR_SUCCESS before processing
+    # This ensures the task is only executed after OCR is completed
+    if email.status != EmailMessage.ProcessingStatus.OCR_SUCCESS:
+        logger.error(
+            f"Email {email.subject} status is {email.status}, "
+            f"expected OCR_SUCCESS. Aborting LLM processing."
+        )
+        raise ValueError(
+            f"Email status must be OCR_SUCCESS before LLM processing. "
+            f"Current status: {email.status}"
+        )
 
     # Set status to SUMMARY_PROCESSING at the start
     email.status = EmailMessage.ProcessingStatus.SUMMARY_PROCESSING
@@ -87,6 +100,7 @@ def organize_email_body(email, email_content_prompt, force=False):
     """
     Use LLM to organize/structure the email body/chat content.
     Save result to email.llm_content.
+    Raise exception if no content is available for processing.
     """
     logger.info(f"Starting to organize email body: {email.subject}")
     if not force and email.llm_content:
@@ -101,6 +115,10 @@ def organize_email_body(email, email_content_prompt, force=False):
     else:
         content = email.raw_content
 
+    # Raise exception if all content fields are empty
+    if not content or not content.strip():
+        raise ValueError("No email content available for LLM organization.")
+
     # Call LLM (summary_chat)
     llm_result = call_llm(email_content_prompt, content)
 
@@ -111,6 +129,7 @@ def organize_attachments_ocr(email, ocr_prompt, force=False):
     """
     Use LLM to organize/structure each image attachment's OCR content.
     Save result to attachment.llm_content.
+    Raise exception if any image attachment has empty OCR content.
     """
     logger.info(f"Starting to organize attachments OCR: {email.subject}")
     for att in email.attachments.filter(is_image=True):
@@ -118,10 +137,12 @@ def organize_attachments_ocr(email, ocr_prompt, force=False):
             logger.info(f"Attachment {att.id} already has "
                         f"LLM content, skipping")
             continue
-
+        # Raise exception if OCR content is empty
+        if not att.ocr_content or not att.ocr_content.strip():
+            raise ValueError(
+                f"Attachment {att.id} has no OCR content for LLM organization.")
         # Call LLM (summary_chat)
         llm_result = call_llm(ocr_prompt, att.ocr_content)
-
         att.llm_content = llm_result.strip() if llm_result else ''
         att.save(update_fields=['llm_content'])
 
@@ -129,6 +150,7 @@ def summarize_email(email, summary_prompt, summary_title_prompt, force=False):
     """
     Use LLM to generate summary_title and summary_content for the email.
     Include OCR processed content from attachments for comprehensive summary.
+    Raise exception if required LLM content is missing.
     """
     logger.info(f"Starting to summarize email: {email.subject}")
     if not force and email.summary_content and email.summary_title:
@@ -136,14 +158,21 @@ def summarize_email(email, summary_prompt, summary_title_prompt, force=False):
                     f"title, skipping")
         return
 
+    # Raise exception if email.llm_content is empty
+    if not email.llm_content or not email.llm_content.strip():
+        raise ValueError("Email LLM content is missing for summary generation.")
+
     content = f"Subject: {email.subject}\nText Content: {email.llm_content}\n"
 
     # Collect all OCR processed content from attachments with filenames
     ocr_contents = []
     for att in email.attachments.filter(is_image=True):
-        if att.llm_content:
-            ocr_contents.append(
-                f"[Attachment: {att.filename}]\n{att.llm_content}")
+        # Raise exception if OCR LLM content is missing
+        if not att.llm_content or not att.llm_content.strip():
+            raise ValueError(
+                f"Attachment {att.id} LLM OCR content is missing for summary.")
+        ocr_contents.append(
+            f"[Attachment: {att.filename}]\n{att.llm_content}")
 
     # Combine email content with OCR contents
     combined_content = content

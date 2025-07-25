@@ -14,7 +14,7 @@ class Command(BaseCommand):
     Command to test submit_issue_to_jira task.
     """
     help = (
-        'Submit processed issue info to JIRA for a given email_message_id.'
+        'Submit processed issue info to JIRA for a given email_id.'
     )
 
     def add_arguments(self, parser):
@@ -22,7 +22,7 @@ class Command(BaseCommand):
         Add command line arguments for the management command.
         """
         parser.add_argument(
-            '--email-message-id',
+            '--email-id',
             type=int,
             required=True,
             help='Email message ID to submit to JIRA (required)'
@@ -32,14 +32,14 @@ class Command(BaseCommand):
         """
         Handle the command logic for testing submit_issue_to_jira.
         """
-        email_message_id = options.get('email_message_id')
+        email_id = options.get('email_id')
         logger.info(
             f'Testing submit_issue_to_jira task for '
-            f'email_message_id={email_message_id}...'
+            f'email_id={email_id}...'
         )
         try:
             # Synchronously call Celery task with context
-            submit_issue_to_jira.run(email_message_id)
+            submit_issue_to_jira.run(email_id)
             logger.info('submit_issue_to_jira task executed successfully.')
         except Exception as e:
             logger.error(f'Error running submit_issue_to_jira: {e}')

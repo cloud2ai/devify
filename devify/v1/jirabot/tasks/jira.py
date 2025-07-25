@@ -72,13 +72,28 @@ def submit_issue_to_jira(self, email_message_id):
         }
 
         def replacer(match):
+            """
+            Replace image reference with OCR result if available.
+            """
             fname = match.group(1)
             ocr_text = ocr_map.get(fname)
             if ocr_text:
-                return f"!{fname}!\n\n[OCR Result]{ocr_text}\n"
+                return (
+                    f"!{match.group(1)}{match.group(2) or ''}!\n\n"
+                    f"[OCR Result]{ocr_text}\n"
+                )
             return match.group(0)
 
-        llm_content_with_ocr = re.sub(r"!([\w@.\-]+)!", replacer, llm_content)
+        # Insert OCR result after image reference in llm_content.
+        # This regex supports both:
+        #   !filename!                (e.g. !image.jpg!)
+        #   !filename|width=600!      (e.g. !image.jpg|width=600!)
+        # and any other parameters after '|'.
+        llm_content_with_ocr = re.sub(
+            r"!([\w@.\-]+)((?:\|[^!]*)?)!",
+            replacer,
+            llm_content
+        )
         if description_parts:
             description_parts.append("--------------------------------")
         description_parts.append(llm_content_with_ocr)

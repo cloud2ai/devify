@@ -7,7 +7,7 @@ from ..models import EmailMessage
 logger = logging.getLogger(__name__)
 
 @shared_task
-def reset_stuck_processing_emails(timeout_minutes=30):
+def schedule_reset_stuck_processing_emails(timeout_minutes=30):
     """
     Scan and reset emails stuck in PROCESSING states for over timeout_minutes.
     """

@@ -10,14 +10,13 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.1/ref/settings/
 """
 
-import dj_database_url
-import logging.config
 import os
 from pathlib import Path
 
 from django.utils.translation import gettext_lazy as _
 from dotenv import load_dotenv
 
+from .database import *
 from .globals import *
 from .logging_config import configure_logging
 
@@ -123,7 +122,6 @@ INSTALLED_APPS = [
 # Project-Specific Apps
 INSTALLED_APPS += [
     'accounts',
-    'v1.sample',
     'v1.jirabot',
 ]
 
@@ -178,13 +176,6 @@ WSGI_APPLICATION = 'core.wsgi.application'
 # Database Configuration
 # ============================
 
-# Database
-# https://docs.djangoproject.com/en/5.1/ref/settings/#databases
-
-DATABASE_URL = os.getenv('DATABASE_URL', 'sqlite:///db.sqlite3')
-DATABASES = {
-    'default': dj_database_url.config(default=DATABASE_URL)
-}
 
 # Password validation
 # https://docs.djangoproject.com/en/5.1/ref/settings/#auth-password-validators
