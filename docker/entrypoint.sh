@@ -79,7 +79,7 @@ collect_static() {
 start_gunicorn() {
     log "Starting Gunicorn..."
     exec gunicorn core.wsgi:application \
-        --name app \
+        --name devify \
         --bind 0.0.0.0:8000 \
         --workers $WORKERS \
         --threads $THREADS \

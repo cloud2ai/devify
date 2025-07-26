@@ -10,33 +10,6 @@ services:
       dockerfile: Dockerfile
     env_file:
       - ./.env
-    environment:
-      DJANGO_DEBUG: ${DJANGO_DEBUG:-False}
-      DJANGO_LOG_LEVEL: ${DJANGO_LOG_LEVEL:-INFO}
-      CELERY_BROKER_URL: ${CELERY_BROKER_URL:-redis://redis:6379/0}
-      CELERY_RESULT_BACKEND: ${CELERY_RESULT_BACKEND:-redis://redis:6379/0}
-      OSS_BUCKET_NAME: ${OSS_BUCKET_NAME}
-      OSS_ENDPOINT: ${OSS_ENDPOINT}
-      OSS_ACCESS_KEY_ID: ${OSS_ACCESS_KEY_ID}
-      OSS_ACCESS_KEY_SECRET: ${OSS_ACCESS_KEY_SECRET}
-      OSS_REGION: ${OSS_REGION}
-      OSS_USE_VIRTUAL_STYLE: ${OSS_USE_VIRTUAL_STYLE:-True}
-      EMAIL_HOST: ${EMAIL_HOST}
-      EMAIL_PORT: ${EMAIL_PORT:-587}
-      EMAIL_HOST_USER: ${EMAIL_HOST_USER}
-      EMAIL_HOST_PASSWORD: ${EMAIL_HOST_PASSWORD}
-      EMAIL_USE_TLS: ${EMAIL_USE_TLS:-True}
-      DEFAULT_FROM_EMAIL: ${DEFAULT_FROM_EMAIL}
-      GOOGLE_OAUTH_CLIENT_ID: ${GOOGLE_OAUTH_CLIENT_ID}
-      GOOGLE_OAUTH_CLIENT_SECRET: ${GOOGLE_OAUTH_CLIENT_SECRET}
-      GOOGLE_OAUTH_CALLBACK_URL: ${GOOGLE_OAUTH_CALLBACK_URL}
-      WECHAT_APP_ID: ${WECHAT_APP_ID}
-      WECHAT_APP_SECRET: ${WECHAT_APP_SECRET}
-      # Default admin user configuration
-      DJANGO_SUPERUSER_USERNAME: ${DJANGO_SUPERUSER_USERNAME:-admin}
-      DJANGO_SUPERUSER_EMAIL: ${DJANGO_SUPERUSER_EMAIL:-admin@example.com}
-      DJANGO_SUPERUSER_PASSWORD: ${DJANGO_SUPERUSER_PASSWORD:-adminpassword}
-      EMAIL_ATTACHMENT_STORAGE_PATH: /opt/email_attachments
     volumes:
       - ./data/django/staticfiles:/opt/devify/core/staticfiles
       - ./cache:/opt/cache
@@ -61,19 +34,6 @@ services:
     restart: unless-stopped
     env_file:
       - ./.env
-    environment:
-      DJANGO_DEBUG: ${DJANGO_DEBUG:-False}
-      DJANGO_LOG_LEVEL: ${DJANGO_LOG_LEVEL:-INFO}
-      CELERY_BROKER_URL: ${CELERY_BROKER_URL:-redis://redis:6379/0}
-      CELERY_RESULT_BACKEND: ${CELERY_RESULT_BACKEND:-redis://redis:6379/0}
-      OSS_BUCKET_NAME: ${OSS_BUCKET_NAME}
-      OSS_ENDPOINT: ${OSS_ENDPOINT}
-      OSS_ACCESS_KEY_ID: ${OSS_ACCESS_KEY_ID}
-      OSS_ACCESS_KEY_SECRET: ${OSS_ACCESS_KEY_SECRET}
-      OSS_REGION: ${OSS_REGION}
-      OSS_USE_VIRTUAL_STYLE: ${OSS_USE_VIRTUAL_STYLE:-False}
-      CELERY_LOG_LEVEL: ${CELERY_LOG_LEVEL:-DEBUG}
-      EMAIL_ATTACHMENT_STORAGE_PATH: /opt/email_attachments
     volumes:
       - ./cache:/opt/cache
       - ./data/logs/worker:/var/log/celery
@@ -96,8 +56,6 @@ services:
     restart: unless-stopped
     env_file:
       - ./.env
-    environment:
-      CELERY_LOG_LEVEL: ${CELERY_LOG_LEVEL:-DEBUG}
     volumes:
       - ./data/logs/scheduler:/var/log/celery
       - ./devify:/opt/devify
@@ -142,10 +100,6 @@ services:
     restart: unless-stopped
     env_file:
       - ./.env
-    environment:
-      MYSQL_ROOT_PASSWORD: root_password
-      MYSQL_HOST: ${MYSQL_HOST:-mysql}
-      MYSQL_PORT: ${MYSQL_PORT:-3306}
     volumes:
       - ./docker/mysql/etc/my.cnf:/etc/mysql/my.cnf
       - ./docker/mysql/initdb.d:/docker-entrypoint-initdb.d
