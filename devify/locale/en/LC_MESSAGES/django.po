@@ -12,164 +12,164 @@ msgstr ""
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
-"Language: zh_Hans\n"
+"Language: en\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"Plural-Forms: nplurals=1; plural=0;\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
 #: devify/v1/jirabot/tasks/notifications.py:74
 msgid "New email received: {subject}"
-msgstr "收到新邮件：{subject}"
+msgstr "New email received: {subject}"
 
 #: devify/v1/jirabot/tasks/notifications.py:75
 msgid "Email Fetching"
-msgstr "邮件获取"
+msgstr "Email Fetching"
 
 #: devify/v1/jirabot/tasks/notifications.py:76
 msgid "From: {sender}"
-msgstr "发件人：{sender}"
+msgstr "From: {sender}"
 
 #: devify/v1/jirabot/tasks/notifications.py:80
 msgid "OCR processing completed: {subject}"
-msgstr "OCR处理完成：{subject}"
+msgstr "OCR processing completed: {subject}"
 
 #: devify/v1/jirabot/tasks/notifications.py:81
 msgid "OCR Processing"
-msgstr "OCR处理"
+msgstr "OCR Processing"
 
 #: devify/v1/jirabot/tasks/notifications.py:82
 msgid "Image text extraction successful"
-msgstr "图片文字提取成功"
+msgstr "Image text extraction successful"
 
 #: devify/v1/jirabot/tasks/notifications.py:86
 msgid "OCR processing failed: {subject}"
-msgstr "OCR处理失败：{subject}"
+msgstr "OCR processing failed: {subject}"
 
 #: devify/v1/jirabot/tasks/notifications.py:88
 msgid "Image text extraction failed"
-msgstr "图片文字提取失败"
+msgstr "Image text extraction failed"
 
 #: devify/v1/jirabot/tasks/notifications.py:92
 msgid "LLM processing completed: {subject}"
-msgstr "LLM处理完成：{subject}"
+msgstr "LLM processing completed: {subject}"
 
 #: devify/v1/jirabot/tasks/notifications.py:93
 msgid "LLM Processing"
-msgstr "LLM处理"
+msgstr "LLM Processing"
 
 #: devify/v1/jirabot/tasks/notifications.py:94
 msgid "Content analysis and summarization completed"
-msgstr "内容分析和摘要完成"
+msgstr "Content analysis and summarization completed"
 
 #: devify/v1/jirabot/tasks/notifications.py:98
 msgid "LLM processing failed: {subject}"
-msgstr "LLM处理失败：{subject}"
+msgstr "LLM processing failed: {subject}"
 
 #: devify/v1/jirabot/tasks/notifications.py:100
 msgid "Content analysis failed"
-msgstr "内容分析失败"
+msgstr "Content analysis failed"
 
 #: devify/v1/jirabot/tasks/notifications.py:105
 msgid "JIRA issue created successfully: {subject}"
-msgstr "JIRA问题创建成功：{subject}"
+msgstr "JIRA issue created successfully: {subject}"
 
 #: devify/v1/jirabot/tasks/notifications.py:106
 msgid "JIRA Creation"
-msgstr "JIRA创建"
+msgstr "JIRA Creation"
 
 #: devify/v1/jirabot/tasks/notifications.py:108
 msgid "Issue: {key} | URL: {url}"
-msgstr "问题：{key} | 链接：{url}"
+msgstr "Issue: {key} | URL: {url}"
 
 #: devify/v1/jirabot/tasks/notifications.py:113
 msgid "Issue created but details not available"
-msgstr "问题已创建但详细信息不可用"
+msgstr "Issue created but details not available"
 
 #: devify/v1/jirabot/tasks/notifications.py:118
 msgid "Issue created"
-msgstr "问题已创建"
+msgstr "Issue created"
 
 #: devify/v1/jirabot/tasks/notifications.py:123
 msgid "JIRA issue creation failed: {subject}"
-msgstr "JIRA问题创建失败：{subject}"
+msgstr "JIRA issue creation failed: {subject}"
 
 #: devify/v1/jirabot/tasks/notifications.py:125
 msgid "Failed to create JIRA issue"
-msgstr "创建JIRA问题失败"
+msgstr "Failed to create JIRA issue"
 
 #: devify/v1/jirabot/tasks/notifications.py:130
 msgid "Status updated: {subject}"
-msgstr "状态已更新：{subject}"
+msgstr "Status updated: {subject}"
 
 #: devify/v1/jirabot/tasks/notifications.py:131
 msgid "Processing"
-msgstr "处理中"
+msgstr "Processing"
 
 #: devify/v1/jirabot/tasks/notifications.py:132
 msgid "Status changed from {old_status} to {new_status}"
-msgstr "状态从 {old_status} 更改为 {new_status}"
+msgstr "Status changed from {old_status} to {new_status}"
 
 #: devify/v1/jirabot/tasks/notifications.py:150
 msgid "Webhook not configured or disabled, skipping notification"
-msgstr "Webhook未配置或已禁用，跳过通知"
+msgstr "Webhook not configured or disabled, skipping notification"
 
 #: devify/v1/jirabot/tasks/notifications.py:155
 msgid "No events configured for notification"
-msgstr "未配置通知事件"
+msgstr "No events configured for notification"
 
 #: devify/v1/jirabot/tasks/notifications.py:160
 msgid "Status '{status}' not in configured events: {events}"
-msgstr "状态 '{status}' 不在配置的事件中：{events}"
+msgstr "Status '{status}' not in configured events: {events}"
 
 #: devify/v1/jirabot/tasks/notifications.py:175
 msgid "Webhook failed: {status_code}"
-msgstr "Webhook失败：{status_code}"
+msgstr "Webhook failed: {status_code}"
 
 #: devify/v1/jirabot/tasks/notifications.py:177
 msgid "Webhook notification sent successfully for status: {status}"
-msgstr "Webhook通知发送成功，状态：{status}"
+msgstr "Webhook notification sent successfully for status: {status}"
 
 #: devify/v1/jirabot/tasks/notifications.py:180
 msgid "Webhook notification failed: {error}"
-msgstr "Webhook通知失败：{error}"
+msgstr "Webhook notification failed: {error}"
 
 #: devify/v1/jirabot/tasks/notifications.py:200
 msgid "Time"
-msgstr "时间"
+msgstr "Time"
 
 #: devify/v1/jirabot/tasks/notifications.py:201
 msgid "Subject"
-msgstr "主题"
+msgstr "Subject"
 
 #: devify/v1/jirabot/tasks/notifications.py:202
 msgid "Sender"
-msgstr "发件人"
+msgstr "Sender"
 
 #: devify/v1/jirabot/tasks/notifications.py:203
 msgid "Stage"
-msgstr "阶段"
+msgstr "Stage"
 
 #: devify/v1/jirabot/tasks/notifications.py:204
 msgid "Details"
-msgstr "详情"
+msgstr "Details"
 
 #: devify/v1/jirabot/tasks/notifications.py:205
 msgid "Unknown"
-msgstr "未知"
+msgstr "Unknown"
 
 #: devify/v1/jirabot/tasks/notifications.py:206
 msgid "No details available"
-msgstr "暂无详细信息"
+msgstr "No details available"
 
 #: devify/v1/jirabot/tasks/notifications.py:208
 msgid "JIRA Issue"
-msgstr "JIRA问题"
+msgstr "JIRA Issue"
 
 #: devify/v1/jirabot/tasks/notifications.py:209
 msgid "JIRA URL"
-msgstr "JIRA链接"
+msgstr "JIRA URL"
 
 #: devify/v1/jirabot/tasks/notifications.py:195
 msgid "[AI] Email Processing: {status}"
-msgstr "[AI] 邮件处理: {status}"
+msgstr "[AI] Email Processing: {status}"

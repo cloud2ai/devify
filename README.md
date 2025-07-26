@@ -323,6 +323,99 @@ To enable automated email processing and JIRA issue creation, you need to config
 >
 > Both tasks are essential for robust, automated email-to-JIRA processing. Make sure both are scheduled to run at appropriate intervals (e.g., every 5 minutes for the main scheduler, every 10-30 minutes for the stuck task reset).
 
+### Webhook Notifications
+
+Jirabot supports webhook notifications to keep you informed about email processing status. Configure webhook settings in Django Admin under **Settings**.
+
+#### Webhook Configuration Keys
+
+| Key                | Type     | Description                                      | Example                      | Required |
+|--------------------|----------|--------------------------------------------------|------------------------------|----------|
+| `url`              | string   | Webhook endpoint URL                             | `"https://open.feishu.cn/open-apis/bot/v2/hook/xxx"` | Yes |
+| `events`           | array    | List of events to notify                         | `["JIRA_SUCCESS", "OCR_FAILED", "SUMMARY_FAILED"]` | No |
+| `timeout`          | integer  | Request timeout in seconds                       | `10`                         | No |
+| `retries`          | integer  | Number of retry attempts                         | `3`                          | No |
+| `headers`          | object   | Custom headers for webhook requests              | `{"Authorization": "Bearer xxx"}` | No |
+| `language`         | string   | Notification message language                    | `"zh-hans"` or `"en"`        | No |
+| `provider`         | string   | Webhook provider type                            | `"feishu"`                   | No |
+
+> **Note:** Whether the webhook is enabled is controlled by the `is_active` field of the `webhook_config` setting in Django Admin. There is no need for an `enabled` field inside the JSON config.
+
+#### Supported Providers
+
+Currently, the following webhook providers are supported:
+
+- **`feishu`** (default): Feishu/Lark interactive card messages with Markdown format
+
+#### Supported Events
+
+The following email processing status events can be configured for notifications:
+
+- **`FETCHED`**: New email received
+- **`OCR_SUCCESS`**: OCR processing completed successfully
+- **`OCR_FAILED`**: OCR processing failed
+- **`SUMMARY_SUCCESS`**: LLM processing completed successfully
+- **`SUMMARY_FAILED`**: LLM processing failed
+- **`JIRA_SUCCESS`**: JIRA issue created successfully
+- **`JIRA_FAILED`**: JIRA issue creation failed
+
+#### Webhook Configuration Validation
+
+The system checks webhook configuration in the following order:
+
+1. **`url`** - Must be configured for notifications to work
+2. **`is_active`** - Enable/disable notifications (set in Django Admin Settings)
+3. **`events`** - List of status types to notify (e.g., `["JIRA_SUCCESS", "OCR_FAILED"]`)
+4. **`provider`** - Webhook provider type (currently supports `"feishu"`)
+5. **`language`** - Message language (defaults to `"zh-hans"`)
+
+#### Example Webhook Configuration
+
+```json
+{
+  "url": "https://open.feishu.cn/open-apis/bot/v2/hook/xxx",
+  "events": ["JIRA_SUCCESS", "OCR_FAILED", "SUMMARY_FAILED"],
+  "timeout": 10,
+  "retries": 3,
+  "headers": {},
+  "language": "zh-hans",
+  "provider": "feishu"
+}
+```
+
+#### Feishu Card Message Format
+
+When using the `feishu` provider, notifications are sent as interactive cards with:
+
+- **Color-coded headers**: Green (success), Red (failure), Blue (processing), Grey (other)
+- **Markdown content**: Formatted with time, subject, sender, stage, and details
+- **JIRA integration**: Includes issue key and URL when available
+- **Internationalization**: Supports Chinese and English message content
+
+#### Testing Webhook Configuration
+
+Use the management command to test your webhook configuration:
+
+```bash
+# Test with default parameters
+python manage.py test_webhook --user your_username
+
+# Test with specific email and status
+python manage.py test_webhook --user your_username --email-id 123 --old-status fetched --new-status jira_success
+
+# Test with status transition only
+python manage.py test_webhook --user your_username --old-status processing --new-status jira_success
+```
+
+#### Initializing Webhook Settings
+
+Webhook settings are included in the unified initialization command:
+
+```bash
+# Initialize all settings including webhook
+python manage.py init_jirabot_settings --user your_username
+```
+
 ## Required Periodic Tasks
 
 You **must** configure the following periodic tasks in Django Admin (**Periodic Tasks** section, provided by `django-celery-beat`):

@@ -109,6 +109,15 @@ class Command(BaseCommand):
                     'Focus on the core need or problem, using a brief verb-object '
                     'structure. Avoid product-specific or platform-specific terms.'
                 )
+            },
+            'webhook_config': {
+                'url': '',
+                'events': ['jira_success', 'ocr_failed', 'summary_failed'],
+                'timeout': 10,
+                'retries': 3,
+                'headers': {},
+                'language': 'zh-hans',
+                'provider': 'feishu'
             }
         }
 
@@ -163,9 +172,12 @@ class Command(BaseCommand):
                 f'   • email_config - Your email server details\n'
                 f'   • jira_config - Your JIRA server details\n'
                 f'   • prompt_config - Customize AI prompts if needed\n'
+                f'   • webhook_config - Configure external notifications (optional)\n'
                 f'3. Configure periodic tasks in Django Admin:\n'
                 f'   • schedule_email_processing_tasks\n'
-                f'   • reset_stuck_processing_email'
+                f'   • reset_stuck_processing_email\n'
+                f'4. Test webhook configuration:\n'
+                f'   • python manage.py test_webhook'
             )
 
     def list_settings(self):
@@ -176,7 +188,8 @@ class Command(BaseCommand):
             ('email_config', 'Email server connection and authentication settings'),
             ('email_filter_config', 'Email filtering and processing rules'),
             ('jira_config', 'JIRA integration and default issue creation settings'),
-            ('prompt_config', 'AI prompt templates for email/attachment/summary processing')
+            ('prompt_config', 'AI prompt templates for email/attachment/summary processing'),
+            ('webhook_config', 'Webhook configuration for external notifications')
         ]
 
         for key, description in settings_info:
