@@ -368,3 +368,52 @@ Core features of this project leverage components from the
 
 For more details on the architecture and advanced usage, please refer to the
 above repositories.
+
+## Jirabot Processing Flow
+
+```mermaid
+flowchart TD
+    A[Input Sources] --> B[Email Collection]
+    B --> C[Email Processing]
+    C --> D{Has Attachments?}
+
+    D -->|Yes| E[Extract Images]
+    D -->|No| F[Process Text Content]
+
+    E --> G[OCR Processing]
+    G --> H[OCR Content Extraction]
+
+    F --> I[Text Content Organization]
+    H --> I
+
+    I --> J[LLM Processing]
+    J --> K[Content Summarization]
+    K --> L[Title Generation]
+
+    L --> M[JIRA Issue Creation]
+    M --> N[Upload Attachments to JIRA]
+    N --> O[JIRA Issue Complete]
+
+    style A fill:#e1f5fe
+    style O fill:#c8e6c9
+    style G fill:#fff3e0
+    style J fill:#f3e5f5
+```
+
+### Process Description
+
+1. **Input Sources**: Various communication tools (WeChat, Slack, Teams, etc.) or direct emails
+2. **Email Collection**: System fetches emails from configured mailboxes
+3. **Email Processing**: Parses email content and extracts attachments
+4. **OCR Processing**: Extracts text content from image attachments using Azure Document Intelligence
+5. **Content Organization**: LLM organizes chat logs and OCR content into structured format
+6. **Summarization**: LLM generates comprehensive summary and issue title
+7. **JIRA Integration**: Creates JIRA issue with organized content and uploaded attachments
+
+### Key Features
+
+- **Multi-source Input**: Supports various communication platforms via email forwarding
+- **Image Processing**: Automatic OCR extraction from screenshots and documents
+- **AI-powered Analysis**: LLM processes and organizes content for better readability
+- **Automated JIRA Creation**: Direct integration with JIRA for issue tracking
+- **Attachment Handling**: Preserves and uploads original files to JIRA issues

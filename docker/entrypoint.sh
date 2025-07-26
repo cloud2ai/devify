@@ -93,9 +93,9 @@ start_celery_worker() {
     log "Starting Celery worker..."
     exec celery -A core worker \
         --loglevel=${CELERY_LOG_LEVEL:-INFO} \
-        --concurrency=${CELERY_CONCURRENCY} \
-        --max-tasks-per-child=1 \
-        --max-memory-per-child=256000 \
+        --concurrency=${CELERY_CONCURRENCY:-1} \
+        --max-tasks-per-child=${CELERY_MAX_TASKS_PER_CHILD:-1000} \
+        --max-memory-per-child=${CELERY_MAX_MEMORY_PER_CHILD:-256000} \
         --logfile=/var/log/celery/worker.log
 }
 
@@ -109,7 +109,7 @@ start_celery_beat() {
 start_flower() {
     log "Starting Flower..."
     exec celery -A core flower \
-        --port=$FLOWER_PORT \
+        --port=${FLOWER_PORT:-5555} \
         --address=0.0.0.0 \
         --broker="$REDIS_URL" \
         --loglevel=${CELERY_LOG_LEVEL:-INFO} \

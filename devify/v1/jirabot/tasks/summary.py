@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 def llm_process_email(self, email_id, force=False):
     """
     Use LLM to organize, enrich, and summarize an email and its attachments.
-    Only execute if email status is OCR_SUCCESS.
+    Only execute if email status is OCR_SUCCESS, unless force=True.
     """
     try:
         email = EmailMessage.objects.select_related('user').get(id=email_id)
@@ -24,7 +24,8 @@ def llm_process_email(self, email_id, force=False):
 
     # Check that the email status is OCR_SUCCESS before processing
     # This ensures the task is only executed after OCR is completed
-    if email.status != EmailMessage.ProcessingStatus.OCR_SUCCESS:
+    # Skip status check if force=True
+    if not force and email.status != EmailMessage.ProcessingStatus.OCR_SUCCESS:
         logger.error(
             f"Email {email.subject} status is {email.status}, "
             f"expected OCR_SUCCESS. Aborting LLM processing."

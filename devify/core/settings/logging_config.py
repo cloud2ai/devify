@@ -14,6 +14,7 @@ Highlights:
 - A `console` handler is configured to output logs to stderr.
 - The `core` logger is customized to avoid propagating logs to the root logger.
 - Suppresses DEBUG logs for `django.utils.autoreload` by setting its level to INFO.
+- Suppresses Celery system DEBUG logs to avoid task registration noise.
 """
 
 import logging.config
@@ -60,6 +61,27 @@ def configure_logging(log_level="INFO"):
             'django.server': DEFAULT_LOGGING['loggers']['django.server'],
             'django.utils.autoreload': {
                 'level': 'INFO',
+                'handlers': ['console'],
+                'propagate': False,
+            },
+            # Suppress Celery system DEBUG logs
+            'celery': {
+                'level': 'WARNING',
+                'handlers': ['console'],
+                'propagate': False,
+            },
+            'celery.utils.functional': {
+                'level': 'WARNING',
+                'handlers': ['console'],
+                'propagate': False,
+            },
+            'celery.worker': {
+                'level': 'WARNING',
+                'handlers': ['console'],
+                'propagate': False,
+            },
+            'celery.app': {
+                'level': 'WARNING',
                 'handlers': ['console'],
                 'propagate': False,
             },
