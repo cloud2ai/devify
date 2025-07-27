@@ -9,8 +9,8 @@ from django.core.management.base import BaseCommand, CommandError
 from django.contrib.auth.models import User
 from django.utils import timezone
 
-from v1.jirabot.models import Settings, EmailTask
-from v1.jirabot.tasks import scan_user_emails
+from jirabot.models import Settings, EmailTask
+from jirabot.tasks import scan_user_emails
 
 # Initialize logger for this module
 logger = logging.getLogger(__name__)

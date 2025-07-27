@@ -7,8 +7,8 @@ from django.utils import timezone
 from celery import shared_task
 from django.contrib.auth.models import User
 
-from v1.jirabot.models import EmailAttachment, EmailMessage, EmailTask, Settings
-from v1.jirabot.utils.email_client import EmailClient
+from jirabot.models import EmailAttachment, EmailMessage, EmailTask, Settings
+from jirabot.utils.email_client import EmailClient
 from django.conf import settings
 
 logger = logging.getLogger(__name__)

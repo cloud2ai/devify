@@ -122,7 +122,7 @@ docker-compose -f docker-compose.yml build
 docker-compose -f docker-compose.yml up -d
 ```
 
-### Settings
+## Jirabot Settings
 
 Before using Jirabot features, you should initialize the required settings for all users. This can be done via a management command inside the API container. The command will automatically create default records for all necessary JIRABOT settings (`email_config`, `email_filter_config`, `jira_config`, `prompt_config`) for each user if they do not already exist.
 
@@ -167,7 +167,7 @@ To simplify configuration, all required settings should be added here. Below are
 4. **Navigate to the Settings Model**
    - In the sidebar, find and click on **Settings** under JIRABOT
 
-#### Email Configuration(email_config)
+### Email Configuration(email_config)
 
 | Key               | Type     | Description                                 | Example                        |
 |-------------------|----------|---------------------------------------------|--------------------------------|
@@ -194,7 +194,7 @@ To simplify configuration, all required settings should be added here. Below are
 }
 ```
 
-#### Email Filter Config(email_filter_config)
+### Email Filter Config(email_filter_config)
 
 | Key              | Type     | Description                                                        | Example                |
 |------------------|----------|--------------------------------------------------------------------|------------------------|
@@ -270,7 +270,7 @@ To simplify configuration, all required settings should be added here. Below are
 }
 ```
 
-## Prompt Config (prompt_config)
+### Prompt Config (prompt_config)
 
 | Config Key              | Description                                                                                   | Required |
 |------------------------|-----------------------------------------------------------------------------------------------|----------|
@@ -288,40 +288,6 @@ To simplify configuration, all required settings should be added here. Below are
   "summary_title_prompt": "Summarize a clear and specific issue title based on the provided chat logs and background information. The title should directly reflect the main problem to be solved or the key requirement, using a concise verb-object structure. Avoid vague or generic terms. Focus on what needs to be addressed or resolved. Limit the title to 200 characters for clarity and easy identification."
 }
 ```
-
-### How to Configure the Scheduler in Django Admin
-
-To enable automated email processing and JIRA issue creation, you need to configure the scheduler in Django Admin. Follow these steps:
-
-3. **Configure the Scheduler Task**
-   - In Django Admin, go to the **Periodic Tasks** section (provided by `django-celery-beat`).
-   - Click **Add** to create a new periodic task.
-   - In the **Task** field, select the task you want to schedule (for example, your email/JIRA processing task).
-   - Set the **Interval** or **Crontab** schedule as needed (e.g., every 5 minutes).
-   - Fill in any required arguments or keyword arguments for your task.
-   - Optionally, add a description for clarity.
-   - Ensure the **Enabled** checkbox is selected.
-
-4. **Save the Task**
-   - Click **Save** to activate the periodic task.
-
-5. **Verify**
-   - The periodic task will now run automatically according to your schedule (e.g., scanning emails, triggering LLM, submitting to JIRA).
-   - You can edit, disable, or delete the task at any time in the **Periodic Tasks** section.
-
-> **Tip:**
-> Managing periodic tasks directly in the **Periodic Tasks** section is recommended for most use cases. No need to configure scheduler settings separately if you use `django-celery-beat`.
-
-> **Important:**
-> You must configure the following two periodic tasks in Django Admin (Periodic Tasks section):
->
-> 1. **schedule_email_processing_tasks**
->    - This is the main scheduler task. It periodically polls the email/message status and triggers the appropriate processing tasks (such as OCR, LLM summarization, and JIRA submission) based on the current state machine.
->
-> 2. **reset_stuck_processing_emails**
->    - This task is responsible for detecting and resetting any email/message tasks that have been stuck in a pending or processing state for too long (timeout recovery). It helps ensure the system can recover from unexpected failures or timeouts.
->
-> Both tasks are essential for robust, automated email-to-JIRA processing. Make sure both are scheduled to run at appropriate intervals (e.g., every 5 minutes for the main scheduler, every 10-30 minutes for the stuck task reset).
 
 ### Webhook Notifications
 
@@ -359,16 +325,6 @@ The following email processing status events can be configured for notifications
 - **`JIRA_SUCCESS`**: JIRA issue created successfully
 - **`JIRA_FAILED`**: JIRA issue creation failed
 
-#### Webhook Configuration Validation
-
-The system checks webhook configuration in the following order:
-
-1. **`url`** - Must be configured for notifications to work
-2. **`is_active`** - Enable/disable notifications (set in Django Admin Settings)
-3. **`events`** - List of status types to notify (e.g., `["JIRA_SUCCESS", "OCR_FAILED"]`)
-4. **`provider`** - Webhook provider type (currently supports `"feishu"`)
-5. **`language`** - Message language (defaults to `"zh-hans"`)
-
 #### Example Webhook Configuration
 
 ```json
@@ -382,7 +338,6 @@ The system checks webhook configuration in the following order:
   "provider": "feishu"
 }
 ```
-
 #### Feishu Card Message Format
 
 When using the `feishu` provider, notifications are sent as interactive cards with:
@@ -406,15 +361,41 @@ python manage.py test_webhook --user your_username --email-id 123 --old-status f
 # Test with status transition only
 python manage.py test_webhook --user your_username --old-status processing --new-status jira_success
 ```
+### How to Configure the Scheduler in Django Admin
 
-#### Initializing Webhook Settings
+To enable automated email processing and JIRA issue creation, you need to configure the scheduler in Django Admin. Follow these steps:
 
-Webhook settings are included in the unified initialization command:
+3. **Configure the Scheduler Task**
+   - In Django Admin, go to the **Periodic Tasks** section (provided by `django-celery-beat`).
+   - Click **Add** to create a new periodic task.
+   - In the **Task** field, select the task you want to schedule (for example, your email/JIRA processing task).
+   - Set the **Interval** or **Crontab** schedule as needed (e.g., every 5 minutes).
+   - Fill in any required arguments or keyword arguments for your task.
+   - Optionally, add a description for clarity.
+   - Ensure the **Enabled** checkbox is selected.
 
-```bash
-# Initialize all settings including webhook
-python manage.py init_jirabot_settings --user your_username
-```
+4. **Save the Task**
+   - Click **Save** to activate the periodic task.
+
+5. **Verify**
+   - The periodic task will now run automatically according to your schedule (e.g., scanning emails, triggering LLM, submitting to JIRA).
+   - You can edit, disable, or delete the task at any time in the **Periodic Tasks** section.
+
+> **Tip:**
+> Managing periodic tasks directly in the **Periodic Tasks** section is recommended for most use cases. No need to configure scheduler settings separately if you use `django-celery-beat`.
+
+> **Important:**
+> You must configure the following two periodic tasks in Django Admin (Periodic Tasks section):
+>
+> 1. **schedule_email_processing_tasks**
+>    - This is the main scheduler task. It periodically polls the email/message status and triggers the appropriate processing tasks (such as OCR, LLM summarization, and JIRA submission) based on the current state machine.
+>
+> 2. **reset_stuck_processing_emails**
+>    - This task is responsible for detecting and resetting any email/message tasks that have been stuck in a pending or processing state for too long (timeout recovery). It helps ensure the system can recover from unexpected failures or timeouts.
+>
+> Both tasks are essential for robust, automated email-to-JIRA processing. Make sure both are scheduled to run at appropriate intervals (e.g., every 5 minutes for the main scheduler, every 10-30 minutes for the stuck task reset).
+
+
 
 ## Required Periodic Tasks
 

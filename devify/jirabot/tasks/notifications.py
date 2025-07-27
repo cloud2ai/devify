@@ -5,7 +5,7 @@ from django.utils import timezone
 from django.utils.translation import activate, gettext_lazy as _
 
 from devtoolbox.webhook import Webhook
-from v1.jirabot.models import EmailMessage, Settings
+from jirabot.models import EmailMessage, Settings
 
 logger = logging.getLogger(__name__)
 

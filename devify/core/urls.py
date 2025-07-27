@@ -31,8 +31,8 @@ urlpatterns = [
 
     # Authentication routes
     # Includes authentication endpoints provided by custom
-    # v1.auth.urls (no trailing slash)
-    path('', include('v1.auth.urls')),
+    # auth.urls (no trailing slash)
+    path('', include('auth.urls')),
 
     # FIXME(Ray): Implement this method according to real project
     # Simulates WeChat mini-program login functionality

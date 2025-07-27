@@ -3,8 +3,8 @@ import logging
 from django.db.models.signals import post_save, pre_save
 from django.dispatch import receiver
 
-from v1.jirabot.models import EmailMessage
-from v1.jirabot.tasks.notifications import send_webhook_notification
+from jirabot.models import EmailMessage
+from jirabot.tasks.notifications import send_webhook_notification
 
 logger = logging.getLogger(__name__)
 

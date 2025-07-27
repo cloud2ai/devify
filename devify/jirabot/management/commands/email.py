@@ -5,8 +5,8 @@ Management command for email-related tests and operations.
 import logging
 from django.core.management.base import BaseCommand, CommandError
 from django.contrib.auth.models import User
-from v1.jirabot.models import Settings
-from v1.jirabot.utils.email_client import EmailClient
+from jirabot.models import Settings
+from jirabot.utils.email_client import EmailClient
 from core.settings.globals import EMAIL_ATTACHMENT_STORAGE_PATH
 
 logger = logging.getLogger(__name__)

@@ -5,7 +5,7 @@ Management command for testing llm_process_email task.
 from django.core.management.base import BaseCommand
 import logging
 
-from v1.jirabot.tasks import llm_process_email
+from jirabot.tasks import llm_process_email
 
 logger = logging.getLogger(__name__)
 

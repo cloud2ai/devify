@@ -5,7 +5,7 @@ Management command for testing submit_issue_to_jira task.
 from django.core.management.base import BaseCommand
 import logging
 
-from v1.jirabot.tasks import submit_issue_to_jira
+from jirabot.tasks import submit_issue_to_jira
 
 logger = logging.getLogger(__name__)
 

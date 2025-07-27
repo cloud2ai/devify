@@ -2,8 +2,8 @@ import logging
 from django.core.management.base import BaseCommand
 from django.contrib.auth.models import User
 from django.utils import timezone
-from v1.jirabot.models import EmailMessage, EmailTask
-from v1.jirabot.tasks.notifications import (
+from jirabot.models import EmailMessage, EmailTask
+from jirabot.tasks.notifications import (
     get_webhook_config,
     send_webhook_notification
 )

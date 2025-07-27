@@ -5,7 +5,7 @@ import json
 import logging
 from django.core.management.base import BaseCommand
 from django.contrib.auth.models import User
-from v1.jirabot.models import Settings
+from jirabot.models import Settings
 
 
 class Command(BaseCommand):
