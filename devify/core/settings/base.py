@@ -175,6 +175,8 @@ WSGI_APPLICATION = 'core.wsgi.application'
 # ============================
 # Database Configuration
 # ============================
+# https://docs.djangoproject.com/en/5.1/ref/settings/#databases
+# Database related settings moved to database.py
 
 
 # Password validation

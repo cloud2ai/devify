@@ -21,7 +21,6 @@ WORKERS=${WORKERS:-1}
 THREADS=${THREADS:-1}
 CELERY_CONCURRENCY=${CELERY_CONCURRENCY:-1}
 REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
-FLOWER_PORT=5555
 DB_ENGINE=${DB_ENGINE:-sqlite}
 
 # --- Ensure log directories exist ---
@@ -143,7 +142,6 @@ case "$1" in
     development)
         wait_for_db
         run_migrations
-        collect_static
         start_development
         ;;
     *)
