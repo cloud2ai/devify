@@ -22,12 +22,6 @@ services:
     depends_on:
       - mysql
     command: development
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://127.0.0.1:8000/health"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-      start_period: 60s
 
   devify-worker:
     image: devify:latest
@@ -106,7 +100,7 @@ services:
       - "5555:5555"
     depends_on:
       devify-api:
-        condition: service_healthy
+        condition: service_started
       redis:
         condition: service_started
     networks:

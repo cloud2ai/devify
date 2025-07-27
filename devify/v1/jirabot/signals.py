@@ -1,12 +1,25 @@
 import logging
 
-from django.db.models.signals import post_save
+from django.db.models.signals import post_save, pre_save
 from django.dispatch import receiver
 
 from v1.jirabot.models import EmailMessage
 from v1.jirabot.tasks.notifications import send_webhook_notification
 
 logger = logging.getLogger(__name__)
+
+
+@receiver(pre_save, sender=EmailMessage)
+def capture_old_status(sender, instance, **kwargs):
+    """
+    Capture the old status before saving for comparison.
+    """
+    if instance.pk:  # Only for existing instances
+        try:
+            old_instance = EmailMessage.objects.get(pk=instance.pk)
+            instance._old_status = old_instance.status
+        except EmailMessage.DoesNotExist:
+            instance._old_status = None
 
 
 @receiver(post_save, sender=EmailMessage)
@@ -20,27 +33,24 @@ def notify_email_status_change(sender, instance, created, **kwargs):
                      f"skipping notification")
         return
 
-    try:
-        # Get the old status from database
-        old_instance = EmailMessage.objects.get(pk=instance.pk)
-        old_status = old_instance.status
-    except EmailMessage.DoesNotExist:
-        logger.warning(f"Email {instance.id} not found in database, "
-                       f"skipping notification")
-        return
+    # Get the old status that was captured in pre_save
+    old_status = getattr(instance, '_old_status', None)
 
-    # Only trigger notification if status actually changed
-    if old_status != instance.status:
+    if old_status is not None and old_status != instance.status:
         logger.info(f"Email {instance.id} status changed: {old_status} -> "
                     f"{instance.status}")
 
         # Trigger async webhook notification - let the task
         # handle all business logic
-        send_webhook_notification.delay(
-            instance.id,
-            old_status,
-            instance.status
-        )
+        try:
+            send_webhook_notification.delay(
+                instance.id,
+                old_status,
+                instance.status
+            )
+        except Exception as e:
+            logger.error(f"Failed to queue webhook notification "
+                         f"for email {instance.id}: {e}")
     else:
         logger.debug(f"Email {instance.id} status "
                      f"unchanged: {instance.status}")
