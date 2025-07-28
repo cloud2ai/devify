@@ -2,7 +2,7 @@ version: "3.8"
 
 services:
   devify-api:
-    image: devify:latest
+    image: ccr.ccs.tencentyun.com/cloud2ai/devify:latest
     container_name: devify-api
     restart: unless-stopped
     build:
@@ -29,7 +29,7 @@ services:
       start_period: 60s
 
   devify-worker:
-    image: devify:latest
+    image: ccr.ccs.tencentyun.com/cloud2ai/devify:latest
     container_name: devify-worker
     restart: unless-stopped
     env_file:
@@ -51,7 +51,7 @@ services:
     command: celery
 
   devify-scheduler:
-    image: devify:latest
+    image: ccr.ccs.tencentyun.com/cloud2ai/devify:latest
     container_name: devify-scheduler
     restart: unless-stopped
     env_file:
