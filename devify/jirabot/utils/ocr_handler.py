@@ -15,5 +15,5 @@ class OCRHandler:
 
     def recognize(self, image_path: str) -> str:
         logger.info(f"Recognizing image: {image_path}")
-        lines = self.client.recognize(image_path)
+        lines = self.client.recognize(image_path, skip_invalid=True)
         return "\n".join(lines)

@@ -98,10 +98,11 @@ def submit_issue_to_jira(self, email_message_id):
         # Insert OCR content after each image reference in llm_content.
         # For every !filename! in llm_content, if there is a matching
         # attachment with OCR result, insert the OCR text right after the image.
+        # Only include attachments that have both OCR content and LLM content
         ocr_map = {
             att.filename: att.llm_content
             for att in attachments
-            if att.llm_content
+            if att.ocr_content and att.ocr_content.strip() and att.llm_content
         }
 
         def replacer(match):
@@ -151,8 +152,20 @@ def submit_issue_to_jira(self, email_message_id):
         )
         # Upload attachments to JIRA issue
         attachments = email.attachments.all()
-        logger.info(f"Found {attachments.count()} attachments to upload")
+        logger.info(f"Found {attachments.count()} total attachments")
+
+        uploaded_count = 0
+        skipped_count = 0
+
         for attachment in attachments:
+            # Skip image attachments with empty OCR content
+            if attachment.is_image and (not attachment.ocr_content or
+                                      not attachment.ocr_content.strip()):
+                logger.info(f"Skipping image attachment {attachment.filename} "
+                           f"- no OCR content available")
+                skipped_count += 1
+                continue
+
             try:
                 # Use original filename for JIRA upload to match email references
                 original_filename = attachment.filename
@@ -165,12 +178,16 @@ def submit_issue_to_jira(self, email_message_id):
                     f"Successfully uploaded attachment {original_filename} "
                     f"to issue {issue_key}"
                 )
+                uploaded_count += 1
             except Exception as e:
                 logger.error(
                     f"Failed to upload attachment {original_filename} "
                     f"to issue {issue_key}: {e}"
                 )
                 continue
+
+        logger.info(f"Attachment upload completed: {uploaded_count} uploaded, "
+                   f"{skipped_count} skipped (no OCR content)")
         # Create JiraIssue record after successful JIRA issue creation
         jira_issue_url = f"{jira_url}/browse/{issue_key}"
         JiraIssue.objects.create(

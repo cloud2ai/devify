@@ -131,28 +131,41 @@ def organize_attachments_ocr(email, ocr_prompt, force=False):
     """
     Use LLM to organize/structure each image attachment's OCR content.
     Save result to attachment.llm_content.
-    Raise exception if any image attachment has empty OCR content.
+    Skip attachments with empty OCR content instead of raising exception.
     """
     logger.info(f"Starting to organize attachments OCR: {email.subject}")
+    processed_count = 0
+    skipped_count = 0
+
     for att in email.attachments.filter(is_image=True):
         if not force and att.llm_content:
             logger.info(f"Attachment {att.id} already has "
                         f"LLM content, skipping")
             continue
-        # Raise exception if OCR content is empty
+
+        # Skip attachments with empty OCR content
         if not att.ocr_content or not att.ocr_content.strip():
-            raise ValueError(
-                f"Attachment {att.id} has no OCR content for LLM organization.")
+            logger.info(f"Attachment {att.id} ({att.filename}) has no OCR "
+                       f"content, skipping LLM organization")
+            skipped_count += 1
+            continue
+
         # Call LLM (summary_chat)
         llm_result = call_llm(ocr_prompt, att.ocr_content)
         att.llm_content = llm_result.strip() if llm_result else ''
         att.save(update_fields=['llm_content'])
+        processed_count += 1
+        logger.info(f"LLM organization completed for attachment {att.id} "
+                   f"({att.filename})")
+
+    logger.info(f"Attachments OCR organization completed: {processed_count} "
+               f"processed, {skipped_count} skipped (no OCR content)")
 
 def summarize_email(email, summary_prompt, summary_title_prompt, force=False):
     """
     Use LLM to generate summary_title and summary_content for the email.
     Include OCR processed content from attachments for comprehensive summary.
-    Raise exception if required LLM content is missing.
+    Only include attachments that have LLM content.
     """
     logger.info(f"Starting to summarize email: {email.subject}")
     if not force and email.summary_content and email.summary_title:
@@ -167,14 +180,15 @@ def summarize_email(email, summary_prompt, summary_title_prompt, force=False):
     content = f"Subject: {email.subject}\nText Content: {email.llm_content}\n"
 
     # Collect all OCR processed content from attachments with filenames
+    # Only include attachments that have LLM content
     ocr_contents = []
     for att in email.attachments.filter(is_image=True):
-        # Raise exception if OCR LLM content is missing
-        if not att.llm_content or not att.llm_content.strip():
-            raise ValueError(
-                f"Attachment {att.id} LLM OCR content is missing for summary.")
-        ocr_contents.append(
-            f"[Attachment: {att.filename}]\n{att.llm_content}")
+        if att.llm_content and att.llm_content.strip():
+            ocr_contents.append(
+                f"[Attachment: {att.filename}]\n{att.llm_content}")
+        else:
+            logger.info(f"Skipping attachment {att.id} ({att.filename}) "
+                       f"for summary - no LLM content")
 
     # Combine email content with OCR contents
     combined_content = content
@@ -182,6 +196,8 @@ def summarize_email(email, summary_prompt, summary_title_prompt, force=False):
         combined_content += "\n\n--- ATTACHMENT OCR CONTENT ---\n\n"
         combined_content += "\n\n".join(ocr_contents)
         logger.info(f"Included {len(ocr_contents)} OCR contents in summary")
+    else:
+        logger.info("No attachment OCR content available for summary")
 
     summary_content = email.summary_content
     summary_title = email.summary_title
