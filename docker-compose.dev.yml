@@ -20,6 +20,12 @@ services:
     depends_on:
       - mysql
     command: development
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:8000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
 
   devify-worker:
     image: devify:latest

@@ -1,3 +1,42 @@
+"""
+JIRA Issue Creation Module
+
+This module handles the creation of JIRA issues from processed email
+messages. It includes comprehensive image processing, OCR content
+integration, and attachment management.
+
+Function Call Flow:
+==================
+
+submit_issue_to_jira(email_message_id)
+    ↓
+├── get_jira_config(email)            # Get JIRA settings from user
+├── build_jira_summary(email)         # Create formatted summary with AI prefix
+├── build_description_parts(email)    # Build comprehensive description
+│   ├── process_embedded_images()     # Add OCR results to embedded images
+│   ├── get_embedded_filenames()      # Extract embedded image filenames
+│   └── process_unembedded_images()   # Handle images not in conversation
+├── upload_attachments_to_jira()      # Upload files with filtering
+└── create_jira_issue_record()        # Create database record
+
+Key Features:
+=============
+- Automatic image embedding in JIRA descriptions
+- OCR content integration for embedded and unembedded images
+- Intelligent filtering of attachments (skip images without OCR)
+- Comprehensive error handling and logging
+- Database record creation for tracking
+- Emoji removal and content formatting for JIRA compatibility
+
+Dependencies:
+=============
+- EmailMessage: Source email with processed content
+- EmailAttachment: Image files with OCR and LLM content
+- Settings: User JIRA configuration
+- JiraHandler: JIRA API interaction
+- JiraIssue: Database record for created issues
+"""
+
 import logging
 import re
 import datetime
@@ -9,9 +48,104 @@ from ..utils.jira_handler import JiraHandler
 
 logger = logging.getLogger(__name__)
 
+
+@shared_task(bind=True)
+def submit_issue_to_jira(self, email_message_id):
+    """
+    Submit processed issue info to JIRA for a given email_message_id.
+
+    Args:
+        email_message_id: ID of the EmailMessage to process
+
+    Returns:
+        JIRA issue key if successful, None otherwise
+    """
+    logger.info(
+        f"Submitting JIRA issue for email_message_id={email_message_id}"
+    )
+    try:
+        email = EmailMessage.objects.select_related('user').get(
+            id=email_message_id
+        )
+    except EmailMessage.DoesNotExist:
+        logger.error(
+            f"EmailMessage id {email_message_id} does not exist"
+        )
+        return
+
+    try:
+        jira_config = get_jira_config(email)
+    except Settings.DoesNotExist:
+        logger.error(
+            f"User {email.user} has no active jira_config setting"
+        )
+        return
+
+    jira_url = jira_config.get('url')
+    username = jira_config.get('username')
+    password = jira_config.get('api_token')
+    project_key = jira_config.get('project_key')
+    issue_type = jira_config.get('default_issue_type', 'New Feature')
+    priority = jira_config.get('default_priority', 'High')
+    epic_link = jira_config.get('epic_link', '')
+    assignee = jira_config.get('assignee', '')
+    summary = build_jira_summary(email)
+
+    # Build comprehensive description with summary and LLM
+    # content (with OCR inline)
+    description_parts = build_description_parts(email)
+
+    description = "\n\n".join(description_parts)
+    # Remove emoji from description
+    description = remove_emoji(description)[:10000]
+
+    try:
+        handler = JiraHandler(jira_url, username, password)
+        issue_key = handler.create_issue(
+            project_key=project_key,
+            summary=summary,
+            issue_type=issue_type,
+            description=description,
+            priority=priority,
+            epic_link=epic_link,
+            assignee=assignee
+        )
+        logger.info(
+            f"Successfully submitted JIRA issue {issue_key} "
+            f"for email_message_id={email_message_id}"
+        )
+
+        # Upload attachments to JIRA issue
+        uploaded_count, skipped_count = upload_attachments_to_jira(
+            handler, issue_key, email
+        )
+
+        # Create JiraIssue record after successful JIRA issue creation
+        create_jira_issue_record(email, issue_key, jira_url)
+        email.status = EmailMessage.ProcessingStatus.JIRA_SUCCESS
+        email.save(update_fields=['status'])
+        return issue_key
+
+    except Exception as e:
+        logger.error(
+            f"Failed to submit JIRA issue for "
+            f"email_message_id={email_message_id}: {e}",
+            exc_info=True
+        )
+        email.status = EmailMessage.ProcessingStatus.JIRA_FAILED
+        email.save(update_fields=['status'])
+        return
+
+
 def remove_emoji(text):
     """
     Remove emoji characters from text for JIRA compatibility.
+
+    Args:
+        text: Input text that may contain emoji characters
+
+    Returns:
+        Text with emoji characters removed
     """
     if not text:
         return ''
@@ -30,49 +164,294 @@ def remove_emoji(text):
     )
     return emoji_pattern.sub('', text)
 
+
 def clean_jira_summary(summary):
     """
     Remove all line breaks and trim spaces for JIRA summary.
+
+    Args:
+        summary: Input summary text
+
+    Returns:
+        Cleaned summary text without line breaks
     """
     if summary is None:
         return ''
     return summary.replace('\n', ' ').replace('\r', ' ').strip()
 
-@shared_task(bind=True)
-def submit_issue_to_jira(self, email_message_id):
+
+def process_embedded_images(llm_content, attachments):
     """
-    Submit processed issue info to JIRA for a given email_message_id.
+    Process embedded images in LLM content and add OCR results.
+
+    Args:
+        llm_content: The LLM processed content
+        attachments: List of image attachments
+
+    Returns:
+        Processed content with OCR results added after image references
     """
-    logger.info(
-        f"Submitting JIRA issue for email_message_id={email_message_id}"
+    if not llm_content:
+        return ''
+
+    # Create OCR map for attachments with both OCR and LLM content
+    ocr_map = {
+        att.filename: att.llm_content
+        for att in attachments
+        if att.ocr_content and att.ocr_content.strip() and att.llm_content
+    }
+
+    def replacer(match):
+        """
+        Replace image reference with OCR result if available.
+        """
+        fname = match.group(1)
+        ocr_text = ocr_map.get(fname)
+        if ocr_text:
+            return (
+                f"!{match.group(1)}{match.group(2) or ''}!\n\n"
+                f"[OCR Result]{ocr_text}\n"
+            )
+        return match.group(0)
+
+    # Insert OCR result after image reference in llm_content
+    # This regex supports both:
+    #   !filename!                (e.g. !image.jpg!)
+    #   !filename|width=600!      (e.g. !image.jpg|width=600!)
+    # and any other parameters after '|'.
+    return re.sub(
+        r"!([\w@.\-]+)((?:\|[^!]*)?)!",
+        replacer,
+        llm_content
     )
-    try:
-        email = EmailMessage.objects.select_related('user').get(
-            id=email_message_id
+
+
+def get_embedded_filenames(llm_content):
+    """
+    Extract embedded image filenames from LLM content.
+
+    Args:
+        llm_content: The LLM processed content
+
+    Returns:
+        Set of embedded image filenames
+    """
+    if not llm_content:
+        return set()
+
+    embedded_matches = re.findall(
+        r"!([\w@.\-]+)(?:\|[^!]*)?!", llm_content
+    )
+    return set(embedded_matches)
+
+
+def process_unembedded_images(attachments, embedded_filenames):
+    """
+    Process images that are not embedded in the conversation.
+
+    Args:
+        attachments: List of image attachments
+        embedded_filenames: Set of filenames already embedded in content
+
+    Returns:
+        List of formatted image content strings
+    """
+    unembedded_images = []
+    unembedded_count = 0
+
+    for attachment in attachments:
+        if (attachment.filename not in embedded_filenames and
+            attachment.ocr_content and attachment.ocr_content.strip()):
+
+            logger.info(
+                f"Processing unembedded image: {attachment.filename}"
+            )
+            image_content = []
+            image_content.append(f"**Image: {attachment.filename}**")
+
+            # Embed the actual image using JIRA image syntax
+            image_content.append(f"!{attachment.filename}|width=600!")
+
+            # Add OCR content
+            if attachment.ocr_content:
+                image_content.append(
+                    f"[OCR Content]\n{attachment.ocr_content}"
+                )
+
+            # Add LLM summary if available
+            if attachment.llm_content:
+                image_content.append(
+                    f"[AI Summary]\n{attachment.llm_content}"
+                )
+
+            unembedded_images.append("\n".join(image_content))
+            unembedded_count += 1
+
+    if unembedded_images:
+        logger.info(
+            f"Adding {unembedded_count} unembedded images to description"
         )
-    except EmailMessage.DoesNotExist:
-        logger.error(
-            f"EmailMessage id {email_message_id} does not exist"
+
+    return unembedded_images
+
+
+def build_description_parts(email):
+    """
+    Build description parts for JIRA issue.
+
+    Args:
+        email: EmailMessage object
+
+    Returns:
+        List of description parts to be joined
+    """
+    description_parts = []
+
+    # Add summary content if available
+    if email.summary_content:
+        description_parts.append(email.summary_content)
+
+    # Add LLM processed content if available
+    llm_content = email.llm_content or ''
+    attachments = list(email.attachments.filter(is_image=True))
+
+    if llm_content:
+        # Process embedded images and add OCR results
+        llm_content_with_ocr = process_embedded_images(
+            llm_content, attachments
         )
-        return
-    try:
-        jira_setting = email.user.settings.get(
-            key='jira_config', is_active=True
+        if description_parts:
+            description_parts.append("--------------------------------")
+        description_parts.append(llm_content_with_ocr)
+
+    # Add unembedded image content with OCR results and summaries
+    embedded_filenames = get_embedded_filenames(llm_content)
+    if llm_content:
+        logger.info(
+            f"Found {len(embedded_filenames)} embedded images in LLM content"
         )
-        jira_config = jira_setting.value
-    except Settings.DoesNotExist:
-        logger.error(
-            f"User {email.user} has no active jira_config setting"
-        )
-        return
-    jira_url = jira_config.get('url')
-    username = jira_config.get('username')
-    password = jira_config.get('api_token')
-    project_key = jira_config.get('project_key')
-    issue_type = jira_config.get('default_issue_type', 'New Feature')
-    priority = jira_config.get('default_priority', 'High')
-    epic_link = jira_config.get('epic_link', '')
-    assignee = jira_config.get('assignee', '')
+
+    unembedded_images = process_unembedded_images(
+        attachments, embedded_filenames
+    )
+
+    # Append unembedded image content to description
+    if unembedded_images:
+        if description_parts:
+            description_parts.append("--------------------------------")
+        description_parts.append("**Additional Images:**")
+        description_parts.extend(unembedded_images)
+
+    return description_parts
+
+
+def upload_attachments_to_jira(handler, issue_key, email):
+    """
+    Upload attachments to JIRA issue with proper filtering and error handling.
+
+    Args:
+        handler: JiraHandler instance
+        issue_key: JIRA issue key
+        email: EmailMessage object
+
+    Returns:
+        Tuple of (uploaded_count, skipped_count)
+    """
+    attachments = email.attachments.all()
+    logger.info(f"Found {attachments.count()} total attachments")
+
+    uploaded_count = 0
+    skipped_count = 0
+
+    for attachment in attachments:
+        # Skip image attachments with empty OCR content
+        if (attachment.is_image and
+            (not attachment.ocr_content or not attachment.ocr_content.strip())):
+            logger.info(
+                f"Skipping image attachment {attachment.filename} "
+                f"- no OCR content available"
+            )
+            skipped_count += 1
+            continue
+
+        try:
+            # Use original filename for JIRA upload to match email references
+            original_filename = attachment.filename
+            handler.upload_attachment(
+                issue_key=issue_key,
+                file_path=attachment.file_path,
+                filename=original_filename
+            )
+            logger.info(
+                f"Successfully uploaded attachment {original_filename} "
+                f"to issue {issue_key}"
+            )
+            uploaded_count += 1
+        except Exception as e:
+            logger.error(
+                f"Failed to upload attachment {original_filename} "
+                f"to issue {issue_key}: {e}"
+            )
+            continue
+
+    logger.info(
+        f"Attachment upload completed: {uploaded_count} uploaded, "
+        f"{skipped_count} skipped (no OCR content)"
+    )
+    return uploaded_count, skipped_count
+
+
+def create_jira_issue_record(email, issue_key, jira_url):
+    """
+    Create JiraIssue record in database after successful JIRA issue creation.
+
+    Args:
+        email: EmailMessage object
+        issue_key: JIRA issue key
+        jira_url: JIRA base URL
+
+    Returns:
+        Created JiraIssue object
+    """
+    jira_issue_url = f"{jira_url}/browse/{issue_key}"
+    jira_issue = JiraIssue.objects.create(
+        user=email.user,
+        email_message=email,
+        jira_issue_key=issue_key,
+        jira_url=jira_issue_url
+    )
+    return jira_issue
+
+
+def get_jira_config(email):
+    """
+    Get JIRA configuration from user settings.
+
+    Args:
+        email: EmailMessage object
+
+    Returns:
+        JIRA configuration dictionary
+
+    Raises:
+        Settings.DoesNotExist: If user has no active jira_config setting
+    """
+    jira_setting = email.user.settings.get(
+        key='jira_config', is_active=True
+    )
+    return jira_setting.value
+
+
+def build_jira_summary(email):
+    """
+    Build JIRA summary with AI prefix and date.
+
+    Args:
+        email: EmailMessage object
+
+    Returns:
+        Formatted summary string
+    """
     summary = email.summary_title or email.subject
 
     # Build JIRA summary with [AI] and today's date in [YYYYMMDD] format
@@ -83,128 +462,4 @@ def submit_issue_to_jira(self, email_message_id):
     summary = clean_jira_summary(summary)
     summary = remove_emoji(summary)[:500]
 
-    # Build comprehensive description with summary and LLM
-    # content (with OCR inline)
-    description_parts = []
-
-    # Add summary content if available
-    if email.summary_content:
-        description_parts.append(email.summary_content)
-
-    # Add LLM processed content if available
-    llm_content = email.llm_content or ''
-    attachments = list(email.attachments.filter(is_image=True))
-    if llm_content:
-        # Insert OCR content after each image reference in llm_content.
-        # For every !filename! in llm_content, if there is a matching
-        # attachment with OCR result, insert the OCR text right after the image.
-        # Only include attachments that have both OCR content and LLM content
-        ocr_map = {
-            att.filename: att.llm_content
-            for att in attachments
-            if att.ocr_content and att.ocr_content.strip() and att.llm_content
-        }
-
-        def replacer(match):
-            """
-            Replace image reference with OCR result if available.
-            """
-            fname = match.group(1)
-            ocr_text = ocr_map.get(fname)
-            if ocr_text:
-                return (
-                    f"!{match.group(1)}{match.group(2) or ''}!\n\n"
-                    f"[OCR Result]{ocr_text}\n"
-                )
-            return match.group(0)
-
-        # Insert OCR result after image reference in llm_content.
-        # This regex supports both:
-        #   !filename!                (e.g. !image.jpg!)
-        #   !filename|width=600!      (e.g. !image.jpg|width=600!)
-        # and any other parameters after '|'.
-        llm_content_with_ocr = re.sub(
-            r"!([\w@.\-]+)((?:\|[^!]*)?)!",
-            replacer,
-            llm_content
-        )
-        if description_parts:
-            description_parts.append("--------------------------------")
-        description_parts.append(llm_content_with_ocr)
-
-    description = "\n\n".join(description_parts)
-    # Remove emoji from description
-    description = remove_emoji(description)[:10000]
-    try:
-        handler = JiraHandler(jira_url, username, password)
-        issue_key = handler.create_issue(
-            project_key=project_key,
-            summary=summary,
-            issue_type=issue_type,
-            description=description,
-            priority=priority,
-            epic_link=epic_link,
-            assignee=assignee
-        )
-        logger.info(
-            f"Successfully submitted JIRA issue {issue_key} "
-            f"for email_message_id={email_message_id}"
-        )
-        # Upload attachments to JIRA issue
-        attachments = email.attachments.all()
-        logger.info(f"Found {attachments.count()} total attachments")
-
-        uploaded_count = 0
-        skipped_count = 0
-
-        for attachment in attachments:
-            # Skip image attachments with empty OCR content
-            if attachment.is_image and (not attachment.ocr_content or
-                                      not attachment.ocr_content.strip()):
-                logger.info(f"Skipping image attachment {attachment.filename} "
-                           f"- no OCR content available")
-                skipped_count += 1
-                continue
-
-            try:
-                # Use original filename for JIRA upload to match email references
-                original_filename = attachment.filename
-                handler.upload_attachment(
-                    issue_key=issue_key,
-                    file_path=attachment.file_path,
-                    filename=original_filename
-                )
-                logger.info(
-                    f"Successfully uploaded attachment {original_filename} "
-                    f"to issue {issue_key}"
-                )
-                uploaded_count += 1
-            except Exception as e:
-                logger.error(
-                    f"Failed to upload attachment {original_filename} "
-                    f"to issue {issue_key}: {e}"
-                )
-                continue
-
-        logger.info(f"Attachment upload completed: {uploaded_count} uploaded, "
-                   f"{skipped_count} skipped (no OCR content)")
-        # Create JiraIssue record after successful JIRA issue creation
-        jira_issue_url = f"{jira_url}/browse/{issue_key}"
-        JiraIssue.objects.create(
-            user=email.user,
-            email_message=email,
-            jira_issue_key=issue_key,
-            jira_url=jira_issue_url
-        )
-        email.status = EmailMessage.ProcessingStatus.JIRA_SUCCESS
-        email.save(update_fields=['status'])
-        return issue_key
-    except Exception as e:
-        logger.error(
-            f"Failed to submit JIRA issue for "
-            f"email_message_id={email_message_id}: {e}",
-            exc_info=True
-        )
-        email.status = EmailMessage.ProcessingStatus.JIRA_FAILED
-        email.save(update_fields=['status'])
-        return
+    return summary
