@@ -91,8 +91,9 @@ def llm_process_email(self, email_id, force=False):
         logger.info(f"LLM processed email: {email.subject}")
     except Exception as e:
         logger.error(f"Failed to process email {email.subject} with LLM: {e}")
+        logger.exception(e)
         # Update email status to FAILED and record error message
-        email.status = EmailMessage.ProcessingStatus.FAILED
+        email.status = EmailMessage.ProcessingStatus.SUMMARY_FAILED
         email.error_message = str(e)
         email.save(update_fields=['status', 'error_message'])
         raise

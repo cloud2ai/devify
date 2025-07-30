@@ -1,9 +1,10 @@
+import json
+
+from django import forms
 from django.contrib import admin
-from django.utils.html import format_html
 from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
 from django_json_widget.widgets import JSONEditorWidget
-from django import forms
 
 from .models import (
     Settings,
@@ -14,23 +15,135 @@ from .models import (
 )
 
 
+class SafeJSONEditorWidget(JSONEditorWidget):
+    """
+    Custom JSON editor widget that safely handles both string and dict values.
+    Provides automatic JSON formatting and error handling.
+    """
+
+    def value_from_datadict(self, data, files, name):
+        """
+        Convert form data to Python object with safe JSON parsing.
+        """
+        value = data.get(name)
+        if value is None:
+            return None
+        if isinstance(value, str):
+            try:
+                return json.loads(value) if value.strip() else None
+            except json.JSONDecodeError:
+                return value
+        return value
+
+    def value_omitted_from_data(self, data, files, name):
+        """
+        Check if value is omitted from data.
+        """
+        return name not in data
+
+    def format_value(self, value):
+        """
+        Format value for display in widget with proper JSON indentation.
+        """
+        if value is None:
+            return ''
+        if isinstance(value, (dict, list)):
+            return json.dumps(value, indent=2, ensure_ascii=False)
+        if isinstance(value, str):
+            try:
+                # Try to parse and re-format for consistency
+                parsed = json.loads(value)
+                return json.dumps(parsed, indent=2, ensure_ascii=False)
+            except json.JSONDecodeError:
+                return value
+        return str(value)
+
+
+class FormattedTextEditorWidget(forms.Textarea):
+    """
+    Enhanced text editor widget for fields that may contain JSON or
+    formatted text. Provides automatic JSON detection and formatting.
+    """
+
+    def render(self, name, value, attrs=None, renderer=None):
+        """
+        Render the widget with basic JSON formatting.
+        """
+        # Try to format JSON if the value looks like JSON
+        formatted_value = value
+        if value and isinstance(value, str):
+            try:
+                # Check if it looks like JSON
+                if (value.strip().startswith('{') or
+                    value.strip().startswith('[')):
+                    parsed = json.loads(value)
+                    formatted_value = json.dumps(
+                        parsed, indent=2, ensure_ascii=False
+                    )
+            except (json.JSONDecodeError, ValueError):
+                pass
+
+        # Use default textarea rendering with formatted value
+        attrs = attrs or {}
+        attrs['rows'] = attrs.get('rows', '10')
+        attrs['cols'] = attrs.get('cols', '80')
+
+        return super().render(name, formatted_value, attrs, renderer)
+
+
 class SettingsAdminForm(forms.ModelForm):
     """
-    Custom admin form for Settings, using JSONEditorWidget for value field.
+    Custom admin form for Settings, using SafeJSONEditorWidget for
+    value field.
     """
+
     class Meta:
         model = Settings
         fields = '__all__'
         widgets = {
-            'value': JSONEditorWidget
+            'value': SafeJSONEditorWidget
+        }
+
+
+class EmailMessageAdminForm(forms.ModelForm):
+    """
+    Custom admin form for EmailMessage, using FormattedTextEditorWidget
+    for content fields.
+    """
+
+    class Meta:
+        model = EmailMessage
+        fields = '__all__'
+        widgets = {
+            'raw_content': FormattedTextEditorWidget,
+            'html_content': FormattedTextEditorWidget,
+            'text_content': FormattedTextEditorWidget,
+            'llm_content': FormattedTextEditorWidget,
+            'error_message': FormattedTextEditorWidget
+        }
+
+
+class EmailAttachmentAdminForm(forms.ModelForm):
+    """
+    Custom admin form for EmailAttachment, using FormattedTextEditorWidget
+    for content fields.
+    """
+
+    class Meta:
+        model = EmailAttachment
+        fields = '__all__'
+        widgets = {
+            'ocr_content': FormattedTextEditorWidget,
+            'llm_content': FormattedTextEditorWidget
         }
 
 
 @admin.register(Settings)
 class SettingsAdmin(admin.ModelAdmin):
     """
-    Admin interface for user settings
+    Admin interface for user settings with JSON value formatting.
     """
+
     form = SettingsAdminForm
     list_display = [
         'user', 'key', 'value_preview', 'is_active', 'created_at'
@@ -50,26 +163,38 @@ class SettingsAdmin(admin.ModelAdmin):
     )
 
     def value_preview(self, obj):
-        """Show a preview of the JSON value"""
-        import json
+        """
+        Show a preview of the JSON value with proper formatting.
+        """
         try:
             if isinstance(obj.value, dict):
-                return json.dumps(obj.value, indent=2)[:100] + '...'
+                formatted_json = json.dumps(
+                    obj.value, indent=2, ensure_ascii=False
+                )
+                if len(formatted_json) > 100:
+                    return formatted_json[:100] + '...'
+                else:
+                    return formatted_json
             else:
                 return str(obj.value)[:100] + '...'
-        except:
+        except Exception:
             return str(obj.value)[:100] + '...'
+
     value_preview.short_description = _('Value Preview')
 
     def get_queryset(self, request):
+        """
+        Optimize queryset with select_related for user.
+        """
         return super().get_queryset(request).select_related('user')
 
 
 @admin.register(EmailTask)
 class EmailTaskAdmin(admin.ModelAdmin):
     """
-    Admin interface for email tasks
+    Admin interface for email tasks with comprehensive task management.
     """
+
     list_display = [
         'id', 'user', 'status', 'emails_processed',
         'emails_created_issues', 'started_at', 'completed_at'
@@ -99,22 +224,32 @@ class EmailTaskAdmin(admin.ModelAdmin):
     )
 
     def get_queryset(self, request):
+        """
+        Optimize queryset with select_related for user.
+        """
         return super().get_queryset(request).select_related('user')
 
 
 @admin.register(EmailMessage)
 class EmailMessageAdmin(admin.ModelAdmin):
     """
-    Admin interface for email messages
+    Admin interface for email messages with content formatting and
+    attachment management.
     """
+
+    form = EmailMessageAdminForm
     list_display = [
         'subject', 'user', 'sender', 'status', 'received_at',
         'task', 'has_attachments'
     ]
     list_filter = ['status', 'received_at', 'created_at']
-    search_fields = ['subject', 'sender', 'recipients', 'summary_title', 'user__username']
+    search_fields = [
+        'subject', 'sender', 'recipients', 'summary_title',
+        'user__username'
+    ]
     readonly_fields = [
-        'created_at', 'updated_at', 'llm_content'
+        'created_at', 'updated_at', 'llm_content_formatted',
+        'raw_content_formatted'
     ]
 
     fieldsets = (
@@ -125,13 +260,13 @@ class EmailMessageAdmin(admin.ModelAdmin):
             )
         }),
         (_('Content'), {
-            'fields': ('raw_content', 'html_content', 'text_content'),
+            'fields': ('raw_content_formatted', 'html_content', 'text_content'),
             'classes': ('collapse',)
         }),
         (_('Summary'), {
             'fields': (
                 'summary_title', 'summary_content', 'summary_priority',
-                'llm_content'
+                'llm_content_formatted'
             )
         }),
         (_('Processing'), {
@@ -144,32 +279,99 @@ class EmailMessageAdmin(admin.ModelAdmin):
     )
 
     def has_attachments(self, obj):
+        """
+        Check if email message has attachments.
+        """
         return obj.attachments.exists()
+
     has_attachments.boolean = True
     has_attachments.short_description = _('Has Attachments')
 
+    def ocr_content_formatted(self, obj):
+        """
+        Format OCR content for better display.
+        """
+        if not obj.ocr_content:
+            return '-'
+        return str(obj.ocr_content)
+
+    ocr_content_formatted.short_description = _('OCR Content (Formatted)')
+
+    def llm_content_formatted(self, obj):
+        """
+        Format LLM content for better display with JSON formatting.
+        """
+        if not obj.llm_content:
+            return '-'
+
+        try:
+            # Try to parse as JSON
+            if isinstance(obj.llm_content, str):
+                content = json.loads(obj.llm_content)
+            else:
+                content = obj.llm_content
+
+            return json.dumps(content, indent=2, ensure_ascii=False)
+        except (json.JSONDecodeError, TypeError):
+            # If not JSON, display as formatted text
+            return str(obj.llm_content)
+
+    llm_content_formatted.short_description = _('LLM Content (Formatted)')
+
+    def raw_content_formatted(self, obj):
+        """
+        Format raw content for better display with JSON formatting.
+        """
+        if not obj.raw_content:
+            return '-'
+
+        try:
+            # Try to parse as JSON
+            if isinstance(obj.raw_content, str):
+                content = json.loads(obj.raw_content)
+            else:
+                content = obj.raw_content
+
+            return json.dumps(content, indent=2, ensure_ascii=False)
+        except (json.JSONDecodeError, TypeError):
+            # If not JSON, display as formatted text
+            return str(obj.raw_content)
+
+    raw_content_formatted.short_description = _('Raw Content (Formatted)')
+
     def get_queryset(self, request):
+        """
+        Optimize queryset with select_related for user and task.
+        """
         return super().get_queryset(request).select_related('user', 'task')
 
 
 @admin.register(EmailAttachment)
 class EmailAttachmentAdmin(admin.ModelAdmin):
     """
-    Admin interface for email attachments
+    Admin interface for email attachments with content formatting and
+    file management.
     """
+
+    form = EmailAttachmentAdminForm
     list_display = [
         'filename', 'user', 'email_message', 'content_type',
         'file_size', 'is_image', 'ocr_content', 'created_at'
     ]
     list_filter = ['is_image', 'content_type', 'created_at']
-    search_fields = ['filename', 'email_message__subject', 'user__username']
-    readonly_fields = ['created_at', 'ocr_content', 'llm_content']
+    search_fields = [
+        'filename', 'email_message__subject', 'user__username'
+    ]
+    readonly_fields = [
+        'created_at', 'ocr_content_formatted', 'llm_content_formatted'
+    ]
 
     fieldsets = (
         (_('Attachment Information'), {
             'fields': (
                 'user', 'email_message', 'filename', 'content_type',
-                'file_size', 'is_image', 'ocr_content', 'llm_content'
+                'file_size', 'is_image', 'ocr_content_formatted',
+                'llm_content_formatted'
             )
         }),
         (_('File Details'), {
@@ -182,15 +384,52 @@ class EmailAttachmentAdmin(admin.ModelAdmin):
         }),
     )
 
+    def llm_content_formatted(self, obj):
+        """
+        Format LLM content for better display with JSON formatting.
+        """
+        if not obj.llm_content:
+            return '-'
+
+        try:
+            # Try to parse as JSON
+            if isinstance(obj.llm_content, str):
+                content = json.loads(obj.llm_content)
+            else:
+                content = obj.llm_content
+
+            return json.dumps(content, indent=2, ensure_ascii=False)
+        except (json.JSONDecodeError, TypeError):
+            # If not JSON, display as formatted text
+            return str(obj.llm_content)
+
+    llm_content_formatted.short_description = _('LLM Content (Formatted)')
+
+    def ocr_content_formatted(self, obj):
+        """
+        Format OCR content for better display.
+        """
+        if not obj.ocr_content:
+            return '-'
+        return str(obj.ocr_content)
+
+    ocr_content_formatted.short_description = _('OCR Content (Formatted)')
+
     def get_queryset(self, request):
-        return super().get_queryset(request).select_related('user', 'email_message')
+        """
+        Optimize queryset with select_related for user and email_message.
+        """
+        return super().get_queryset(request).select_related(
+            'user', 'email_message'
+        )
 
 
 @admin.register(JiraIssue)
 class JiraIssueAdmin(admin.ModelAdmin):
     """
-    Admin interface for JIRA issues
+    Admin interface for JIRA issues with issue tracking and URL management.
     """
+
     list_display = [
         'jira_issue_key', 'user', 'email_message', 'jira_url',
         'created_at', 'updated_at'
@@ -199,6 +438,7 @@ class JiraIssueAdmin(admin.ModelAdmin):
         'jira_issue_key', 'email_message__subject', 'user__username'
     ]
     readonly_fields = ['created_at', 'updated_at']
+
     fieldsets = (
         (_('Issue Information'), {
             'fields': (
@@ -213,7 +453,7 @@ class JiraIssueAdmin(admin.ModelAdmin):
 
     def get_queryset(self, request):
         """
-        Optimize queryset with select_related for user and email_message
+        Optimize queryset with select_related for user and email_message.
         """
         return super().get_queryset(request).select_related(
             'user', 'email_message'
