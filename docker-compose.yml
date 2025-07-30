@@ -1,6 +1,6 @@
 services:
   devify-api:
-    image: ccr.ccs.tencentyun.com/cloud2ai/devify:latest
+    image: registry.cn-beijing.aliyuncs.com/cloud2ai/devify:latest
     container_name: devify-api
     restart: unless-stopped
     build:
@@ -27,7 +27,7 @@ services:
       start_period: 60s
 
   devify-worker:
-    image: ccr.ccs.tencentyun.com/cloud2ai/devify:latest
+    image: registry.cn-beijing.aliyuncs.com/cloud2ai/devify:latest
     container_name: devify-worker
     restart: unless-stopped
     env_file:
@@ -49,7 +49,7 @@ services:
     command: celery
 
   devify-scheduler:
-    image: ccr.ccs.tencentyun.com/cloud2ai/devify:latest
+    image: registry.cn-beijing.aliyuncs.com/cloud2ai/devify:latest
     container_name: devify-scheduler
     restart: unless-stopped
     env_file:
