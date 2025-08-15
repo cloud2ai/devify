@@ -259,7 +259,15 @@ class EmailAttachment(models.Model):
     )
     filename = models.CharField(
         max_length=255,
-        verbose_name=_('Filename')
+        verbose_name=_('Filename'),
+        help_text=_('Original filename from email')
+    )
+    safe_filename = models.CharField(
+        max_length=255,
+        verbose_name=_('Safe Filename'),
+        help_text=_('UUID-based filename for file system storage'),
+        null=True,
+        blank=True
     )
     content_type = models.CharField(
         max_length=100,
@@ -298,6 +306,7 @@ class EmailAttachment(models.Model):
         )
     )
     created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         verbose_name = _('Email Attachment')

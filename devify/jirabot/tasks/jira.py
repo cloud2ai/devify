@@ -195,8 +195,9 @@ def process_embedded_images(llm_content, attachments):
         return ''
 
     # Create OCR map for attachments with both OCR and LLM content
+    # Use UUID filename for mapping to match LLM content
     ocr_map = {
-        att.filename: att.llm_content
+        att.safe_filename or att.filename: att.llm_content
         for att in attachments
         if att.ocr_content and att.ocr_content.strip() and att.llm_content
     }
@@ -260,17 +261,20 @@ def process_unembedded_images(attachments, embedded_filenames):
     unembedded_count = 0
 
     for attachment in attachments:
-        if (attachment.filename not in embedded_filenames and
+        # Use UUID filename for consistency with LLM content
+        jira_filename = attachment.safe_filename or attachment.filename
+
+        if (jira_filename not in embedded_filenames and
             attachment.ocr_content and attachment.ocr_content.strip()):
 
             logger.info(
-                f"Processing unembedded image: {attachment.filename}"
+                f"Processing unembedded image: {jira_filename}"
             )
             image_content = []
-            image_content.append(f"**Image: {attachment.filename}**")
+            image_content.append(f"**Image: {jira_filename}**")
 
             # Embed the actual image using JIRA image syntax
-            image_content.append(f"!{attachment.filename}|width=600!")
+            image_content.append(f"!{jira_filename}|width=600!")
 
             # Add OCR content
             if attachment.ocr_content:
@@ -375,21 +379,21 @@ def upload_attachments_to_jira(handler, issue_key, email):
             continue
 
         try:
-            # Use original filename for JIRA upload to match email references
-            original_filename = attachment.filename
+            # Use UUID filename for JIRA upload to match text placeholders
+            jira_filename = attachment.safe_filename or attachment.filename
             handler.upload_attachment(
                 issue_key=issue_key,
                 file_path=attachment.file_path,
-                filename=original_filename
+                filename=jira_filename
             )
             logger.info(
-                f"Successfully uploaded attachment {original_filename} "
+                f"Successfully uploaded attachment {jira_filename} "
                 f"to issue {issue_key}"
             )
             uploaded_count += 1
         except Exception as e:
             logger.error(
-                f"Failed to upload attachment {original_filename} "
+                f"Failed to upload attachment {jira_filename} "
                 f"to issue {issue_key}: {e}"
             )
             continue

@@ -27,7 +27,7 @@ dependencies = [
     "flower==2.0.1",
     "redis",
     "gunicorn==20.1.0",
-    "mail-parser==3.15.0",
+    "beautifulsoup4>=4.12.0",
     "email-validator==2.1.1",
     "devtoolbox @ git+https://github.com/cloud2ai/devtoolbox.git",
     "devtoolbox[llm] @ git+https://github.com/cloud2ai/devtoolbox.git",

@@ -106,6 +106,7 @@ def _save_email_attachments(user, email_msg, attachments):
             user=user,
             email_message=email_msg,
             filename=att.get('filename', 'unknown'),
+            safe_filename=att.get('safe_filename', ''),
             content_type=att.get('content_type', ''),
             file_size=att.get('file_size', 0),
             file_path=new_path,

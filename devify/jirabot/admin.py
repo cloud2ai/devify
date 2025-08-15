@@ -3,6 +3,7 @@ import json
 from django import forms
 from django.contrib import admin
 from django.urls import reverse
+from django.utils.safestring import mark_safe
 from django.utils.translation import gettext_lazy as _
 from django_json_widget.widgets import JSONEditorWidget
 
@@ -240,7 +241,7 @@ class EmailMessageAdmin(admin.ModelAdmin):
     form = EmailMessageAdminForm
     list_display = [
         'subject', 'user', 'sender', 'status', 'received_at',
-        'task', 'has_attachments'
+        'task', 'attachment_count', 'has_attachments'
     ]
     list_filter = ['status', 'received_at', 'created_at']
     search_fields = [
@@ -249,7 +250,7 @@ class EmailMessageAdmin(admin.ModelAdmin):
     ]
     readonly_fields = [
         'created_at', 'updated_at', 'llm_content_formatted',
-        'raw_content_formatted'
+        'raw_content_formatted', 'attachment_details'
     ]
 
     fieldsets = (
@@ -272,11 +273,22 @@ class EmailMessageAdmin(admin.ModelAdmin):
         (_('Processing'), {
             'fields': ('status', 'error_message')
         }),
+        (_('Attachments'), {
+            'fields': ('attachment_details',),
+            'classes': ('collapse',)
+        }),
         (_('Timestamps'), {
             'fields': ('created_at', 'updated_at'),
             'classes': ('collapse',)
         }),
     )
+
+    def attachment_count(self, obj):
+        """
+        Display attachment count in list view.
+        """
+        return obj.attachments.count()
+    attachment_count.short_description = _('Attachments')
 
     def has_attachments(self, obj):
         """
@@ -286,6 +298,56 @@ class EmailMessageAdmin(admin.ModelAdmin):
 
     has_attachments.boolean = True
     has_attachments.short_description = _('Has Attachments')
+
+    def attachment_details(self, obj):
+        """
+        Display detailed attachment list in detail view.
+        """
+        attachments = obj.attachments.all()
+        if attachments:
+            html = (
+                '<h3>Attachment List</h3>'
+                '<table style="width: 100%; border-collapse: collapse;">'
+                '<thead>'
+                '<tr style="background-color: #f5f5f5;">'
+                '<th style="border: 1px solid #ddd; padding: 8px; text-align: left;">'
+                'Original Filename</th>'
+                '<th style="border: 1px solid #ddd; padding: 8px; text-align: left;">'
+                'Safe Filename (UUID)</th>'
+                '<th style="border: 1px solid #ddd; padding: 8px; text-align: left;">'
+                'Content Type</th>'
+                '<th style="border: 1px solid #ddd; padding: 8px; text-align: left;">'
+                'Size (bytes)</th>'
+                '<th style="border: 1px solid #ddd; padding: 8px; text-align: left;">'
+                'Type</th>'
+                '</tr>'
+                '</thead>'
+                '<tbody>'
+            )
+            for attachment in attachments:
+                safe_filename = attachment.safe_filename or 'Not set'
+                file_type = 'Image' if attachment.is_image else 'File'
+                html += (
+                    f'<tr>'
+                    f'<td style="border: 1px solid #ddd; padding: 8px;">'
+                    f'<strong>{attachment.filename}</strong></td>'
+                    f'<td style="border: 1px solid #ddd; padding: 8px; '
+                    f'font-family: monospace; font-size: 12px;">{safe_filename}</td>'
+                    f'<td style="border: 1px solid #ddd; padding: 8px;">'
+                    f'{attachment.content_type}</td>'
+                    f'<td style="border: 1px solid #ddd; padding: 8px;">'
+                    f'{attachment.file_size}</td>'
+                    f'<td style="border: 1px solid #ddd; padding: 8px;">'
+                    f'{file_type}</td>'
+                    f'</tr>'
+                )
+            html += '</tbody></table>'
+            return mark_safe(html)
+        return "No attachments"
+
+    attachment_details.short_description = _(
+        'Attachment Details'
+    )
 
     def ocr_content_formatted(self, obj):
         """
@@ -355,31 +417,34 @@ class EmailAttachmentAdmin(admin.ModelAdmin):
 
     form = EmailAttachmentAdminForm
     list_display = [
-        'filename', 'user', 'email_message', 'content_type',
-        'file_size', 'is_image', 'ocr_content', 'created_at'
+        'filename', 'safe_filename', 'user', 'email_message', 'content_type',
+        'file_size', 'is_image', 'created_at'
     ]
     list_filter = ['is_image', 'content_type', 'created_at']
     search_fields = [
-        'filename', 'email_message__subject', 'user__username'
+        'filename', 'safe_filename', 'email_message__subject', 'user__username'
     ]
     readonly_fields = [
-        'created_at', 'ocr_content_formatted', 'llm_content_formatted'
+        'created_at', 'updated_at', 'ocr_content_formatted', 'llm_content_formatted'
     ]
 
     fieldsets = (
         (_('Attachment Information'), {
             'fields': (
-                'user', 'email_message', 'filename', 'content_type',
-                'file_size', 'is_image', 'ocr_content_formatted',
-                'llm_content_formatted'
+                'user', 'email_message', 'filename', 'safe_filename',
+                'content_type', 'file_size', 'is_image'
             )
+        }),
+        (_('Content'), {
+            'fields': ('ocr_content_formatted', 'llm_content_formatted'),
+            'classes': ('collapse',)
         }),
         (_('File Details'), {
             'fields': ('file_path',),
             'classes': ('collapse',)
         }),
         (_('Timestamps'), {
-            'fields': ('created_at',),
+            'fields': ('created_at', 'updated_at'),
             'classes': ('collapse',)
         }),
     )
