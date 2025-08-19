@@ -196,6 +196,7 @@ def process_embedded_images(llm_content, attachments):
 
     # Create OCR map for attachments with both OCR and LLM content
     # Use UUID filename for mapping to match LLM content
+    # LLM content uses [IMAGE: uuid.jpg] format as placeholders
     ocr_map = {
         att.safe_filename or att.filename: att.llm_content
         for att in attachments
@@ -262,8 +263,15 @@ def process_unembedded_images(attachments, embedded_filenames):
 
     for attachment in attachments:
         # Use UUID filename for consistency with LLM content
+        # LLM content uses [IMAGE: uuid.jpg] format as placeholders
         jira_filename = attachment.safe_filename or attachment.filename
 
+        # NOTE(Ray): Current limitation - only processes attachments that are
+        # not in embedded_filenames. This means if LLM content doesn't contain
+        # image references, some attachments with OCR content may not be
+        # included in JIRA description even though the actual files are
+        # uploaded to JIRA. This is a known issue that needs to be addressed
+        # in future iterations.
         if (jira_filename not in embedded_filenames and
             attachment.ocr_content and attachment.ocr_content.strip()):
 
@@ -335,6 +343,21 @@ def build_description_parts(email):
             f"Found {len(embedded_filenames)} embedded images in LLM content"
         )
 
+    # NOTE(Ray): Current implementation limitation
+    # The system only includes OCR content for images that are explicitly
+    # referenced in the LLM content. Images that exist as attachments but
+    # are not mentioned in the conversation text may have their OCR content
+    # excluded from the JIRA description, even though the actual image files
+    # are uploaded to JIRA.
+    #
+    # This means:
+    # - Images referenced in LLM content: OCR content included in description
+    # - Images not referenced in LLM content: Only file uploaded, no OCR
+    #   content in description
+    #
+    # TODO(Ray): Future improvement needed to ensure all image OCR content
+    # is included regardless of whether they are referenced in the conversation
+    # text.
     unembedded_images = process_unembedded_images(
         attachments, embedded_filenames
     )
@@ -380,6 +403,7 @@ def upload_attachments_to_jira(handler, issue_key, email):
 
         try:
             # Use UUID filename for JIRA upload to match text placeholders
+            # LLM content uses [IMAGE: uuid.jpg] format as placeholders
             jira_filename = attachment.safe_filename or attachment.filename
             handler.upload_attachment(
                 issue_key=issue_key,
@@ -398,6 +422,16 @@ def upload_attachments_to_jira(handler, issue_key, email):
             )
             continue
 
+    # NOTE(Ray): Attachment upload vs OCR content inclusion
+    # This function handles file upload to JIRA, but OCR content inclusion
+    # in the JIRA description is handled separately in
+    # build_description_parts().
+    #
+    # Current behavior:
+    # - Files are uploaded to JIRA (this function)
+    # - OCR content is only included if the image is referenced in LLM content
+    # - This can lead to situations where files exist in JIRA but their
+    #   OCR content is missing from the description
     logger.info(
         f"Attachment upload completed: {uploaded_count} uploaded, "
         f"{skipped_count} skipped (no OCR content)"

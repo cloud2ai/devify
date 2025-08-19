@@ -147,15 +147,16 @@ class Command(BaseCommand):
             email: EmailMessage instance
             attachments: List of attachment info from parsing
         """
-        # Use safe_filename as primary identifier, fallback to filename
+        # Use MD5 (safe_filename) as primary identifier for matching
+        # MD5 ensures same content always has same identifier
         existing_attachments = {}
         for att in email.attachments.all():
-            key = att.safe_filename or att.filename
+            key = att.safe_filename  # Use MD5 as primary key
             existing_attachments[key] = att
 
         new_attachments = {}
         for att in attachments:
-            key = att.get('safe_filename') or att.get('filename')
+            key = att.get('safe_filename')  # Use MD5 as primary key
             new_attachments[key] = att
 
         # Find attachments to process
@@ -184,10 +185,10 @@ class Command(BaseCommand):
                 existing_attachment.delete()
                 logger.info(f"Deleted attachment: "
                             f"{existing_attachment.filename} "
-                            f"({existing_attachment.safe_filename})")
+                            f"(MD5: {existing_attachment.safe_filename})")
                 self.stdout.write(f"Deleted attachment: "
                                   f"{existing_attachment.filename} "
-                                  f"({existing_attachment.safe_filename})")
+                                  f"(MD5: {existing_attachment.safe_filename})")
             except Exception as e:
                 logger.error(f"Failed to delete attachment {key}: {e}")
 
@@ -220,14 +221,14 @@ class Command(BaseCommand):
                     ])
                     logger.info(f"Updated attachment: "
                                 f"{existing_attachment.filename} "
-                                f"({existing_attachment.safe_filename})")
+                                f"(MD5: {existing_attachment.safe_filename})")
                     self.stdout.write(f"Updated attachment: "
                                       f"{existing_attachment.filename} "
-                                      f"({existing_attachment.safe_filename})")
+                                      f"(MD5: {existing_attachment.safe_filename})")
                 else:
                     logger.info(f"Attachment unchanged: "
                                 f"{existing_attachment.filename} "
-                                f"({existing_attachment.safe_filename})")
+                                f"(MD5: {existing_attachment.safe_filename})")
 
             except Exception as e:
                 logger.error(f"Failed to update attachment {key}: {e}")
@@ -248,10 +249,10 @@ class Command(BaseCommand):
                 )
                 logger.info(f"Created attachment: "
                             f"{attachment_info['filename']} "
-                            f"({attachment_info['safe_filename']})")
+                            f"(MD5: {attachment_info['safe_filename']})")
                 self.stdout.write(f"Created attachment: "
                                   f"{attachment_info['filename']} "
-                                  f"({attachment_info['safe_filename']})")
+                                  f"(MD5: {attachment_info['safe_filename']})")
 
             except Exception as e:
                 logger.error(

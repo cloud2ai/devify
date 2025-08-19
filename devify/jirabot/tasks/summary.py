@@ -185,9 +185,9 @@ def summarize_email(email, summary_prompt, summary_title_prompt, force=False):
     for att in email.attachments.filter(is_image=True):
         if att.llm_content and att.llm_content.strip():
             ocr_contents.append(
-                f"[Attachment: {att.filename}]\n{att.llm_content}")
+                f"[Attachment: {att.safe_filename}]\n{att.llm_content}")
         else:
-            logger.info(f"Skipping attachment {att.id} ({att.filename}) "
+            logger.info(f"Skipping attachment {att.id} ({att.safe_filename}) "
                        f"for summary - no LLM content")
 
     # Combine email content with OCR contents

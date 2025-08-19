@@ -465,9 +465,9 @@ class EmailClient:
             Input: Image part with filename "screenshot.jpg" and
                    Content-ID "ii_19863421a764cff311"
             Output: {
-                'placeholder': "[IMAGE: 550e8400-e29b-41d4-a716-446655440000.jpg]",
+                'placeholder': "[IMAGE: a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6.jpg]",
                 'filename': 'screenshot.jpg',
-                'safe_filename': '550e8400-e29b-41d4-a716-446655440000.jpg',
+                'safe_filename': 'a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6.jpg',
                 'content_id': 'ii_19863421a764cff311',
                 'content_type': 'image/jpeg',
                 'is_inline': True,
@@ -484,10 +484,18 @@ class EmailClient:
         content_type = part.get_content_type()
         content_disposition = str(part.get('Content-Disposition', ''))
 
-        # Generate UUID-based filename for file system
-        file_uuid = str(uuid.uuid4())
+        # Generate MD5-based filename for consistency
+        # This ensures same content always has same safe_filename
+        payload = part.get_payload(decode=True)
+        if not payload:
+            logger.warning(f"No payload available for image attachment: "
+                           f"{filename}")
+            return None
+
+        file_md5 = hashlib.md5(payload).hexdigest()
         file_extension = os.path.splitext(filename)[1] if filename else ''
-        safe_filename = f"{file_uuid}{file_extension}"
+        safe_filename = f"{file_md5}{file_extension}"
+
         placeholder = f"[IMAGE: {safe_filename}]"
 
         return {
@@ -947,34 +955,55 @@ class EmailClient:
 
         for part in msg.walk():
             content_disposition = str(part.get('Content-Disposition', ''))
+            content_type = part.get_content_type()
+            filename = part.get_filename()
 
-            # Process both attachment and inline files
-            if (
-                'attachment' not in content_disposition
-                and 'inline' not in content_disposition
-            ):
+            # Add debug logging
+            logger.debug(f"Processing part: content_type={content_type}, "
+                        f"content_disposition='{content_disposition}', "
+                        f"filename='{filename}'")
+
+            # Process attachments and inline files
+            # Some email clients don't set Content-Disposition for inline images
+            # So we also check if it's an image with a filename
+            is_attachment = (
+                'attachment' in content_disposition or
+                'inline' in content_disposition or
+                (content_type.startswith('image/') and filename)
+            )
+
+            if not is_attachment:
+                logger.debug(f"Skipping part: not an attachment/inline file")
                 continue
 
             try:
-                filename = part.get_filename()
                 if not filename:
+                    logger.debug(f"Skipping part: no filename")
                     continue
 
-                content_type = part.get_content_type()
                 payload = part.get_payload(decode=True)
 
                 if payload:
+                    logger.debug(f"Processing attachment: {filename}, "
+                                f"size={len(payload)} bytes")
                     # Save attachment with safe filename
                     attachment_info = self._save_attachment(
                         filename, content_type, payload
                     )
                     if attachment_info:
                         attachments.append(attachment_info)
+                        logger.info(f"Successfully processed "
+                                    f"attachment: {filename}")
+                    else:
+                        logger.warning(f"Failed to save attachment: {filename}")
+                else:
+                    logger.debug(f"Skipping part: no payload")
 
             except Exception as e:
                 logger.error(f"Error processing attachment: {e}")
                 continue
 
+        logger.info(f"Total attachments processed: {len(attachments)}")
         return attachments
 
     def _save_attachment(
@@ -1003,10 +1032,10 @@ class EmailClient:
             Output:
                 {
                     'filename': 'report.pdf',
-                    'safe_filename': '550e8400-e29b-41d4-a716-446655440000.pdf',
+                    'safe_filename': 'a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6.pdf',
                     'content_type': 'application/pdf',
                     'file_size': 1024,
-                    'file_path': '/tmp/attachments/550e8400-e29b-41d4-a716-446655440000.pdf',
+                    'file_path': '/tmp/attachments/a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6.pdf',
                     'is_image': False
                 }
         """
@@ -1014,21 +1043,30 @@ class EmailClient:
             # Create attachment directory
             os.makedirs(self.attachment_storage_path, exist_ok=True)
 
-            # Generate UUID-based filename for file system
-            file_uuid = str(uuid.uuid4())
+            # Generate MD5-based filename for consistency
+            # This ensures same content always has same safe_filename
+            file_md5 = hashlib.md5(payload).hexdigest()
             file_extension = os.path.splitext(filename)[1] if filename else ''
-            safe_filename = f"{file_uuid}{file_extension}"
+            safe_filename = f"{file_md5}{file_extension}"
+
+            # Check if file already exists with same MD5
             file_path = os.path.join(
                 self.attachment_storage_path, safe_filename
             )
 
-            # Save file to disk
-            with open(file_path, 'wb') as f:
-                f.write(payload)
+            if os.path.exists(file_path):
+                logger.debug(f"File with same MD5 already "
+                             f"exists: {safe_filename}")
+                # File already exists, no need to save again
+            else:
+                # Save file to disk
+                with open(file_path, 'wb') as f:
+                    f.write(payload)
+                logger.debug(f"Saved new file with MD5: {safe_filename}")
 
             logger.info(
-                f"Attachment '{filename}' saved successfully, "
-                f"size={len(payload)} bytes"
+                f"Attachment '{filename}' processed successfully, "
+                f"size={len(payload)} bytes, MD5: {file_md5}"
             )
 
             # Determine if it's an image
