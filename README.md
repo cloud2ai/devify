@@ -4,7 +4,7 @@
 
 ### Purpose
 
-Devify is an **AI-driven development platform** created to accelerate R&D workflows and address pain points that traditionally require significant manual effort. The project was initiated to meet internal demands for smarter, more efficient development processes.
+Devify is an **AI-driven development lifecycle platform** created to accelerate R&D workflows and address pain points that traditionally require significant manual effort. The project was initiated to meet internal demands for smarter, more efficient development processes.
 
 ### Vision
 
@@ -15,7 +15,9 @@ By integrating advanced AI technologies, Devify aims to:
 
 ### Key Features
 
-- **Jirabot Core Feature:** Automatically converts WeChat chat records into JIRA issues, streamlining the process of requirements collection and task creation for development teams.
+Below is a list of the main tools and components included in this project:
+
+- **Jirabot Core Feature:** Automatically transforms chat records (including WeChat, WhatsApp, email, etc.) into JIRA issues, streamlining requirements gathering and task creation for development teams.
 
 #### Jirabot AI Agent
 

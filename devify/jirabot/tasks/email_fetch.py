@@ -10,6 +10,7 @@ from django.contrib.auth.models import User
 from jirabot.models import EmailAttachment, EmailMessage, EmailTask, Settings
 from jirabot.utils.email_client import EmailClient
 from django.conf import settings
+from jirabot.state_machine import EmailStatus
 
 logger = logging.getLogger(__name__)
 
@@ -167,7 +168,7 @@ def scan_user_emails(self, user_id):
                     html_content=mail['html_content'],
                     text_content=mail['text_content'],
                     message_id=message_id,
-                    status=EmailMessage.ProcessingStatus.FETCHED,
+                    status=EmailStatus.FETCHED.value,
                 )
                 attachments = mail.get('attachments', [])
                 logger.info(f"mail['attachments'] = {attachments}")
@@ -206,16 +207,3 @@ def scan_user_emails(self, user_id):
             email_task.status = EmailTask.TaskStatus.FAILED
             email_task.error_message = str(e)
             email_task.save(update_fields=['status', 'error_message'])
-
-@shared_task
-def schedule_scan_all_users_emails():
-    """
-    Periodically fetch emails for all users with active email_config.
-    """
-    users = User.objects.filter(
-        settings__key='email_config',
-        settings__is_active=True
-    ).distinct()
-    for user in users:
-        scan_user_emails.delay(user.id)
-    logger.info(f"Scheduled scan_user_emails for {users.count()} users")

@@ -7,7 +7,8 @@ from unittest.mock import patch, MagicMock
 
 from jirabot.models import EmailMessage, EmailAttachment, User
 from jirabot.tasks.ocr import ocr_images_for_email
-from jirabot.tasks.summary import organize_attachments_ocr, summarize_email
+from jirabot.tasks.llm_attachment import organize_attachments_ocr_task
+from jirabot.tasks.llm_summary import summarize_email_task
 
 
 class OCREmptyContentTestCase(TestCase):
@@ -69,7 +70,7 @@ class OCREmptyContentTestCase(TestCase):
         """
         # Mock OCR handler to return empty content for one attachment
         mock_handler = MagicMock()
-        mock_handler.recognize.side_effect = lambda file_path, skip_invalid: (
+        mock_handler.recognize.side_effect = lambda file_path: (
             "Some text content" if "with_text" in file_path else ""
         )
         mock_ocr_handler.return_value = mock_handler
@@ -88,7 +89,7 @@ class OCREmptyContentTestCase(TestCase):
                         "Some text content")
         self.assertEqual(self.attachment_empty_content.ocr_content, "")
 
-    @patch('jirabot.tasks.summary.call_llm')
+    @patch('jirabot.tasks.llm_attachment.call_llm')
     def test_summary_skips_empty_ocr_content(self, mock_call_llm):
         """
         Test that summary task skips attachments with empty OCR content.
@@ -104,7 +105,7 @@ class OCREmptyContentTestCase(TestCase):
         mock_call_llm.return_value = "Processed OCR content"
 
         # Run summary task
-        organize_attachments_ocr(self.email, "Test prompt")
+        organize_attachments_ocr_task(self.email.id, force=False)
 
         # Refresh from database
         self.attachment_with_content.refresh_from_db()
@@ -118,7 +119,7 @@ class OCREmptyContentTestCase(TestCase):
         # Verify LLM was only called once (for the attachment with content)
         self.assertEqual(mock_call_llm.call_count, 1)
 
-    @patch('jirabot.tasks.summary.call_llm')
+    @patch('jirabot.tasks.llm_summary.call_llm')
     def test_summarize_email_includes_only_valid_attachments(self, mock_call_llm):
         """
         Test that email summarization only includes attachments with LLM content.
@@ -137,7 +138,7 @@ class OCREmptyContentTestCase(TestCase):
         mock_call_llm.return_value = "Generated summary"
 
         # Run summarization
-        summarize_email(self.email, "Summary prompt", "Title prompt")
+        summarize_email_task(self.email.id, force=False)
 
         # Verify LLM was called with content that includes attachment
         call_args = mock_call_llm.call_args_list

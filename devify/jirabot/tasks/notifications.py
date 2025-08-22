@@ -6,6 +6,7 @@ from django.utils.translation import activate, gettext_lazy as _
 
 from devtoolbox.webhook import Webhook
 from jirabot.models import EmailMessage, Settings
+from jirabot.state_machine import EmailStatus
 
 logger = logging.getLogger(__name__)
 
@@ -102,7 +103,7 @@ def build_notification_payload(
             "status_transition": f"{old_status} -> {new_status}"
         })
     # Internationalized message content for webhook
-    if status == EmailMessage.ProcessingStatus.FETCHED:
+    if status == EmailStatus.FETCHED.value:
         payload.update({
             "message": _(
                 "New email received: {subject}"
@@ -110,7 +111,7 @@ def build_notification_payload(
             "stage": _("Email Fetching"),
             "details": _("From: {sender}").format(sender=email.sender)
         })
-    elif status == EmailMessage.ProcessingStatus.OCR_SUCCESS:
+    elif status == EmailStatus.OCR_SUCCESS.value:
         payload.update({
             "message": _(
                 "OCR processing completed: {subject}"
@@ -118,7 +119,7 @@ def build_notification_payload(
             "stage": _("OCR Processing"),
             "details": _("Image text extraction successful")
         })
-    elif status == EmailMessage.ProcessingStatus.OCR_FAILED:
+    elif status == EmailStatus.OCR_FAILED.value:
         payload.update({
             "message": _(
                 "OCR processing failed: {subject}"
@@ -126,7 +127,7 @@ def build_notification_payload(
             "stage": _("OCR Processing"),
             "details": _("Image text extraction failed")
         })
-    elif status == EmailMessage.ProcessingStatus.SUMMARY_SUCCESS:
+    elif status == EmailStatus.SUMMARY_SUCCESS.value:
         payload.update({
             "message": _(
                 "LLM processing completed: {subject}"
@@ -134,7 +135,7 @@ def build_notification_payload(
             "stage": _("LLM Processing"),
             "details": _("Content analysis and summarization completed")
         })
-    elif status == EmailMessage.ProcessingStatus.SUMMARY_FAILED:
+    elif status == EmailStatus.SUMMARY_FAILED.value:
         payload.update({
             "message": _(
                 "LLM processing failed: {subject}"
@@ -142,7 +143,7 @@ def build_notification_payload(
             "stage": _("LLM Processing"),
             "details": _("Content analysis failed")
         })
-    elif status == EmailMessage.ProcessingStatus.JIRA_SUCCESS:
+    elif status == EmailStatus.JIRA_SUCCESS.value:
         try:
             jira_issue = email.jiraissue_set.first()
             if jira_issue:
@@ -176,7 +177,7 @@ def build_notification_payload(
                 "stage": _("JIRA Creation"),
                 "details": _("Issue created")
             })
-    elif status == EmailMessage.ProcessingStatus.JIRA_FAILED:
+    elif status == EmailStatus.JIRA_FAILED.value:
         payload.update({
             "message": _(
                 "JIRA issue creation failed: {subject}"
@@ -233,7 +234,6 @@ def build_markdown_payload(status, email, old_status=None,
         'template_color': template_color,
         'wide_screen_mode': True
     }
-
 
 @shared_task(bind=True, max_retries=3)
 def send_webhook_notification(self, email_id, old_status, new_status):

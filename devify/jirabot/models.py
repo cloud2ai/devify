@@ -1,7 +1,18 @@
 from django.db import models
 from django.contrib.auth.models import User
-from django.core.validators import URLValidator
+from django.core.exceptions import ValidationError
 from django.utils.translation import gettext_lazy as _
+
+from .state_machine import (
+    EmailStatus,
+    AttachmentStatus,
+    get_initial_email_status,
+    get_initial_attachment_status,
+    can_transition_email_to,
+    can_transition_attachment_to,
+    EMAIL_STATE_MACHINE,
+    ATTACHMENT_STATE_MACHINE
+)
 
 
 class Settings(models.Model):
@@ -49,6 +60,70 @@ class Settings(models.Model):
 
     def __str__(self):
         return f"{self.user.username} - {self.key}: {str(self.value)[:50]}"
+
+    @classmethod
+    def get_user_config(cls, user, config_key: str,
+                        required_fields: list = None):
+        """
+        Get user's configuration by key and validate required fields.
+
+        This method provides a centralized way to access user configurations
+        across tasks, views, and management commands.
+
+        Args:
+            user: User instance
+            config_key: Configuration key (e.g., 'prompt_config', 'email_config')
+            required_fields: List of required field keys to validate
+
+        Returns:
+            dict: Configuration value
+
+        Raises:
+            ValueError: If configuration is missing or incomplete
+        """
+        try:
+            setting = cls.objects.get(
+                user=user,
+                key=config_key,
+                is_active=True
+            )
+            config_value = setting.value
+
+            # Validate required fields if specified
+            if required_fields:
+                missing_fields = [
+                    field for field in required_fields
+                    if not config_value.get(field)
+                ]
+                if missing_fields:
+                    raise ValueError(
+                        f"Missing fields in {config_key}: "
+                        f"{', '.join(missing_fields)}"
+                    )
+
+            return config_value
+
+        except cls.DoesNotExist:
+            raise ValueError(
+                f"User {user.username} has no active {config_key} setting"
+            )
+
+    @classmethod
+    def get_user_prompt_config(cls, user,
+                               required_prompts: list = None) -> dict:
+        """
+        Get user's prompt configuration and validate required prompts.
+
+        This is a convenience method for the commonly used prompt_config.
+
+        Args:
+            user: User instance
+            required_prompts: List of required prompt keys to validate
+
+        Returns:
+            dict: Prompt configuration
+        """
+        return cls.get_user_config(user, 'prompt_config', required_prompts)
 
 
 class EmailTask(models.Model):
@@ -115,33 +190,6 @@ class EmailMessage(models.Model):
     """
     Email message details
     """
-    class ProcessingStatus(models.TextChoices):
-        PENDING = 'pending', _('Pending')
-        FETCHED = 'fetched', _('Fetched')
-        OCR_PROCESSING = 'ocr_processing', _('OCR Processing')
-        OCR_FAILED = 'ocr_failed', _('OCR Failed')
-        OCR_SUCCESS = 'ocr_success', _('OCR Success')
-        SUMMARY_PROCESSING = 'summary_processing', _('Summary Processing')
-        SUMMARY_FAILED = 'summary_failed', _('Summary Failed')
-        SUMMARY_SUCCESS = 'summary_success', _('Summary Success')
-        JIRA_PROCESSING = 'jira_processing', _('JIRA Processing')
-        JIRA_FAILED = 'jira_failed', _('JIRA Failed')
-        JIRA_SUCCESS = 'jira_success', _('JIRA Success')
-        ATTACHMENT_UPLOADING = (
-            'attachment_uploading',
-            _('Attachment Uploading')
-        )
-        ATTACHMENT_UPLOAD_FAILED = (
-            'attachment_upload_failed',
-            _('Attachment Upload Failed')
-        )
-        ATTACHMENT_UPLOADED = (
-            'attachment_uploaded',
-            _('Attachment Uploaded')
-        )
-        SUCCESS = 'success', _('Success')
-        FAILED = 'failed', _('Failed')
-        SKIPPED = 'skipped', _('Skipped')
 
     user = models.ForeignKey(
         User,
@@ -214,8 +262,9 @@ class EmailMessage(models.Model):
     # Processing status for each stage of the email workflow
     status = models.CharField(
         max_length=32,
-        choices=ProcessingStatus.choices,
-        default=ProcessingStatus.PENDING,
+        choices=[(status.value, status.name.replace('_', ' ').title())
+                 for status in EmailStatus],
+        default=get_initial_email_status(),
         db_index=True,
         verbose_name=_('Processing Status')
     )
@@ -240,11 +289,38 @@ class EmailMessage(models.Model):
     def __str__(self):
         return f"{self.subject} - {self.sender}"
 
+    def save(self, *args, **kwargs):
+        """
+        Override save to automatically validate status transitions
+        """
+        # Check if this is an update and status has changed
+        if self.pk:
+            try:
+                old_instance = EmailMessage.objects.get(pk=self.pk)
+                if (old_instance.status != self.status and
+                    not can_transition_email_to(
+                        old_instance.status, self.status)):
+                    raise ValidationError(
+                        f"Invalid email status transition from "
+                        f"{old_instance.status} to {self.status}. "
+                        f"Valid transitions: {', '.join(
+                            [s.value for s in EMAIL_STATE_MACHINE[
+                                next(status for status in EmailStatus
+                                     if status.value == old_instance.status)
+                            ]['next']]
+                        )}"
+                    )
+            except EmailMessage.DoesNotExist:
+                pass  # New object, no validation needed
+
+        super().save(*args, **kwargs)
+
 
 class EmailAttachment(models.Model):
     """
     Email attachments
     """
+
     user = models.ForeignKey(
         User,
         on_delete=models.CASCADE,
@@ -286,6 +362,21 @@ class EmailAttachment(models.Model):
         verbose_name=_('Is Image'),
         help_text=_('Whether this attachment is an image')
     )
+
+    # Processing status for attachment workflow
+    status = models.CharField(
+        max_length=32,
+        choices=[(status.value, status.name.replace('_', ' ').title())
+                 for status in AttachmentStatus],
+        default=get_initial_attachment_status(),
+        db_index=True,
+        verbose_name=_('Processing Status')
+    )
+    error_message = models.TextField(
+        blank=True,
+        verbose_name=_('Error Message')
+    )
+
     ocr_content = models.TextField(
         blank=True,
         null=True,
@@ -315,10 +406,37 @@ class EmailAttachment(models.Model):
         indexes = [
             models.Index(fields=['user', 'is_image']),
             models.Index(fields=['email_message']),
+            models.Index(fields=['status']),
         ]
 
     def __str__(self):
         return f"{self.filename} ({self.content_type})"
+
+    def save(self, *args, **kwargs):
+        """
+        Override save to automatically validate status transitions
+        """
+        # Check if this is an update and status has changed
+        if self.pk:
+            try:
+                old_instance = EmailAttachment.objects.get(pk=self.pk)
+                if (old_instance.status != self.status and
+                    not can_transition_attachment_to(
+                        old_instance.status, self.status)):
+                    raise ValidationError(
+                        f"Invalid attachment status transition from "
+                        f"{old_instance.status} to {self.status}. "
+                        f"Valid transitions: {', '.join(
+                            [s.value for s in ATTACHMENT_STATE_MACHINE[
+                                next(status for status in AttachmentStatus
+                                     if status.value == old_instance.status)
+                            ]['next']]
+                        )}"
+                    )
+            except EmailAttachment.DoesNotExist:
+                pass  # New object, no validation needed
+
+        super().save(*args, **kwargs)
 
 
 class JiraIssue(models.Model):

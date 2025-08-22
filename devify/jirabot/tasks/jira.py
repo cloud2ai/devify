@@ -1,142 +1,319 @@
 """
-JIRA Issue Creation Module
+JIRA Issue Creation Task using Celery Task class approach.
 
-This module handles the creation of JIRA issues from processed email
-messages. It includes comprehensive image processing, OCR content
-integration, and attachment management.
+This module follows the same architecture pattern as ocr.py:
+- Task class with before_start() for initialization
+- run() method for main execution flow
+- Helper methods for specific logic
+- Compatibility wrapper function for existing calls
 
-Function Call Flow:
-==================
-
-submit_issue_to_jira(email_message_id)
-    ↓
-├── get_jira_config(email)            # Get JIRA settings from user
-├── build_jira_summary(email)         # Create formatted summary with AI prefix
-├── build_description_parts(email)    # Build comprehensive description
-│   ├── process_embedded_images()     # Add OCR results to embedded images
-│   ├── get_embedded_filenames()      # Extract embedded image filenames
-│   └── process_unembedded_images()   # Handle images not in conversation
-├── upload_attachments_to_jira()      # Upload files with filtering
-└── create_jira_issue_record()        # Create database record
-
-Key Features:
-=============
-- Automatic image embedding in JIRA descriptions
-- OCR content integration for embedded and unembedded images
-- Intelligent filtering of attachments (skip images without OCR)
-- Comprehensive error handling and logging
-- Database record creation for tracking
-- Emoji removal and content formatting for JIRA compatibility
-
-Dependencies:
-=============
-- EmailMessage: Source email with processed content
-- EmailAttachment: Image files with OCR and LLM content
-- Settings: User JIRA configuration
-- JiraHandler: JIRA API interaction
-- JiraIssue: Database record for created issues
+See ocr.py for detailed architecture documentation.
 """
 
+
+# Import statements
+from celery import Task, shared_task
 import logging
 import re
 import datetime
-
-from celery import shared_task
+from typing import Dict, Any
 
 from ..models import EmailMessage, JiraIssue, Settings
 from ..utils.jira_handler import JiraHandler
+from ..state_machine import EmailStatus
 
 logger = logging.getLogger(__name__)
 
 
-@shared_task(bind=True)
-def submit_issue_to_jira(self, email_message_id):
+class JiraTask(Task):
     """
-    Submit processed issue info to JIRA for a given email_message_id.
+    JIRA issue creation task using Celery Task class.
+
+    This class provides a unified execution flow for JIRA issue creation
+    while keeping all logic visible and maintainable.
+    """
+
+    def before_start(self, email_id: str, force: bool = False, **kwargs):
+        """
+        Initialize task before execution starts.
+
+        This method handles all initialization work including:
+        - Setting instance attributes
+        - Getting email object
+
+        Args:
+            email_message_id: ID of the email to process
+            force: Whether to force processing regardless of current status
+            **kwargs: Additional arguments
+
+        Raises:
+            EmailMessage.DoesNotExist: If email not found
+        """
+        # Set instance attributes
+        self.email_id = email_id
+        self.force = force
+        self.email = None
+        self.task_name = "JIRA"
+        self.allowed_statuses = [
+            EmailStatus.SUMMARY_SUCCESS.value,
+            EmailStatus.JIRA_FAILED.value
+        ]
+
+        # Get email object
+        try:
+            self.email = EmailMessage.objects.select_related('user').get(
+                id=email_id
+            )
+            logger.info(f"[JIRA] Email object retrieved: {email_id}")
+        except EmailMessage.DoesNotExist:
+            logger.error(f"[JIRA] EmailMessage id {email_id} does not exist")
+            raise
+
+        logger.info(f"[JIRA] Initialization completed for {email_id}, "
+                    f"force: {force}")
+
+    def run(self, email_id: str, force: bool = False) -> str:
+        """
+        Main task execution method.
+
+        Args:
+            email_id: ID of the email to process
+            force: Whether to force processing regardless of current status
+
+        Returns:
+            str: The email_id for the next task in the chain
+        """
+        try:
+            # Initialize task
+            #
+            # Normal flow: Celery automatically calls before_start before run
+            # Manual testing: Directly calling run method
+            #   Check self.email doesn't exist → Call self.before_start to
+            #   complete initialization
+            #   Continue with business logic
+            if not hasattr(self, 'email'):
+                self.before_start(email_id, force)
+
+            logger.info(f"[JIRA] Start processing: {email_id}, force: {force}")
+
+            # Step 1: Pre-execution check (status machine + force parameter)
+            if not self._pre_execution_check():
+                logger.info(f"[JIRA] Pre-execution check failed, skipping to "
+                            f"next task: {email_id}")
+                return email_id
+
+            # Step 2: Check if already complete
+            if self._is_already_complete():
+                return email_id
+
+            # Step 3: Set processing status
+            self._set_processing_status()
+
+            # Step 4: Execute core business logic and complete task
+            jira_results = self._execute_jira_creation()
+
+            logger.info(f"[JIRA] JIRA issue creation task completed: {email_id}")
+            return email_id
+
+        except EmailMessage.DoesNotExist:
+            logger.error(f"[JIRA] EmailMessage {email_id} not found")
+            raise
+        except Exception as exc:
+            logger.error(f"[JIRA] Fatal error for {email_id}: {exc}")
+            # Save error status to email (force mode handling is inside
+            # _save_email)
+            self._save_email(
+                status=EmailStatus.JIRA_FAILED.value,
+                error_message=str(exc)
+            )
+            raise
+
+    def _pre_execution_check(self) -> bool:
+        """
+        Pre-execution check: Check if the task can be executed based on
+        current status and force parameter.
+
+        This is the main pre-execution check that combines:
+        - Status machine validation
+        - Force parameter handling
+
+        Returns:
+            bool: True if execution is allowed
+        """
+        if self.force:
+            logger.debug(f"[JIRA] Force mode enabled for email "
+                         f"{self.email.id}, skipping status check")
+            return True
+
+        if self.email.status not in self.allowed_statuses:
+            logger.warning(
+                f"Email {self.email.id} cannot be processed in status: "
+                f"{self.email.status}. Allowed: {self.allowed_statuses}"
+            )
+            return False
+
+        logger.debug(f"[JIRA] Pre-execution check passed for email "
+                     f"{self.email.id}")
+        return True
+
+    def _is_already_complete(self) -> bool:
+        """
+        Check if JIRA issue creation is already complete.
+
+        Returns:
+            bool: True if already complete
+        """
+        if self.force:
+            logger.debug(f"[JIRA] Force mode enabled for email "
+                         f"{self.email.id}, skipping completion check")
+            return False
+
+        if (
+            hasattr(self.email, 'jira_issues') and
+            self.email.jira_issues.exists()
+        ):
+            logger.info(
+                f"Email {self.email.id} already has JIRA issues, "
+                f"skipping to next task"
+            )
+            return True
+
+        return False
+
+    def _set_processing_status(self) -> None:
+        """
+        Set the email to processing status.
+        """
+        self._save_email(status=EmailStatus.JIRA_PROCESSING.value)
+
+    def _execute_jira_creation(self) -> Dict:
+        """
+        Execute JIRA issue creation for the email.
+
+        Returns:
+            Dict: JIRA creation results
+        """
+        try:
+            jira_config = get_jira_config(self.email)
+        except Settings.DoesNotExist:
+            logger.error(
+                f"User {self.email.user} has no active jira_config setting"
+            )
+            raise
+
+        jira_url = jira_config.get('url')
+        username = jira_config.get('username')
+        password = jira_config.get('api_token')
+        project_key = jira_config.get('project_key')
+        issue_type = jira_config.get('default_issue_type', 'New Feature')
+        priority = jira_config.get('default_priority', 'High')
+        epic_link = jira_config.get('epic_link', '')
+        assignee = jira_config.get('assignee', '')
+        summary = build_jira_summary(self.email)
+
+        # Build comprehensive description with summary and LLM
+        # content (with OCR inline)
+        description_parts = build_description_parts(self.email)
+
+        description = "\n\n".join(description_parts)
+        # Remove emoji from description
+        description = remove_emoji(description)[:10000]
+
+        try:
+            handler = JiraHandler(jira_url, username, password)
+            issue_key = handler.create_issue(
+                project_key=project_key,
+                summary=summary,
+                issue_type=issue_type,
+                description=description,
+                priority=priority,
+                epic_link=epic_link,
+                assignee=assignee
+            )
+            logger.info(
+                f"Successfully submitted JIRA issue {issue_key} "
+                f"for email_message_id={self.email.id}"
+            )
+
+            # Upload attachments to JIRA issue
+            uploaded_count, skipped_count = upload_attachments_to_jira(
+                handler, issue_key, self.email
+            )
+
+            # Create JiraIssue record after successful JIRA issue creation
+            create_jira_issue_record(self.email, issue_key, jira_url)
+
+            # Update email status to success (force mode handling is inside _save_email)
+            self._save_email(status=EmailStatus.JIRA_SUCCESS.value)
+
+            return {
+                'issue_key': issue_key,
+                'uploaded_count': uploaded_count,
+                'skipped_count': skipped_count,
+                'jira_url': jira_url
+            }
+
+        except Exception as e:
+            logger.error(
+                f"[JIRA] Failed to submit JIRA issue for "
+                f"email_message_id={self.email.id}: {e}",
+                exc_info=True
+            )
+            raise
+
+
+
+    def _save_email(self, status: str = "", error_message: str = "") -> None:
+        """
+        Save email with status and error message.
+        In force mode, skip status updates.
+
+        Args:
+            status: Status to set (only used in non-force mode)
+            error_message: Error message to set (only used in non-force mode)
+        """
+        if self.force:
+            # Force mode: skip status updates
+            logger.debug(f"[JIRA] Force mode: skipping email status update to "
+                         f"{status}")
+            return
+
+        # Non-force mode: save status
+        self.email.status = status
+        if error_message:
+            self.email.error_message = error_message
+        else:
+            self.email.error_message = ""
+
+        update_fields = ['status', 'error_message']
+        self.email.save(update_fields=update_fields)
+        logger.debug(f"[JIRA] Saved email {self.email.id} to {status}")
+
+
+# Create JiraTask instance for Celery task registration
+jira_task = JiraTask()
+
+
+@shared_task(bind=True)
+def submit_issue_to_jira(self, email_id: str, force: bool = False) -> str:
+    """
+    Celery task for submitting processed issue info to JIRA.
+
+    This is a compatibility wrapper around the JiraTask class.
 
     Args:
-        email_message_id: ID of the EmailMessage to process
+        email_id (str): ID of the EmailMessage to process
+        force (bool): Whether to force processing regardless of current status.
+                     When True, skips status checks and allows reprocessing
+                     even if the content already exists.
 
     Returns:
-        JIRA issue key if successful, None otherwise
+        str: The email_id for the next task in the chain
     """
-    logger.info(
-        f"Submitting JIRA issue for email_message_id={email_message_id}"
-    )
-    try:
-        email = EmailMessage.objects.select_related('user').get(
-            id=email_message_id
-        )
-    except EmailMessage.DoesNotExist:
-        logger.error(
-            f"EmailMessage id {email_message_id} does not exist"
-        )
-        return
-
-    try:
-        jira_config = get_jira_config(email)
-    except Settings.DoesNotExist:
-        logger.error(
-            f"User {email.user} has no active jira_config setting"
-        )
-        return
-
-    jira_url = jira_config.get('url')
-    username = jira_config.get('username')
-    password = jira_config.get('api_token')
-    project_key = jira_config.get('project_key')
-    issue_type = jira_config.get('default_issue_type', 'New Feature')
-    priority = jira_config.get('default_priority', 'High')
-    epic_link = jira_config.get('epic_link', '')
-    assignee = jira_config.get('assignee', '')
-    summary = build_jira_summary(email)
-
-    # Build comprehensive description with summary and LLM
-    # content (with OCR inline)
-    description_parts = build_description_parts(email)
-
-    description = "\n\n".join(description_parts)
-    # Remove emoji from description
-    description = remove_emoji(description)[:10000]
-
-    try:
-        handler = JiraHandler(jira_url, username, password)
-        issue_key = handler.create_issue(
-            project_key=project_key,
-            summary=summary,
-            issue_type=issue_type,
-            description=description,
-            priority=priority,
-            epic_link=epic_link,
-            assignee=assignee
-        )
-        logger.info(
-            f"Successfully submitted JIRA issue {issue_key} "
-            f"for email_message_id={email_message_id}"
-        )
-
-        # Upload attachments to JIRA issue
-        uploaded_count, skipped_count = upload_attachments_to_jira(
-            handler, issue_key, email
-        )
-
-        # Create JiraIssue record after successful JIRA issue creation
-        create_jira_issue_record(email, issue_key, jira_url)
-        email.status = EmailMessage.ProcessingStatus.JIRA_SUCCESS
-        email.save(update_fields=['status'])
-        return issue_key
-
-    except Exception as e:
-        logger.error(
-            f"Failed to submit JIRA issue for "
-            f"email_message_id={email_message_id}: {e}",
-            exc_info=True
-        )
-        email.status = EmailMessage.ProcessingStatus.JIRA_FAILED
-        email.save(update_fields=['status'])
-        return
+    return jira_task.run(email_id, force)
 
 
+# Helper functions (unchanged from original implementation)
 def remove_emoji(text):
     """
     Remove emoji characters from text for JIRA compatibility.

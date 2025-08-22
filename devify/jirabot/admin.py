@@ -418,9 +418,9 @@ class EmailAttachmentAdmin(admin.ModelAdmin):
     form = EmailAttachmentAdminForm
     list_display = [
         'filename', 'safe_filename', 'user', 'email_message', 'content_type',
-        'file_size', 'is_image', 'created_at'
+        'file_size', 'is_image', 'status', 'created_at'
     ]
-    list_filter = ['is_image', 'content_type', 'created_at']
+    list_filter = ['status', 'is_image', 'content_type', 'created_at']
     search_fields = [
         'filename', 'safe_filename', 'email_message__subject', 'user__username'
     ]
@@ -434,6 +434,9 @@ class EmailAttachmentAdmin(admin.ModelAdmin):
                 'user', 'email_message', 'filename', 'safe_filename',
                 'content_type', 'file_size', 'is_image'
             )
+        }),
+        (_('Processing Status'), {
+            'fields': ('status', 'error_message'),
         }),
         (_('Content'), {
             'fields': ('ocr_content_formatted', 'llm_content_formatted'),

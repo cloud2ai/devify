@@ -15,17 +15,29 @@ class Command(BaseCommand):
             required=True,
             help='ID of the EmailMessage to OCR'
         )
+        parser.add_argument(
+            '--force',
+            action='store_true',
+            help='Force processing regardless of current status'
+        )
 
     def handle(self, *args, **options):
         email_id = options['email_id']
+        force = options['force']
+
         try:
             email = EmailMessage.objects.get(id=email_id)
         except EmailMessage.DoesNotExist:
             logger.error(f"EmailMessage {email_id} does not exist")
             return
 
-        ocr_images_for_email.run(email_id)
-        logger.info(
-            f"OCR task for EmailMessage {email_id} has been "
-            f"dispatched to Celery."
-        )
+        try:
+            # Use synchronous execution for command line
+            result = ocr_images_for_email.run(email_id, force=force)
+            logger.info(
+                f"OCR task for EmailMessage {email_id} has been "
+                f"completed successfully."
+            )
+        except Exception as e:
+            logger.error(f"Error executing OCR task: {e}")
+            raise
