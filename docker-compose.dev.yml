@@ -78,6 +78,7 @@ services:
     volumes:
       - ./docker/mysql/etc/my.cnf:/etc/mysql/my.cnf
       - ./docker/mysql/initdb.d:/docker-entrypoint-initdb.d
+      - ./docker/mysql/scripts:/opt/devify/scripts
       - ./data/mysql/data:/var/lib/mysql
       - ./data/logs/mysql:/var/log/mysql
     networks:

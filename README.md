@@ -4,7 +4,7 @@
 
 ### Purpose
 
-Devify is an **AI-driven development lifecycle platform** created to accelerate R&D workflows and address pain points that traditionally require significant manual effort. The project was initiated to meet internal demands for smarter, more efficient development processes.
+Devify is a comprehensive **toolkit for AI-driven development lifecycle management**. It is designed to accelerate R&D workflows and address pain points that typically require substantial manual effort. Devify brings together a suite of tools that leverage artificial intelligence to automate and optimize various stages of the software development lifecycle. The project was initiated to fulfill internal needs for smarter, more efficient, and streamlined development processes.
 
 ### Vision
 
@@ -17,45 +17,25 @@ By integrating advanced AI technologies, Devify aims to:
 
 Below is a list of the main tools and components included in this project:
 
-- **Jirabot Core Feature:** Automatically transforms chat records (including WeChat, WhatsApp, email, etc.) into JIRA issues, streamlining requirements gathering and task creation for development teams.
+- **Threadline Core Feature:** Automatically organizes and structures chat records (including WeChat, WhatsApp, email, etc.) to streamline requirements gathering and task creation. As an extension, these organized records can be sent to JIRA issues or other platforms as needed.
 
-#### Jirabot AI Agent
+#### Threadline AI Agent
 
-Jirabot AI Agent was born out of a common pain point in daily project
-management: many issues and solutions are discussed and resolved
-within WeChat groups, but this valuable knowledge is often lost
-because it is not systematically captured in the product knowledge
-base. Since WeChat does not provide a direct API to access all
-conversation content, and relying solely on delivery personnel to
-manually document these discussions is unreliable, we sought an
-alternative approach.
+Threadline AI Agent was born out of a common pain point in daily project management: many issues and solutions are discussed and resolved within WeChat groups, but this valuable knowledge is often lost because it is not systematically captured in the product knowledge base. Since WeChat does not provide a direct API to access all conversation content, and relying solely on delivery personnel to manually document these discussions is unreliable, we sought an alternative approach.
 
-Our solution leverages the fact that WeChat allows users to forward
-chat records via email. By simply sending relevant chat logs to a
-designated internal mailbox, we can then utilize large language
-models and image recognition technologies to process the content.
-After appropriate analysis and summarization, the processed
-information is automatically submitted to JIRA, enabling the
-initial accumulation of project knowledge with minimal manual
-intervention.
+Our solution leverages the fact that WeChat allows users to forward chat records via email. By simply sending relevant chat logs to a designated internal mailbox, we can then utilize large language models and image recognition technologies to process the content.  After appropriate analysis and summarization, the processed information is automatically submitted to JIRA, enabling the initial accumulation of project knowledge with minimal manual intervention.
 
-In fact, this approach is not limited to WeChat chat records.
-It can be extended to many other scenarios as well. In the future,
-we will continue to broaden the boundaries of this model.
+In fact, this approach is not limited to WeChat chat records.  It can be extended to many other scenarios as well. In the future, we will continue to broaden the boundaries of this model.
 
 ### Technical Overview
 
-This project is built on standard Django and Celery asynchronous
-task frameworks, leveraging AI capabilities such as Azure OpenAI
-and OCR services. All essential configuration can be managed
-directly through the Django Admin Portal; currently, no additional
-user-facing UI is provided. Future releases will gradually introduce
-more user interfaces and enhanced configuration options.
+This project is a robust AI workflow and agent system, architected with Django and powered by Celery for efficient orchestration of diverse tasks. It streamlines business processes by integrating advanced AI capabilities, including large language models (LLMs), OCR, and speech technologies. All system management and configuration are currently handled through Django’s built-in Admin Portal, enabling rapid development and easy maintenance. In future releases, dedicated user-facing interfaces will be introduced to further enhance accessibility and user experience, with the ultimate goal of evolving into a SaaS platform for broader adoption.
+
+Notably, the AI workflow and process control in this project are implemented using a custom state machine tailored to business requirements, rather than relying on existing frameworks such as LangChain or Dify. This approach ensures that the workflow logic remains flexible, maintainable, and closely aligned with real-world use cases.
 
 ## How to run Devify?
 
-Devify supports both development and production environments using
-Docker. Please note the following differences:
+Devify supports both development and production environments using Docker. Please note the following differences:
 
 - **Development Mode (`docker-compose.dev.yml`):**
   - Local source code is mounted into the container.
@@ -70,6 +50,32 @@ Docker. Please note the following differences:
   - Source code is not mounted; the container uses a built image.
   - This setup is recommended for deployment and production use.
 
+### Service Architecture
+
+Both modes include the following services:
+
+- **devify-api**: Django API server (Django dev server in dev mode, Gunicorn in production)
+- **devify-worker**: Celery worker for background task processing
+- **devify-scheduler**: Celery beat scheduler for periodic tasks
+- **mysql**: MariaDB database server
+- **redis**: Redis cache and message broker
+- **nginx**: Reverse proxy server (production mode only)
+- **flower**: Celery monitoring dashboard (development mode only)
+
+### Key Differences
+
+**Development Mode:**
+- Uses `development` command to start Django's built-in server
+- Includes Flower dashboard for Celery monitoring
+- Source code is mounted for live reloading
+- Exposes Django admin on port 8000
+
+**Production Mode:**
+- Uses `gunicorn` command for production-grade WSGI server
+- Includes Nginx reverse proxy with SSL support
+- Optimized for performance and stability
+- Health checks and restart policies enabled
+
 ### Environment Preparation
 
 This step is required for both development and production environments.
@@ -81,16 +87,27 @@ cp env.sample .env
 This environment values should be provided:
 
 ```
-# Common Settings for MySQL Database
+# Database Configuration
+DB_ENGINE=mysql
 MYSQL_ROOT_PASSWORD=root_password
 MYSQL_PORT=3306
 MYSQL_USER=devify
 MYSQL_PASSWORD=devifyPass
 MYSQL_DATABASE=devify
 
-# Celery
+# Celery Configuration
 CELERY_BROKER_URL=redis://redis:6379
 CELERY_RESULT_BACKEND=redis://redis:6379
+CELERY_CONCURRENCY=4
+CELERY_MAX_TASKS_PER_CHILD=1000
+CELERY_MAX_MEMORY_PER_CHILD=256000
+CELERY_LOG_LEVEL=INFO
+
+# Server Configuration (Production)
+WORKERS=1
+THREADS=1
+NGINX_HTTP_PORT=10080
+NGINX_HTTPS_PORT=10443
 
 AZURE_OPENAI_API_BASE=https://your-azure-openai-endpoint.openai.azure.com/
 AZURE_OPENAI_API_KEY=your-azure-openai-api-key
@@ -124,9 +141,45 @@ docker-compose -f docker-compose.yml build
 docker-compose -f docker-compose.yml up -d
 ```
 
-## Jirabot Settings
+### Service Access
 
-Before using Jirabot features, you should initialize the required settings for all users. This can be done via a management command inside the API container. The command will automatically create default records for all necessary JIRABOT settings (`email_config`, `email_filter_config`, `jira_config`, `prompt_config`) for each user if they do not already exist.
+**Development Mode:**
+- Django API: http://localhost:8000
+- Django Admin: http://localhost:8000/admin/
+- Flower Dashboard: http://localhost:5555
+
+**Production Mode:**
+- Nginx HTTP: http://localhost:10080
+- Nginx HTTPS: https://localhost:10443
+- Health Check: http://localhost:10080/health
+
+### Container Management
+
+**View logs:**
+```bash
+# API service
+docker logs -f devify-api
+
+# Worker service
+docker logs -f devify-worker
+
+# Scheduler service
+docker logs -f devify-scheduler
+```
+
+**Execute commands:**
+```bash
+# Enter API container
+docker exec -it devify-api bash
+
+# Run Django management commands
+docker exec -it devify-api python manage.py migrate
+docker exec -it devify-api python manage.py collectstatic
+```
+
+## Threadline Settings
+
+Before using Threadline features, you should initialize the required settings for all users. This can be done via a management command inside the API container. The command will automatically create default records for all necessary THREADLINE settings (`email_config`, `email_filter_config`, `jira_config`, `prompt_config`) for each user if they do not already exist.
 
 To simplify configuration, all required settings should be added here. Below are the key-value pairs you need to set before using the system. The table describes the key design, and the values should be saved in JSON format.
 
@@ -141,12 +194,12 @@ To simplify configuration, all required settings should be added here. Below are
 > All values must be valid JSON.
 > If you add new fields to the models or settings, update this table accordingly.
 
-**How to initialize JIRABOT settings:**
+**How to initialize THREADLINE settings:**
 
 1. **Enter the API container:**
 
    ```bash
-   docker exec -it devify-api python manager.py init_jirabot_settings --user admin
+   docker exec -it devify-api python manager.py init_threadline_settings --user admin
    ```
 
 **Note:**
@@ -167,7 +220,7 @@ To simplify configuration, all required settings should be added here. Below are
    - Password: adminpassword
 
 4. **Navigate to the Settings Model**
-   - In the sidebar, find and click on **Settings** under JIRABOT
+   - In the sidebar, find and click on **Settings** under THREADLINE
 
 ### Email Configuration(email_config)
 
@@ -293,7 +346,7 @@ To simplify configuration, all required settings should be added here. Below are
 
 ### Webhook Notifications
 
-Jirabot supports webhook notifications to keep you informed about email processing status. Configure webhook settings in Django Admin under **Settings**.
+Threadline supports webhook notifications to keep you informed about email processing status. Configure webhook settings in Django Admin under **Settings**.
 
 #### Webhook Configuration Keys
 
@@ -397,24 +450,25 @@ To enable automated email processing and JIRA issue creation, you need to config
 >
 > Both tasks are essential for robust, automated email-to-JIRA processing. Make sure both are scheduled to run at appropriate intervals (e.g., every 5 minutes for the main scheduler, every 10-30 minutes for the stuck task reset).
 
-
-
 ## Required Periodic Tasks
 
 You **must** configure the following periodic tasks in Django Admin (**Periodic Tasks** section, provided by `django-celery-beat`):
 
-1. **schedule_scan_all_users_emails**
-   - Periodically fetches new emails for all users with active email_config.
-   - Triggers the scan and storage of new emails into the system, enabling downstream processing (OCR, LLM, JIRA, etc.).
+1. **schedule_email_processing_tasks**
+   - Main scheduler task. Periodically checks for emails in `FETCHED` status and triggers the complete processing chain (OCR → LLM → JIRA).
+   - Uses the new chain-based approach for better workflow management and error handling.
    - **Recommended interval:** every 5 minutes.
 
-2. **schedule_email_processing_tasks**
-   - Main scheduler task. Periodically polls the status of all emails and triggers the appropriate processing tasks (OCR, LLM summarization, JIRA submission) based on the current state machine.
-   - **Recommended interval:** every 5 minutes.
-
-3. **reset_stuck_processing_emails**
-   - Detects and resets any email/message tasks that have been stuck in a pending or processing state for too long (timeout recovery).
+2. **reset_stuck_processing_emails**
+   - Detects and resets emails stuck in processing states for longer than the specified timeout.
+   - Automatically resets stuck emails to appropriate previous states for retry:
+     - `OCR_PROCESSING` → `FETCHED`
+     - `SUMMARY_PROCESSING` → `OCR_SUCCESS`
+     - `JIRA_PROCESSING` → `SUMMARY_SUCCESS`
    - **Recommended interval:** every 10–30 minutes.
+   - **Default timeout:** 30 minutes (configurable via `timeout_minutes` parameter)
+
+> **Note:** The email scanning is now handled automatically by the processing chain, so you no longer need a separate email scanning task.
 
 > **Tip:**
 > You can edit, disable, or delete these tasks at any time in the **Periodic Tasks** section.
@@ -422,10 +476,12 @@ You **must** configure the following periodic tasks in Django Admin (**Periodic 
 ## EmailMessage State Machine & Exception Handling
 
 - The `EmailMessage` model uses a single state field to track the processing stage:
-  - `FETCHED`, `OCR_PROCESSING`, `OCR_SUCCESS`, `OCR_FAILED`, `SUMMARY_PROCESSING`, `SUMMARY_SUCCESS`, `SUMMARY_FAILED`, `JIRA_PROCESSING`, `JIRA_SUCCESS`, `JIRA_FAILED`
-- Each processing task (OCR, LLM, JIRA) will only execute if the previous stage is successful.
-- If any required content is missing (e.g., OCR result, LLM content), the task will raise an exception and set the status to `*_FAILED`.
-- The scheduler will retry or reset failed/stuck tasks as needed.
+  - `FETCHED` → `OCR_PROCESSING` → `OCR_SUCCESS` → `SUMMARY_PROCESSING` → `SUMMARY_SUCCESS` → `JIRA_PROCESSING` → `JIRA_SUCCESS`
+  - Failed states (`OCR_FAILED`, `SUMMARY_FAILED`, `JIRA_FAILED`) can retry by transitioning back to their respective processing states
+- The system now uses a **chain-based approach** where the main scheduler (`schedule_email_processing_tasks`) automatically triggers the complete processing chain for emails in `FETCHED` status
+- Each processing stage (OCR, LLM, JIRA) automatically transitions to the next stage upon successful completion
+- Failed tasks are automatically retried, and stuck tasks are reset by the `reset_stuck_processing_emails` task
+- **Force mode** is available for reprocessing emails regardless of current status (useful for debugging and manual reprocessing)
 
 > **Best Practice:**
 > Always keep your prompt templates, periodic task names, and state machine logic in sync with the codebase. If you add new settings or change the structure of any config, update the README accordingly.
@@ -445,7 +501,7 @@ Core features of this project leverage components from the
 For more details on the architecture and advanced usage, please refer to the
 above repositories.
 
-## Jirabot Processing Flow
+## Threadline Processing Flow
 
 ```mermaid
 flowchart TD

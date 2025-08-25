@@ -123,7 +123,7 @@ INSTALLED_APPS = [
 # Project-Specific Apps
 INSTALLED_APPS += [
     'accounts',
-    'jirabot',
+    'threadline',
 ]
 
 # The ID of the site that this Django project is associated with.
