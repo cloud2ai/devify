@@ -3,15 +3,12 @@ from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError
 from django.utils.translation import gettext_lazy as _
 
-from .state_machine import (
+from threadline.state_machine import (
     EmailStatus,
-    AttachmentStatus,
     get_initial_email_status,
-    get_initial_attachment_status,
-    can_transition_email_to,
-    can_transition_attachment_to,
-    EMAIL_STATE_MACHINE,
-    ATTACHMENT_STATE_MACHINE
+    can_transition_to,
+    get_next_states,
+    EMAIL_STATE_MACHINE
 )
 
 
@@ -212,8 +209,10 @@ class EmailMessage(models.Model):
         max_length=500,
         verbose_name=_('Subject')
     )
-    sender = models.EmailField(
-        verbose_name=_('Sender')
+    sender = models.CharField(
+        max_length=500,
+        verbose_name=_('Sender'),
+        help_text=_('Sender email address (supports RFC 5322 format)')
     )
     recipients = models.TextField(
         verbose_name=_('Recipients'),
@@ -293,22 +292,27 @@ class EmailMessage(models.Model):
         """
         Override save to automatically validate status transitions
         """
+        # Skip state machine validation if saving from Django Admin
+        if hasattr(self, '_from_admin'):
+            # Clear the flag and save without validation
+            delattr(self, '_from_admin')
+            super().save(*args, **kwargs)
+            return
+
         # Check if this is an update and status has changed
         if self.pk:
             try:
                 old_instance = EmailMessage.objects.get(pk=self.pk)
                 if (old_instance.status != self.status and
-                    not can_transition_email_to(
-                        old_instance.status, self.status)):
+                    not can_transition_to(
+                        old_instance.status, self.status, EMAIL_STATE_MACHINE)):
+                    # Get valid next states using the state machine function
+                    valid_transitions = get_next_states(
+                        old_instance.status, EMAIL_STATE_MACHINE)
                     raise ValidationError(
                         f"Invalid email status transition from "
                         f"{old_instance.status} to {self.status}. "
-                        f"Valid transitions: {', '.join(
-                            [s.value for s in EMAIL_STATE_MACHINE[
-                                next(status for status in EmailStatus
-                                     if status.value == old_instance.status)
-                            ]['next']]
-                        )}"
+                        f"Valid transitions: {', '.join(valid_transitions)}"
                     )
             except EmailMessage.DoesNotExist:
                 pass  # New object, no validation needed
@@ -318,14 +322,16 @@ class EmailMessage(models.Model):
 
 class EmailAttachment(models.Model):
     """
-    Email attachments
-    """
+    Email attachments without status field.
 
+    Status is now managed by the parent EmailMessage.status field
+    for unified workflow control.
+    """
     user = models.ForeignKey(
         User,
         on_delete=models.CASCADE,
         verbose_name=_('User'),
-        related_name='email_attachments'
+        related_name='attachments'
     )
     email_message = models.ForeignKey(
         EmailMessage,
@@ -336,45 +342,31 @@ class EmailAttachment(models.Model):
     filename = models.CharField(
         max_length=255,
         verbose_name=_('Filename'),
-        help_text=_('Original filename from email')
+        help_text=_('Original filename of the attachment')
     )
     safe_filename = models.CharField(
         max_length=255,
         verbose_name=_('Safe Filename'),
-        help_text=_('UUID-based filename for file system storage'),
-        null=True,
-        blank=True
+        help_text=_('Sanitized filename for safe storage')
     )
     content_type = models.CharField(
         max_length=100,
-        verbose_name=_('Content Type')
+        verbose_name=_('Content Type'),
+        help_text=_('MIME type of the attachment')
     )
     file_size = models.IntegerField(
-        verbose_name=_('File Size (bytes)')
+        verbose_name=_('File Size'),
+        help_text=_('Size of the attachment in bytes')
     )
     file_path = models.CharField(
         max_length=500,
         verbose_name=_('File Path'),
-        help_text=_('Path to stored file')
+        help_text=_('Path to the stored attachment file')
     )
     is_image = models.BooleanField(
         default=False,
         verbose_name=_('Is Image'),
         help_text=_('Whether this attachment is an image')
-    )
-
-    # Processing status for attachment workflow
-    status = models.CharField(
-        max_length=32,
-        choices=[(status.value, status.name.replace('_', ' ').title())
-                 for status in AttachmentStatus],
-        default=get_initial_attachment_status(),
-        db_index=True,
-        verbose_name=_('Processing Status')
-    )
-    error_message = models.TextField(
-        blank=True,
-        verbose_name=_('Error Message')
     )
 
     ocr_content = models.TextField(
@@ -406,66 +398,76 @@ class EmailAttachment(models.Model):
         indexes = [
             models.Index(fields=['user', 'is_image']),
             models.Index(fields=['email_message']),
-            models.Index(fields=['status']),
         ]
 
     def __str__(self):
         return f"{self.filename} ({self.content_type})"
 
-    def save(self, *args, **kwargs):
-        """
-        Override save to automatically validate status transitions
-        """
-        # Check if this is an update and status has changed
-        if self.pk:
-            try:
-                old_instance = EmailAttachment.objects.get(pk=self.pk)
-                if (old_instance.status != self.status and
-                    not can_transition_attachment_to(
-                        old_instance.status, self.status)):
-                    raise ValidationError(
-                        f"Invalid attachment status transition from "
-                        f"{old_instance.status} to {self.status}. "
-                        f"Valid transitions: {', '.join(
-                            [s.value for s in ATTACHMENT_STATE_MACHINE[
-                                next(status for status in AttachmentStatus
-                                     if status.value == old_instance.status)
-                            ]['next']]
-                        )}"
-                    )
-            except EmailAttachment.DoesNotExist:
-                pass  # New object, no validation needed
 
-        super().save(*args, **kwargs)
-
-
-class JiraIssue(models.Model):
+class Issue(models.Model):
     """
-    Mapping between email messages and JIRA issues.
+    Generic issue model for external system integration.
+    Supports multiple engines like Jira, email, Slack, etc.
     """
-    # User who owns the JIRA issue
+    # User who owns the issue
     user = models.ForeignKey(
         User,
         on_delete=models.CASCADE,
         verbose_name=_('User'),
-        related_name='jira_issues'
+        related_name='issues'
     )
-    # Related email message (one email can have multiple JIRA issues)
+    # Related email message
     email_message = models.ForeignKey(
         EmailMessage,
         on_delete=models.CASCADE,
         verbose_name=_('Email Message'),
-        related_name='jira_issues'
+        related_name='issues'
     )
-    # JIRA issue key (e.g., PROJ-123)
-    jira_issue_key = models.CharField(
+    # Issue title
+    title = models.CharField(
+        max_length=255,
+        verbose_name=_('Issue Title'),
+        help_text=_('Title of the issue')
+    )
+    # Issue description
+    description = models.TextField(
+        verbose_name=_('Issue Description'),
+        help_text=_('Description of the issue')
+    )
+
+    # Issue priority
+    priority = models.CharField(
+        max_length=20,
+        verbose_name=_('Issue Priority'),
+        help_text=_('Priority level of the issue')
+    )
+    # Engine type (jira, email, slack, etc.)
+    engine = models.CharField(
         max_length=50,
-        verbose_name=_('JIRA Issue Key'),
-        help_text=_('JIRA issue key (e.g., PROJ-123)')
+        verbose_name=_('Engine Type'),
+        help_text=_('External system engine type')
     )
-    # JIRA issue URL
-    jira_url = models.URLField(
-        verbose_name=_('JIRA Issue URL')
+    # External system ID (e.g., Jira issue key)
+    external_id = models.CharField(
+        max_length=255,
+        blank=True,
+        null=True,
+        verbose_name=_('External ID'),
+        help_text=_('ID in external system')
+    )
+    # Direct URL to the issue in external system
+    issue_url = models.URLField(
+        max_length=500,
+        blank=True,
+        null=True,
+        verbose_name=_('Issue URL'),
+        help_text=_('Direct link to the issue in external system')
+    )
+    # Metadata for engine-specific configuration and data
+    metadata = models.JSONField(
+        default=dict,
+        verbose_name=_('Metadata'),
+        help_text=_('Engine-specific configuration and data')
     )
     # Created timestamp
     created_at = models.DateTimeField(auto_now_add=True)
@@ -473,13 +475,20 @@ class JiraIssue(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        verbose_name = _('JIRA Issue')
-        verbose_name_plural = _('JIRA Issues')
+        verbose_name = _('Issue')
+        verbose_name_plural = _('Issues')
         ordering = ['-created_at']
         indexes = [
             models.Index(fields=['user', 'email_message']),
-            models.Index(fields=['jira_issue_key']),
+            models.Index(fields=['engine']),
+            models.Index(fields=['external_id']),
         ]
 
     def __str__(self):
-        return f"{self.jira_issue_key} ({self.email_message})"
+        return f"{self.title} ({self.engine})"
+
+    def save(self, *args, **kwargs):
+        """
+        Override save for any custom logic if needed
+        """
+        super().save(*args, **kwargs)

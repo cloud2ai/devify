@@ -7,7 +7,7 @@ from unittest.mock import patch, MagicMock
 
 from threadline.models import EmailMessage, EmailAttachment, User
 from threadline.tasks.ocr import ocr_images_for_email
-from threadline.tasks.llm_attachment import organize_attachments_ocr_task
+from threadline.tasks.llm_attachment import llm_ocr_task
 from threadline.tasks.llm_summary import summarize_email_task
 
 
@@ -105,7 +105,7 @@ class OCREmptyContentTestCase(TestCase):
         mock_call_llm.return_value = "Processed OCR content"
 
         # Run summary task
-        organize_attachments_ocr_task(self.email.id, force=False)
+        llm_ocr_task(self.email.id, force=False)
 
         # Refresh from database
         self.attachment_with_content.refresh_from_db()

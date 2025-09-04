@@ -84,9 +84,65 @@ This step is required for both development and production environments.
 cp env.sample .env
 ```
 
+### Docker Build Configuration
+
+Devify supports using Chinese mirrors for faster package downloads during Docker builds. This is particularly useful for users in China or regions with slow access to default package sources.
+
+#### Mirror Configuration
+
+The Docker build process can be configured to use Chinese mirrors through the `USE_MIRROR` environment variable:
+
+**For Chinese users (recommended):**
+```bash
+# In .env file
+USE_MIRROR=true
+```
+
+**For international users:**
+```bash
+# In .env file
+USE_MIRROR=false
+```
+
+#### What the Mirror Configuration Does
+
+When `USE_MIRROR=true`, the Dockerfile will:
+
+1. **Debian Package Sources**: Replace default Debian sources with Tsinghua University mirrors
+   - `deb.debian.org` → `mirrors.tuna.tsinghua.edu.cn`
+   - `security.debian.org` → `mirrors.tuna.tsinghua.edu.cn/debian-security`
+
+2. **Python Package Sources**: Use Tsinghua PyPI mirror for faster pip installs
+   - `pypi.org` → `pypi.tuna.tsinghua.edu.cn`
+
+3. **Build Process**: Automatically configure both system packages and Python dependencies
+
+#### Default Behavior
+
+- **Development Mode** (`docker-compose.dev.yml`): `USE_MIRROR=true` (default)
+- **Production Mode** (`docker-compose.yml`): `USE_MIRROR=false` (default)
+- **Override**: You can override the default by setting `USE_MIRROR` in your `.env` file
+
+#### Docker Compose Differences
+
+**Development Mode (`docker-compose.dev.yml`):**
+- Uses local image name: `devify:latest`
+- Default `USE_MIRROR=true` for faster development builds
+- Includes Flower monitoring dashboard
+- Source code mounted for live reloading
+
+**Production Mode (`docker-compose.yml`):**
+- Uses remote image: `registry.cn-beijing.aliyuncs.com/cloud2ai/devify:latest`
+- Default `USE_MIRROR=false` for production builds
+- Includes Nginx reverse proxy
+- Optimized for production deployment
+
 This environment values should be provided:
 
 ```
+# Docker Build Configuration
+USE_MIRROR=true
+
 # Database Configuration
 DB_ENGINE=mysql
 MYSQL_ROOT_PASSWORD=root_password
@@ -126,6 +182,8 @@ docker-compose -f docker-compose.dev.yml build
 docker-compose -f docker-compose.dev.yml up -d
 ```
 
+**Note:** Development mode uses `USE_MIRROR=true` by default for faster builds in China. You can override this by setting `USE_MIRROR=false` in your `.env` file.
+
 Django API services is running in http://your_host:8000
 
 Check output:
@@ -140,6 +198,8 @@ docker logs -f devify-api
 docker-compose -f docker-compose.yml build
 docker-compose -f docker-compose.yml up -d
 ```
+
+**Note:** Production mode uses `USE_MIRROR=false` by default. For faster builds in China, you can set `USE_MIRROR=true` in your `.env` file.
 
 ### Service Access
 
@@ -179,7 +239,7 @@ docker exec -it devify-api python manage.py collectstatic
 
 ## Threadline Settings
 
-Before using Threadline features, you should initialize the required settings for all users. This can be done via a management command inside the API container. The command will automatically create default records for all necessary THREADLINE settings (`email_config`, `email_filter_config`, `jira_config`, `prompt_config`) for each user if they do not already exist.
+Before using Threadline features, you should initialize the required settings for all users. This can be done via a management command inside the API container. The command will automatically create default records for all necessary THREADLINE settings (`email_config`, `email_filter_config`, `issue_config`, `prompt_config`, `webhook_config`) for each user if they do not already exist.
 
 To simplify configuration, all required settings should be added here. Below are the key-value pairs you need to set before using the system. The table describes the key design, and the values should be saved in JSON format.
 
@@ -187,8 +247,9 @@ To simplify configuration, all required settings should be added here. Below are
 |----------------------|------------------------------------------------------------------|----------|-----------------------------------------|
 | email_config         | Email server connection and authentication settings               | Yes      | See below                              |
 | email_filter_config  | Email filtering and processing rules                              | Yes      | See below                              |
-| jira_config          | JIRA integration and default issue creation settings              | Yes      | See below                              |
+| issue_config         | Issue creation engine configuration (JIRA, email, Slack, etc.)   | Yes      | See below                              |
 | prompt_config        | AI prompt templates for email/attachment/summary processing       | Yes      | See below                              |
+| webhook_config       | Webhook configuration for external notifications                  | No       | See below                              |
 
 > **Note:**
 > All values must be valid JSON.
@@ -208,7 +269,7 @@ To simplify configuration, all required settings should be added here. Below are
 
 2. **Edit the settings in Django Admin:**
 
-   After initialization, log in to the Django Admin panel and navigate to the **Settings** section. You can then edit the values for each key (`email_config`, `email_filter_config`, `jira_config`, `prompt_config`) as needed for your environment.
+   After initialization, log in to the Django Admin panel and navigate to the **Settings** section. You can then edit the values for each key (`email_config`, `email_filter_config`, `issue_config`, `prompt_config`, `webhook_config`) as needed for your environment.
 
    > **Tip:**
    > You can also update these settings directly in the database if required.
@@ -253,7 +314,6 @@ To simplify configuration, all required settings should be added here. Below are
 
 | Key              | Type     | Description                                                        | Example                |
 |------------------|----------|--------------------------------------------------------------------|------------------------|
-| folder           | string   | The email folder to fetch messages from, usually "INBOX"           | "INBOX"                |
 | filters          | array    | List of IMAP search criteria to apply when fetching emails         | ["UNSEEN", "SINCE \"24-Jul-2025\""] |
 | exclude_patterns | array    | Patterns to exclude emails, e.g., subjects containing keywords     | ["spam", "newsletter"] |
 | max_age_days     | integer  | Maximum age of emails to process, in days                          | 7                      |
@@ -280,7 +340,6 @@ To simplify configuration, all required settings should be added here. Below are
 
 ```json
 {
-  "folder": "INBOX",
   "filters": [
     "UNSEEN",
     "SINCE \"24-Jul-2025\"",
@@ -299,36 +358,72 @@ To simplify configuration, all required settings should be added here. Below are
 - Date format should be "DD-MMM-YYYY" (e.g., "24-Jul-2025")
 - The system automatically adds time-based filtering using `last_email_fetch_time` for incremental fetching
 
-### JIRA Config(jira_config)
+### Issue Config(issue_config)
+
+The issue configuration supports multiple engines (JIRA, email, Slack, etc.) with engine-specific settings.
+
+| Key                | Type     | Description                                      | Example                      |
+|--------------------|----------|--------------------------------------------------|------------------------------|
+| enable             | boolean  | Whether issue creation is enabled                | true                         |
+| engine             | string   | Issue creation engine type                       | "jira"                       |
+| jira               | object   | JIRA-specific configuration (when engine="jira") | See JIRA config below        |
+
+#### JIRA Configuration (when engine="jira")
 
 | Key                | Type     | Description                                      | Example                      |
 |--------------------|----------|--------------------------------------------------|------------------------------|
 | url                | string   | JIRA server URL                                  | "https://jira.example.com"   |
 | username           | string   | JIRA account username                            | "jira-user"                  |
 | api_token          | string   | JIRA API token or password                       | "your-api-token"             |
-| project_key        | string   | JIRA project key                                 | "PRJ"                        |
+| summary_prefix     | string   | Prefix for issue summary                         | "[AI]"                       |
+| summary_timestamp  | boolean  | Add timestamp to summary                         | true                         |
+| project_key        | string   | Default JIRA project key                         | "PRJ"                        |
+| allow_project_keys | array    | Allowed project keys for validation              | ["PRJ", "REQ"]               |
+| project_prompt     | string   | LLM prompt for project key selection (empty = use default) | "" or "The project key is: ..." |
 | default_issue_type | string   | Default issue type for new issues                | "Task"                       |
 | default_priority   | string   | Default priority for new issues                  | "High"                       |
 | epic_link          | string   | Epic link key (optional)                         | "PRJ-1234"                   |
 | assignee           | string   | Default assignee username (optional)             | "jira-assignee"              |
+| allow_assignees    | array    | Allowed assignees for validation                 | ["assignee1", "assignee2"]   |
+| assignee_prompt    | string   | LLM prompt for assignee selection (empty = use default) | "" or "Assign the issue to..." |
+| description_prompt | string   | LLM prompt for description formatting (empty = use default) | "" or "Convert the provided..." |
 
-```
+**Example configuration:**
+
+```json
 {
-  "url": "your-jira-url",
-  "username": "your-jira-username",
-  "api_token": "your-api-token-or-password",
-  "project_key": "your-project-key",
-  "default_issue_type": "your-default-issue-type",
-  "default_priority": "your-default-priority",
-  "epic_link": "your-epic-link-key",
-  "assignee": "your-assignee-username"
+  "enable": false,
+  "engine": "jira",
+  "jira": {
+    "url": "your-jira-url",
+    "username": "your-jira-username",
+    "api_token": "your-api-token-or-password",
+    "summary_prefix": "[AI]",
+    "summary_timestamp": true,
+    "project_key": "your-default-project-key",
+    "allow_project_keys": ["PRJ", "REQ"],
+    "project_prompt": "",
+    "default_issue_type": "your-default-issue-type",
+    "default_priority": "your-default-priority",
+    "epic_link": "your-epic-link-key",
+    "assignee": "your-default-assignee-username",
+    "allow_assignees": ["assignee1", "assignee2"],
+    "description_prompt": "",
+    "assignee_prompt": ""
+  }
 }
 ```
+
+**Note about prompts:**
+- If `project_prompt`, `assignee_prompt`, or `description_prompt` are empty strings (`""`), the system will use the default values directly without calling LLM
+- This is the recommended approach for simple setups where you want to use fixed project keys, assignees, and standard description formatting
+- If you want LLM-based dynamic selection, provide custom prompts for these fields
 
 ### Prompt Config (prompt_config)
 
 | Config Key              | Description                                                                                   | Required |
 |------------------------|-----------------------------------------------------------------------------------------------|----------|
+| `output_language`      | Default output language for LLM responses                                                     | Yes      |
 | `email_content_prompt` | Organizes email/chat content for LLM processing.                                              | Yes      |
 | `ocr_prompt`           | Processes OCR text from images for LLM summarization.                                         | Yes      |
 | `summary_prompt`       | Summarizes email and attachment content for JIRA issue creation.                              | Yes      |
@@ -337,23 +432,22 @@ To simplify configuration, all required settings should be added here. Below are
 **Example:**
 ```json
 {
-  "email_content_prompt": "Sort chat logs in chronological order (oldest to newest). Format each message as: [Time] [Sender]: Message Content. Place each image on a separate line using markup (e.g., !image-filename.png!). Keep the original time, sender, and content. Supplement semantics if necessary, but do not change the original meaning.",
-  "ocr_prompt": "Extract key information from raw OCR text, remove irrelevant or redundant content, supplement semantics, and organize it into a concise and complete description. Highlight operational context, abnormal phenomena, and error messages to help locate and document issues.",
-  "summary_prompt": "Based on chat logs, background information, user feedback, and screenshots, clarify task responsibilities, determine where the issue occurred, and perform issue classification and analysis. Output three parts: (1) phenomenon description and preliminary cause analysis (including environment information, issue phenomenon, and reproduction process; reference screenshots and chat for completeness; clearly mark any assumptions), (2) TODO list of core issues and potential requirements (mark assumptions), (3) if the input contains '--- ATTACHMENT OCR CONTENT ---', analyze the OCR content, as it may contain key error messages or configuration information. If information is unclear, mark as 'To be confirmed' and strictly summarize based on the provided content.",
-  "summary_title_prompt": "Summarize a clear and specific issue title based on the provided chat logs and background information. The title should directly reflect the main problem to be solved or the key requirement, using a concise verb-object structure. Avoid vague or generic terms. Focus on what needs to be addressed or resolved. Limit the title to 200 characters for clarity and easy identification."
+  "output_language": "zh-hans",
+  "email_content_prompt": "Organize the provided email content (which may include chat records or message bodies) in chronological order into a conversation text with minimal polishing (clearly mark any assumptions), without altering any original meaning and retaining all information. Output format: [Date Time] Speaker: Content (on a single line, or wrapped across multiple lines if necessary), with image placeholders [IMAGE: filename.png] placed on separate lines in their original positions. Date and time: if the date is unknown, display only the time; if known, display both date and time. Conversation text must be plain text (excluding emojis, special characters, etc.) with clear structure. Always preserve the original language of the conversation; if the specified output language differs from the original language, include the original text on top and the translated text below. No explanations or additional content should be provided.",
+  "ocr_prompt": "Organize the provided OCR results into plain text output, using Markdown formatting when necessary for code or quoted content (e.g., ``` for code blocks, > for quotes). Describe all explanatory or interpretive content in the specified output language, while keeping all actual OCR text in the original language from the image. Fully retain and describe all content without omission. Clearly highlight any normal, abnormal, or valuable information. Attempt to correct and standardize incomplete, unclear, or potentially erroneous OCR content without altering its original meaning, and mark any uncertain parts as [unclear]. Produce only structured text with necessary Markdown formatting, without any additional explanations, summaries, or unrelated content.",
+  "summary_prompt": "Based on the provided content (including chronological chat records and OCR-recognized content from images), organize the chat records in chronological order, preserving the original speaker and language for each entry, fully retaining all information, and using Markdown formatting when necessary for code or quoted content. The output should include four sections: 1) **Main Content**: list the key points of the current conversation; 2) **Process Description**: provide a detailed description of the problem and its reproduction steps, marking any uncertain information as \"unknown\"; 3) **Solution** (if unresolved, indicate attempted measures): if the issue is resolved, list the solution; if unresolved, list measures already taken and their results, optionally including possible causes clearly marked as (speculation); 4) **Resolution Status**: indicate whether the issue has been resolved (Yes/No). Output must be well-structured, hierarchically clear plain text, without any additional explanations, summaries, or extra content, while highlighting any normal, abnormal, or valuable information for quick reference.",
+  "summary_title_prompt": "Based on the chat records, extract a single structured title in the format: [Issue Category][Participant]Title Content; the title should use a verb-object structure, be concise, and accurately express the core problem or requirement, avoiding vague terms, with a maximum length of 300 characters; if the information is unclear, add [To Be Confirmed]; if multiple issues exist, extract only the most critical and central one, generating a single structured title."
 }
 ```
 
-### Webhook Notifications
+### Webhook Config (webhook_config)
 
 Threadline supports webhook notifications to keep you informed about email processing status. Configure webhook settings in Django Admin under **Settings**.
-
-#### Webhook Configuration Keys
 
 | Key                | Type     | Description                                      | Example                      | Required |
 |--------------------|----------|--------------------------------------------------|------------------------------|----------|
 | `url`              | string   | Webhook endpoint URL                             | `"https://open.feishu.cn/open-apis/bot/v2/hook/xxx"` | Yes |
-| `events`           | array    | List of events to notify                         | `["JIRA_SUCCESS", "OCR_FAILED", "SUMMARY_FAILED"]` | No |
+| `events`           | array    | List of events to notify                         | `["issue_success", "ocr_failed", "llm_summary_failed"]` | No |
 | `timeout`          | integer  | Request timeout in seconds                       | `10`                         | No |
 | `retries`          | integer  | Number of retry attempts                         | `3`                          | No |
 | `headers`          | object   | Custom headers for webhook requests              | `{"Authorization": "Bearer xxx"}` | No |
@@ -370,22 +464,80 @@ Currently, the following webhook providers are supported:
 
 #### Supported Events
 
-The following email processing status events can be configured for notifications:
+All email processing status events from the state machine can be configured for notifications:
 
-- **`FETCHED`**: New email received
-- **`OCR_SUCCESS`**: OCR processing completed successfully
-- **`OCR_FAILED`**: OCR processing failed
-- **`SUMMARY_SUCCESS`**: LLM processing completed successfully
-- **`SUMMARY_FAILED`**: LLM processing failed
-- **`JIRA_SUCCESS`**: JIRA issue created successfully
-- **`JIRA_FAILED`**: JIRA issue creation failed
+**Email Fetch Status:**
+- **`fetched`**: Email has been fetched and is ready for processing
+
+**OCR Processing Status:**
+- **`ocr_processing`**: OCR processing is in progress
+- **`ocr_success`**: OCR processing completed successfully
+- **`ocr_failed`**: OCR processing failed
+
+**LLM OCR Processing Status:**
+- **`llm_ocr_processing`**: LLM processing OCR results in progress
+- **`llm_ocr_success`**: LLM OCR processing completed successfully
+- **`llm_ocr_failed`**: LLM OCR processing failed
+
+**LLM Email Content Processing Status:**
+- **`llm_email_processing`**: LLM processing email content in progress
+- **`llm_email_success`**: LLM email processing completed successfully
+- **`llm_email_failed`**: LLM email processing failed
+
+**LLM Summary Generation Status:**
+- **`llm_summary_processing`**: LLM summary generation in progress
+- **`llm_summary_success`**: LLM summary generation completed successfully
+- **`llm_summary_failed`**: LLM summary generation failed
+
+**Issue Creation Status:**
+- **`issue_processing`**: Issue creation is in progress
+- **`issue_success`**: Issue creation completed successfully
+- **`issue_failed`**: Issue creation failed
+
+**Completion Status:**
+- **`completed`**: Email processing completed successfully
 
 #### Example Webhook Configuration
 
+**Basic Configuration (only key events):**
 ```json
 {
   "url": "https://open.feishu.cn/open-apis/bot/v2/hook/xxx",
-  "events": ["JIRA_SUCCESS", "OCR_FAILED", "SUMMARY_FAILED"],
+  "events": ["issue_success", "ocr_failed", "llm_summary_failed"],
+  "timeout": 10,
+  "retries": 3,
+  "headers": {},
+  "language": "zh-hans",
+  "provider": "feishu"
+}
+```
+
+**Complete Configuration (all events):**
+```json
+{
+  "url": "https://open.feishu.cn/open-apis/bot/v2/hook/xxx",
+  "events": [
+    "fetched",
+    "ocr_processing", "ocr_success", "ocr_failed",
+    "llm_ocr_processing", "llm_ocr_success", "llm_ocr_failed",
+    "llm_email_processing", "llm_email_success", "llm_email_failed",
+    "llm_summary_processing", "llm_summary_success", "llm_summary_failed",
+    "issue_processing", "issue_success", "issue_failed",
+    "completed"
+  ],
+  "timeout": 10,
+  "retries": 3,
+  "headers": {},
+  "language": "zh-hans",
+  "provider": "feishu"
+}
+```
+
+**Minimal Configuration (only failures):**
+```json
+{
+  "url": "https://open.feishu.cn/open-apis/bot/v2/hook/xxx",
+  "events": ["ocr_failed", "llm_email_failed", "llm_summary_failed", "issue_failed"],
   "timeout": 10,
   "retries": 3,
   "headers": {},
@@ -475,13 +627,82 @@ You **must** configure the following periodic tasks in Django Admin (**Periodic 
 
 ## EmailMessage State Machine & Exception Handling
 
-- The `EmailMessage` model uses a single state field to track the processing stage:
-  - `FETCHED` → `OCR_PROCESSING` → `OCR_SUCCESS` → `SUMMARY_PROCESSING` → `SUMMARY_SUCCESS` → `JIRA_PROCESSING` → `JIRA_SUCCESS`
-  - Failed states (`OCR_FAILED`, `SUMMARY_FAILED`, `JIRA_FAILED`) can retry by transitioning back to their respective processing states
-- The system now uses a **chain-based approach** where the main scheduler (`schedule_email_processing_tasks`) automatically triggers the complete processing chain for emails in `FETCHED` status
-- Each processing stage (OCR, LLM, JIRA) automatically transitions to the next stage upon successful completion
-- Failed tasks are automatically retried, and stuck tasks are reset by the `reset_stuck_processing_emails` task
-- **Force mode** is available for reprocessing emails regardless of current status (useful for debugging and manual reprocessing)
+The `EmailMessage` model uses a comprehensive state machine to track the processing stage with proper error handling and retry mechanisms.
+
+### State Machine Flow
+
+```mermaid
+stateDiagram-v2
+    [*] --> FETCHED
+    FETCHED --> OCR_PROCESSING
+    OCR_PROCESSING --> OCR_SUCCESS
+    OCR_PROCESSING --> OCR_FAILED
+    OCR_FAILED --> OCR_PROCESSING : Retry
+
+    OCR_SUCCESS --> LLM_OCR_PROCESSING
+    LLM_OCR_PROCESSING --> LLM_OCR_SUCCESS
+    LLM_OCR_PROCESSING --> LLM_OCR_FAILED
+    LLM_OCR_FAILED --> LLM_OCR_PROCESSING : Retry
+
+    LLM_OCR_SUCCESS --> LLM_EMAIL_PROCESSING
+    LLM_EMAIL_PROCESSING --> LLM_EMAIL_SUCCESS
+    LLM_EMAIL_PROCESSING --> LLM_EMAIL_FAILED
+    LLM_EMAIL_FAILED --> LLM_EMAIL_PROCESSING : Retry
+
+    LLM_EMAIL_SUCCESS --> LLM_SUMMARY_PROCESSING
+    LLM_SUMMARY_PROCESSING --> LLM_SUMMARY_SUCCESS
+    LLM_SUMMARY_PROCESSING --> LLM_SUMMARY_FAILED
+    LLM_SUMMARY_FAILED --> LLM_SUMMARY_PROCESSING : Retry
+
+    LLM_SUMMARY_SUCCESS --> ISSUE_PROCESSING
+    LLM_SUMMARY_SUCCESS --> COMPLETED : No issue needed
+
+    ISSUE_PROCESSING --> ISSUE_SUCCESS
+    ISSUE_PROCESSING --> ISSUE_FAILED
+    ISSUE_PROCESSING --> COMPLETED : No issue needed
+    ISSUE_FAILED --> ISSUE_PROCESSING : Retry
+
+    ISSUE_SUCCESS --> COMPLETED
+    COMPLETED --> [*]
+```
+
+### State Descriptions
+
+| Status | Description | Next Possible States |
+|--------|-------------|---------------------|
+| `FETCHED` | Email has been fetched and is ready for OCR | `OCR_PROCESSING` |
+| `OCR_PROCESSING` | OCR processing is in progress | `OCR_SUCCESS`, `OCR_FAILED` |
+| `OCR_SUCCESS` | OCR processing completed successfully | `LLM_OCR_PROCESSING` |
+| `OCR_FAILED` | OCR processing failed | `OCR_PROCESSING` (retry) |
+| `LLM_OCR_PROCESSING` | LLM processing OCR results in progress | `LLM_OCR_SUCCESS`, `LLM_OCR_FAILED` |
+| `LLM_OCR_SUCCESS` | LLM OCR processing completed successfully | `LLM_EMAIL_PROCESSING` |
+| `LLM_OCR_FAILED` | LLM OCR processing failed | `LLM_OCR_PROCESSING` (retry) |
+| `LLM_EMAIL_PROCESSING` | LLM Email content organization is in progress | `LLM_EMAIL_SUCCESS`, `LLM_EMAIL_FAILED` |
+| `LLM_EMAIL_SUCCESS` | LLM Email content organization completed successfully | `LLM_SUMMARY_PROCESSING` |
+| `LLM_EMAIL_FAILED` | LLM Email content organization failed | `LLM_EMAIL_PROCESSING` (retry) |
+| `LLM_SUMMARY_PROCESSING` | LLM summary processing is in progress | `LLM_SUMMARY_SUCCESS`, `LLM_SUMMARY_FAILED` |
+| `LLM_SUMMARY_SUCCESS` | LLM summary processing completed successfully | `ISSUE_PROCESSING`, `COMPLETED` |
+| `LLM_SUMMARY_FAILED` | LLM summary processing failed | `LLM_SUMMARY_PROCESSING` (retry) |
+| `ISSUE_PROCESSING` | Issue creation is in progress | `ISSUE_SUCCESS`, `ISSUE_FAILED`, `COMPLETtED` |
+| `ISSUE_SUCCESS` | Issue creation completed successfully | `COMPLETED` |
+| `ISSUE_FAILED` | Issue creation failed | `ISSUE_PROCESSING` (retry) |
+| `COMPLETED` | Task completed successfully | Terminal state |
+
+### Key Features
+
+- **Chain-based Processing**: The main scheduler (`schedule_email_processing_tasks`) automatically triggers the complete processing chain for emails in `FETCHED` status
+- **Automatic Transitions**: Each processing stage automatically transitions to the next stage upon successful completion
+- **Retry Mechanism**: Failed states can retry by transitioning back to their respective processing states
+- **Stuck Task Recovery**: The `reset_stuck_processing_emails` task automatically detects and resets stuck emails
+- **Force Mode**: Available for reprocessing emails regardless of current status (useful for debugging and manual reprocessing)
+- **Parallel Processing**: OCR and email content processing can run in parallel after OCR completion for better performance
+
+### Error Handling
+
+- **Automatic Retries**: Failed tasks are automatically retried by transitioning back to processing states
+- **Timeout Recovery**: Stuck tasks are reset to appropriate previous states after configurable timeout
+- **Status Validation**: Each state transition is validated against the state machine rules
+- **Force Processing**: Bypass status checks for manual reprocessing and debugging
 
 > **Best Practice:**
 > Always keep your prompt templates, periodic task names, and state machine logic in sync with the codebase. If you add new settings or change the structure of any config, update the README accordingly.
@@ -518,18 +739,23 @@ flowchart TD
     F --> I[Text Content Organization]
     H --> I
 
-    I --> J[LLM Processing]
-    J --> K[Content Summarization]
-    K --> L[Title Generation]
+    I --> J[LLM Email Processing]
+    J --> K[LLM Summary Processing]
+    K --> L[Content Summarization & Title Generation]
 
-    L --> M[JIRA Issue Creation]
-    M --> N[Upload Attachments to JIRA]
-    N --> O[JIRA Issue Complete]
+    L --> M{Issue Creation Enabled?}
+    M -->|Yes| N[JIRA Issue Creation]
+    M -->|No| O[Mark as Completed]
+
+    N --> P[Upload Attachments to JIRA]
+    P --> Q[JIRA Issue Complete]
+    Q --> R[Mark as Completed]
 
     style A fill:#e1f5fe
-    style O fill:#c8e6c9
+    style R fill:#c8e6c9
     style G fill:#fff3e0
     style J fill:#f3e5f5
+    style K fill:#e8f5e8
 ```
 
 ### Process Description
@@ -538,14 +764,18 @@ flowchart TD
 2. **Email Collection**: System fetches emails from configured mailboxes
 3. **Email Processing**: Parses email content and extracts attachments
 4. **OCR Processing**: Extracts text content from image attachments using Azure Document Intelligence
-5. **Content Organization**: LLM organizes chat logs and OCR content into structured format
-6. **Summarization**: LLM generates comprehensive summary and issue title
-7. **JIRA Integration**: Creates JIRA issue with organized content and uploaded attachments
+5. **LLM Email Processing**: LLM organizes chat logs and OCR content into structured format
+6. **LLM Summary Processing**: LLM generates comprehensive summary and issue title
+7. **Issue Creation**: Creates JIRA issue with organized content and uploaded attachments (if enabled)
+8. **Completion**: Marks email as completed regardless of issue creation status
 
 ### Key Features
 
 - **Multi-source Input**: Supports various communication platforms via email forwarding
 - **Image Processing**: Automatic OCR extraction from screenshots and documents
-- **AI-powered Analysis**: LLM processes and organizes content for better readability
+- **AI-powered Analysis**: Two-stage LLM processing (email organization + summary generation)
 - **Automated JIRA Creation**: Direct integration with JIRA for issue tracking
 - **Attachment Handling**: Preserves and uploads original files to JIRA issues
+- **Parallel Processing**: OCR and email content processing can run in parallel for better performance
+- **Flexible Completion**: Can complete processing with or without JIRA issue creation
+- **State Machine Management**: Comprehensive status tracking with automatic retry and recovery mechanisms

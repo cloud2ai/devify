@@ -1,5 +1,6 @@
 import base64
 import hashlib
+from html import unescape
 import html
 import logging
 import os
@@ -7,12 +8,18 @@ import re
 import uuid
 from datetime import datetime, timedelta
 from email import message_from_bytes
+from email.header import decode_header
 from email.utils import parsedate_to_datetime
 from typing import Dict, Generator, Optional
 
 import imaplib
 from django.utils import timezone
 from email_validator import validate_email, EmailNotValidError
+
+from .image_positioning import (
+    embed_images_with_html,
+    normalize_refs
+)
 
 logger = logging.getLogger(__name__)
 
@@ -239,7 +246,6 @@ class EmailClient:
             return ''
 
         try:
-            from email.header import decode_header
             decoded_parts = decode_header(header_value)
 
             # Join all decoded parts
@@ -527,6 +533,9 @@ class EmailClient:
         Returns:
             str: Text content with embedded image placeholders
         """
+        # Store HTML content for image positioning
+        self._last_html_content = html_content
+
         # Strategy 1: HTML priority - embed images in HTML and extract text
         if html_content and image_placeholders:
             # Embed image placeholders directly in HTML
@@ -559,8 +568,9 @@ class EmailClient:
         """
         Embed image placeholders directly in HTML content.
 
-        This method replaces <img src="cid:..."> tags with placeholder text
-        that will be preserved during HTML-to-text conversion.
+        This method replaces <img src="cid:..."> and <img src="file://..."> tags
+        with placeholder text that will be preserved during HTML-to-text conversion.
+        Also handles Chinese image references like [图片: filename(description)]
 
         Args:
             html_content: Original HTML content
@@ -588,7 +598,7 @@ class EmailClient:
             # Create patterns to match the img tag (support both single and double quotes)
             patterns = []
 
-            # Pattern 1: Match by original filename
+            # Pattern 1: Match by original filename (for cid: protocol)
             if original_filename:
                 filename_without_ext = os.path.splitext(original_filename)[0]
                 patterns.extend([
@@ -603,12 +613,37 @@ class EmailClient:
             # Pattern 3: Match by safe_filename (fallback)
             patterns.append(rf'<img[^>]*src=["\']cid:{re.escape(safe_filename)}["\'][^>]*>')
 
+            # Pattern 4: Match file:// protocol images by filename
+            if original_filename:
+                filename_without_ext = os.path.splitext(original_filename)[0]
+                patterns.extend([
+                    rf'<img[^>]*src=["\']file://[^"\']*{re.escape(original_filename)}["\'][^>]*>',
+                    rf'<img[^>]*src=["\']file://[^"\']*{re.escape(filename_without_ext)}["\'][^>]*>'
+                ])
+
+            # Pattern 5: Match by img id attribute (for complex cases)
+            if original_filename:
+                filename_without_ext = os.path.splitext(original_filename)[0]
+                patterns.extend([
+                    rf'<img[^>]*id=["\'][^"\']*{re.escape(original_filename)}[^"\']*["\'][^>]*>',
+                    rf'<img[^>]*id=["\'][^"\']*{re.escape(filename_without_ext)}[^"\']*["\'][^>]*>'
+                ])
+
             # Try to match and replace
             for pattern in patterns:
                 if re.search(pattern, result_html):
-                    result_html = re.sub(pattern, placeholder, result_html)
-                    logger.debug(f"Replaced {pattern} with {placeholder}")
+                    # Use safe_filename for the placeholder to ensure consistency
+                    safe_placeholder = f"[IMAGE: {safe_filename}]"
+                    result_html = re.sub(pattern, safe_placeholder, result_html)
+                    logger.debug(f"Replaced {pattern} with {safe_placeholder}")
                     break
+
+        # Also handle Chinese image references that might already be in the HTML
+        # Convert them to standard format using safe_filename when possible
+        if image_placeholders:
+            result_html = normalize_refs(result_html, image_placeholders)
+        else:
+            result_html = normalize_refs(result_html, {})
 
         return result_html
 
@@ -644,7 +679,6 @@ class EmailClient:
                 End of message.
         """
         try:
-            from html import unescape
 
             # Step 1: Remove script and style elements
             html_content = re.sub(
@@ -804,7 +838,6 @@ class EmailClient:
                 End of message.
         """
         try:
-            from html import unescape
 
             # Step 1: Remove script and style elements
             html_content = re.sub(
@@ -848,9 +881,6 @@ class EmailClient:
             text_content = re.sub(r'[ \t]+', ' ', text_content)
             text_content = re.sub(r'\n +', '\n', text_content)
 
-            # Store image placeholders for later use
-            self._extracted_image_placeholders = image_placeholders
-
             return text_content.strip()
 
         except Exception as e:
@@ -887,12 +917,11 @@ class EmailClient:
         """
         # Strategy 1: Use HTML positioning algorithm if available
         if hasattr(self, "_last_html_content") and getattr(self, "_last_html_content", ""):
-            from threadline.utils.image_positioning import embed_images_in_text_with_html_positioning
 
             logger.info(
                 f"Using HTML positioning algorithm with {len(image_placeholders)} images"
             )
-            return embed_images_in_text_with_html_positioning(
+            return embed_images_with_html(
                 text_content,
                 getattr(self, "_last_html_content", ""),
                 image_placeholders

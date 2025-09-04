@@ -5,6 +5,8 @@ import json
 import logging
 from django.core.management.base import BaseCommand
 from django.contrib.auth.models import User
+from django.conf import settings
+
 from threadline.models import Settings
 
 
@@ -77,42 +79,119 @@ class Command(BaseCommand):
                 ],
                 'max_age_days': 7
             },
-            'jira_config': {
-                'username': 'your-jira-username',
-                'api_token': 'your-api-token-or-password',
-                'project_key': 'your-project-key',
-                'default_issue_type': 'your-default-issue-type',
-                'default_priority': 'your-default-priority',
-                'epic_link': 'your-epic-link-key',
-                'assignee': 'your-assignee-username'
+            'issue_config': {
+                'enable': False,
+                'engine': 'jira',
+                'jira': {
+                    'url': 'your-jira-url',
+                    'username': 'your-jira-username',
+                    'api_token': 'your-api-token-or-password',
+                    'summary_prefix': '[AI]',
+                    'summary_timestamp': True,
+                    'project_key': 'your-default-project-key',
+                    'allow_project_keys': ['PRJ', 'REQ'],
+                    'project_prompt': (
+                        'The project key is: your-default-project-key, only'
+                        'Only return the project key, do not add any other text.'
+                        'leave empty if you want to use default project key'
+                    ),
+                    'default_issue_type': 'your-default-issue-type',
+                    'default_priority': 'your-default-priority',
+                    'epic_link': 'your-epic-link-key',
+                    'assignee': 'your-default-assignee-username',
+                    'allow_assignees': ['assignee1', 'assignee2'],
+                    'description_prompt': (
+                        'Convert the provided content into Jira Markup Wiki '
+                        'format, fully preserving all information and ensuring '
+                        'clear structure and hierarchy. When appropriate, use '
+                        'Jira Wiki syntax elements such as headings, lists, '
+                        'tables, blockquotes, and code blocks for formatting. '
+                        'Do not omit any information, do not add extra '
+                        'explanations or unrelated content, and output only '
+                        'the converted Jira Wiki text.'
+                    ),
+                    'assignee_prompt': (
+                        'Assign the issue to the following user: '
+                        'your-default-assignee-username'
+                        'Only return the username, do not add any other text. '
+                        'leave empty if you want to use default assignee'
+                    )
+                }
             },
             'prompt_config': {
+                'output_language': settings.LLM_OUTPUT_LANGUAGE,
                 'email_content_prompt': (
-                    'Organize the following email content in chronological order. '
-                    'Format messages and images for further processing. '
-                    'Extract key information and maintain context.'
+                    (
+                        'Organize the provided email content (which may include '
+                        'chat records or message bodies) in chronological order '
+                        'into a conversation text with minimal polishing (clearly '
+                        'mark any assumptions), without altering any original '
+                        'meaning and retaining all information. Output format: '
+                        '[Date Time] Speaker: Content (on a single line, or '
+                        'wrapped across multiple lines if necessary), with image '
+                        'placeholders [IMAGE: filename.png] placed on separate '
+                        'lines in their original positions. Date and time: if '
+                        'the date is unknown, display only the time; if known, '
+                        'display both date and time. Conversation text must be '
+                        'plain text (excluding emojis, special characters, etc.) '
+                        'with clear structure. Always preserve the original '
+                        'language of the conversation; if the specified output '
+                        'language differs from the original language, include '
+                        'the original text on top and the translated text below. '
+                        'No explanations or additional content should be provided.'
+                    )
                 ),
                 'ocr_prompt': (
-                    'Process the following OCR text from images. '
-                    'Extract key information and summarize relevant context and issues. '
-                    'Focus on actionable items and technical details.'
+                    'Organize the provided OCR results into plain text output, '
+                    'using Markdown formatting when necessary for code or quoted '
+                    'content (e.g., ``` for code blocks, > for quotes). Describe '
+                    'all explanatory or interpretive content in the specified '
+                    'output language, while keeping all actual OCR text in the '
+                    'original language from the image. Fully retain and describe '
+                    'all content without omission. Clearly highlight any normal, '
+                    'abnormal, or valuable information. Attempt to correct and '
+                    'standardize incomplete, unclear, or potentially erroneous '
+                    'OCR content without altering its original meaning, and mark '
+                    'any uncertain parts as [unclear]. Produce only structured '
+                    'text with necessary Markdown formatting, without any '
+                    'additional explanations, summaries, or unrelated content.'
                 ),
                 'summary_prompt': (
-                    'Summarize the following email content for task creation. '
-                    'Include main issues, analysis, and action items. '
-                    'If OCR content is present, incorporate relevant information. '
-                    'Organize the summary for clarity and actionable steps.'
+                    'Based on the provided content (including chronological chat '
+                    'records and OCR-recognized content from images), organize the '
+                    'chat records in chronological order, preserving the original '
+                    'speaker and language for each entry, fully retaining all '
+                    'information, and using Markdown formatting when necessary for '
+                    'code or quoted content. The output should include four sections: '
+                    '1) **Main Content**: list the key points of the current '
+                    'conversation; 2) **Process Description**: provide a detailed '
+                    'description of the problem and its reproduction steps, marking '
+                    'any uncertain information as "unknown"; 3) **Solution** (if '
+                    'unresolved, indicate attempted measures): if the issue is '
+                    'resolved, list the solution; if unresolved, list measures '
+                    'already taken and their results, optionally including possible '
+                    'causes clearly marked as (speculation); 4) **Resolution Status**: '
+                    'indicate whether the issue has been resolved (Yes/No). Output '
+                    'must be well-structured, hierarchically clear plain text, '
+                    'without any additional explanations, summaries, or extra content, '
+                    'while highlighting any normal, abnormal, or valuable information '
+                    'for quick reference.'
                 ),
                 'summary_title_prompt': (
-                    'Summarize the main issue or requirement from the following '
-                    'information and generate a clear, concise title in native language. '
-                    'Focus on the core need or problem, using a brief verb-object '
-                    'structure. Avoid product-specific or platform-specific terms.'
+                    'Based on the chat records, extract a single structured '
+                    'title in the format: [Issue Category][Participant]Title '
+                    'Content; the title should use a verb-object structure, '
+                    'be concise, and accurately express the core problem or '
+                    'requirement, avoiding vague terms, with a maximum length '
+                    'of 300 characters; if the information is unclear, add '
+                    '[To Be Confirmed]; if multiple issues exist, extract '
+                    'only the most critical and central one, generating a '
+                    'single structured title.'
                 )
             },
             'webhook_config': {
                 'url': '',
-                'events': ['jira_success', 'ocr_failed', 'summary_failed'],
+                'events': ['issue_success', 'ocr_failed', 'llm_summary_failed'],
                 'timeout': 10,
                 'retries': 3,
                 'headers': {},
@@ -170,7 +249,7 @@ class Command(BaseCommand):
                 f'1. Visit Django Admin: http://localhost:8000/admin/v1/threadline/settings/\n'
                 f'2. Update the following configurations:\n'
                 f'   • email_config - Your email server details\n'
-                f'   • jira_config - Your JIRA server details\n'
+                f'   • issue_config - Your issue creation settings\n'
                 f'   • prompt_config - Customize AI prompts if needed\n'
                 f'   • webhook_config - Configure external notifications (optional)\n'
                 f'3. Configure periodic tasks in Django Admin:\n'
@@ -187,7 +266,7 @@ class Command(BaseCommand):
         settings_info = [
             ('email_config', 'Email server connection and authentication settings'),
             ('email_filter_config', 'Email filtering and processing rules'),
-            ('jira_config', 'JIRA integration and default issue creation settings'),
+            ('issue_config', 'Issue creation engine configuration (JIRA, email, Slack, etc.)'),
             ('prompt_config', 'AI prompt templates for email/attachment/summary processing'),
             ('webhook_config', 'Webhook configuration for external notifications')
         ]
@@ -198,6 +277,6 @@ class Command(BaseCommand):
         self.logger.info(
             f'\nUsage examples:\n'
             f'  python manage.py init_threadline_settings --user admin\n'
-f'  python manage.py init_threadline_settings --user admin --force\n'
-f'  python manage.py init_threadline_settings --list'
+            f'  python manage.py init_threadline_settings --user admin --force\n'
+            f'  python manage.py init_threadline_settings --list'
         )

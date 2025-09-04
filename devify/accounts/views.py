@@ -89,9 +89,15 @@ class WeChatAppLoginView(APIView):
         # Get or create a user associated with the openid
         user, created = User.objects.get_or_create(
             username=f"wx_{openid}",
-            defaults={"first_name": "WeChat User"}
+            defaults={
+                "first_name": "WeChat User",
+                "email": f"wx_{openid}@wechat.local"
+            }
         )
         if created:
+            # Set an unusable password for WeChat users (they use token auth)
+            user.set_unusable_password()
+            user.save()
             logger.info("New user created with openid: %s", openid)
 
         # Get or create profile, associate it with the openid

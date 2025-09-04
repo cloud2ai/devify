@@ -4,111 +4,263 @@ State Machine Configuration for Email Processing Workflow
 This module defines the state machine rules for both EmailMessage and
 EmailAttachment models, making state transitions more explicit and easier
 to maintain.
+
+Design Logic Overview:
+=====================
+
+1. Linear Processing Flow:
+   - FETCHED -> OCR -> LLM_EMAIL -> LLM_SUMMARY -> ISSUE -> COMPLETED
+   - Each stage must complete successfully before proceeding to the next
+   - Failed stages can retry by returning to their processing state
+
+2. Error Handling Strategy:
+   - FAILED states always transition back to their respective PROCESSING state
+   - This enables automatic retry without manual intervention
+   - Stuck tasks are detected and reset by the scheduler
+
+3. Parallel Processing Support:
+   - Currently supports sequential processing for stability and reliability
+   - Future enhancement: OCR and email content processing can run in parallel
+   - Chain orchestrator manages the processing sequence and dependencies
+
+4. Flexible Completion Paths:
+   - LLM_SUMMARY_SUCCESS can proceed to either ISSUE_PROCESSING or COMPLETED
+   - COMPLETED state is terminal and cannot transition to other states
+   - Issue creation is optional based on user configuration
+
+5. Success State Skipping:
+   - Adjacent SUCCESS states can directly transition to the next SUCCESS state
+   - This allows skipping intermediate processing stages when conditions are met
+   - Example: OCR_SUCCESS can directly go to LLM_EMAIL_SUCCESS if content exists
+
+6. State Validation:
+   - All transitions are validated against the state machine rules
+   - Force mode bypasses validation for manual reprocessing
+   - Prevents invalid state transitions that could corrupt workflow
+
+7. Recovery Mechanisms:
+   - Automatic retry for failed processing stages
+   - Timeout-based stuck task detection and reset
+   - Graceful degradation when external services are unavailable
+
+8. Monitoring and Debugging:
+   - Clear state descriptions for each status
+   - Comprehensive logging of state transitions
+   - Easy identification of workflow bottlenecks
 """
 
 from enum import Enum
-from typing import Dict, List, Set
+from typing import List, Dict, Any
 
 
 class EmailStatus(Enum):
-    """Email processing status enumeration"""
+    """
+    Email processing status enumeration.
+
+    Unified status for email and attachment processing workflow.
+    """
+    # Email fetch status
     FETCHED = 'fetched'
+
+    # OCR processing status
     OCR_PROCESSING = 'ocr_processing'
     OCR_SUCCESS = 'ocr_success'
     OCR_FAILED = 'ocr_failed'
-    SUMMARY_PROCESSING = 'summary_processing'
-    SUMMARY_SUCCESS = 'summary_success'
-    SUMMARY_FAILED = 'summary_failed'
-    JIRA_PROCESSING = 'jira_processing'
-    JIRA_SUCCESS = 'jira_success'
-    JIRA_FAILED = 'jira_failed'
+
+    # LLM OCR processing status
+    LLM_OCR_PROCESSING = 'llm_ocr_processing'
+    LLM_OCR_SUCCESS = 'llm_ocr_success'
+    LLM_OCR_FAILED = 'llm_ocr_failed'
+
+    # LLM email content processing status
+    LLM_EMAIL_PROCESSING = 'llm_email_processing'
+    LLM_EMAIL_SUCCESS = 'llm_email_success'
+    LLM_EMAIL_FAILED = 'llm_email_failed'
+
+    # LLM summary generation status
+    LLM_SUMMARY_PROCESSING = 'llm_summary_processing'
+    LLM_SUMMARY_SUCCESS = 'llm_summary_success'
+    LLM_SUMMARY_FAILED = 'llm_summary_failed'
+
+    # Issue creation status
+    ISSUE_PROCESSING = 'issue_processing'
+    ISSUE_SUCCESS = 'issue_success'
+    ISSUE_FAILED = 'issue_failed'
+
+    # Completion status
+    COMPLETED = 'completed'
+
+    @classmethod
+    def choices(cls):
+        """
+        Return choices for Django model field.
+
+        Returns:
+            List of tuples with (value, display_name)
+        """
+        return [
+            # Email fetch status
+            (cls.FETCHED.value, 'Fetched'),
+
+            # OCR processing status
+            (cls.OCR_PROCESSING.value, 'OCR Processing'),
+            (cls.OCR_SUCCESS.value, 'OCR Success'),
+            (cls.OCR_FAILED.value, 'OCR Failed'),
+
+            # LLM OCR processing status
+            (cls.LLM_OCR_PROCESSING.value, 'LLM OCR Processing'),
+            (cls.LLM_OCR_SUCCESS.value, 'LLM OCR Success'),
+            (cls.LLM_OCR_FAILED.value, 'LLM OCR Failed'),
+
+            # LLM email content processing status
+            (cls.LLM_EMAIL_PROCESSING.value, 'LLM Email Processing'),
+            (cls.LLM_EMAIL_SUCCESS.value, 'LLM Email Success'),
+            (cls.LLM_EMAIL_FAILED.value, 'LLM Email Failed'),
+
+            # LLM summary generation status
+            (cls.LLM_SUMMARY_PROCESSING.value, 'LLM Summary Processing'),
+            (cls.LLM_SUMMARY_SUCCESS.value, 'LLM Summary Success'),
+            (cls.LLM_SUMMARY_FAILED.value, 'LLM Summary Failed'),
+
+            # Issue creation status
+            (cls.ISSUE_PROCESSING.value, 'Issue Processing'),
+            (cls.ISSUE_SUCCESS.value, 'Issue Success'),
+            (cls.ISSUE_FAILED.value, 'Issue Failed'),
+
+            # Completion status
+            (cls.COMPLETED.value, 'Completed')
+        ]
 
 
-class AttachmentStatus(Enum):
-    """Attachment processing status enumeration"""
-    FETCHED = 'fetched'  # Fetched from email
-    OCR_PROCESSING = 'ocr_processing'
-    OCR_SUCCESS = 'ocr_success'
-    OCR_FAILED = 'ocr_failed'
-    LLM_PROCESSING = 'llm_processing'
-    LLM_SUCCESS = 'llm_success'
-    LLM_FAILED = 'llm_failed'
-
-
-# Email state machine rules
+# Unified email state machine for email and attachment processing
 EMAIL_STATE_MACHINE = {
     EmailStatus.FETCHED: {
-        'next': [EmailStatus.OCR_PROCESSING],
-        'description': 'Email has been fetched and is ready for OCR'
+        'next': [
+            EmailStatus.OCR_PROCESSING,
+            EmailStatus.OCR_SUCCESS
+        ],
+        'description': 'Email has been fetched and ready for processing'
     },
+
     EmailStatus.OCR_PROCESSING: {
-        'next': [EmailStatus.OCR_SUCCESS, EmailStatus.OCR_FAILED],
+        'next': [
+            EmailStatus.OCR_SUCCESS,
+            EmailStatus.OCR_FAILED,
+        ],
         'description': 'OCR processing is in progress'
     },
+
     EmailStatus.OCR_SUCCESS: {
-        'next': [EmailStatus.SUMMARY_PROCESSING],
+        'next': [
+            EmailStatus.LLM_OCR_PROCESSING,
+            EmailStatus.LLM_OCR_SUCCESS
+        ],
         'description': 'OCR processing completed successfully'
     },
+
     EmailStatus.OCR_FAILED: {
-        'next': [EmailStatus.OCR_PROCESSING],  # Can retry
+        'next': [
+            EmailStatus.OCR_PROCESSING,
+        ],
         'description': 'OCR processing failed'
     },
-    EmailStatus.SUMMARY_PROCESSING: {
-        'next': [EmailStatus.SUMMARY_SUCCESS, EmailStatus.SUMMARY_FAILED],
-        'description': 'LLM summary processing is in progress'
-    },
-    EmailStatus.SUMMARY_SUCCESS: {
-        'next': [EmailStatus.JIRA_PROCESSING],
-        'description': 'LLM summary processing completed successfully'
-    },
-    EmailStatus.SUMMARY_FAILED: {
-        'next': [EmailStatus.SUMMARY_PROCESSING],  # Can retry
-        'description': 'LLM summary processing failed'
-    },
-    EmailStatus.JIRA_PROCESSING: {
-        'next': [EmailStatus.JIRA_SUCCESS, EmailStatus.JIRA_FAILED],
-        'description': 'JIRA issue creation is in progress'
-    },
-    EmailStatus.JIRA_SUCCESS: {
-        'next': [],  # Terminal state
-        'description': 'JIRA issue creation completed successfully'
-    },
-    EmailStatus.JIRA_FAILED: {
-        'next': [EmailStatus.JIRA_PROCESSING],  # Can retry
-        'description': 'JIRA issue creation failed'
-    }
-}
 
+    EmailStatus.LLM_OCR_PROCESSING: {
+        'next': [
+            EmailStatus.LLM_OCR_SUCCESS,
+            EmailStatus.LLM_OCR_FAILED,
+        ],
+        'description': 'LLM processing OCR results in progress'
+    },
 
-# Attachment state machine rules
-ATTACHMENT_STATE_MACHINE = {
-    AttachmentStatus.FETCHED: {
-        'next': [AttachmentStatus.OCR_PROCESSING, AttachmentStatus.LLM_SUCCESS],
-        'description': 'Attachment has been fetched from email'
+    EmailStatus.LLM_OCR_SUCCESS: {
+        'next': [
+            EmailStatus.LLM_EMAIL_PROCESSING,
+            EmailStatus.LLM_EMAIL_SUCCESS
+        ],
+        'description': 'LLM OCR processing completed successfully'
     },
-    AttachmentStatus.OCR_PROCESSING: {
-        'next': [AttachmentStatus.OCR_SUCCESS, AttachmentStatus.OCR_FAILED],
-        'description': 'OCR processing is in progress'
+
+    EmailStatus.LLM_OCR_FAILED: {
+        'next': [
+            EmailStatus.LLM_OCR_PROCESSING,
+        ],
+        'description': 'LLM OCR processing failed'
     },
-    AttachmentStatus.OCR_SUCCESS: {
-        'next': [AttachmentStatus.LLM_PROCESSING],
-        'description': 'OCR processing completed successfully'
+
+    EmailStatus.LLM_EMAIL_PROCESSING: {
+        'next': [
+            EmailStatus.LLM_EMAIL_SUCCESS,
+            EmailStatus.LLM_EMAIL_FAILED,
+        ],
+        'description': 'LLM processing email content in progress'
     },
-    AttachmentStatus.OCR_FAILED: {
-        'next': [AttachmentStatus.OCR_PROCESSING],  # Can retry
-        'description': 'OCR processing failed'
+
+    EmailStatus.LLM_EMAIL_SUCCESS: {
+        'next': [
+            EmailStatus.LLM_SUMMARY_PROCESSING,
+            EmailStatus.LLM_SUMMARY_SUCCESS
+        ],
+        'description': 'LLM email processing completed successfully'
     },
-    AttachmentStatus.LLM_PROCESSING: {
-        'next': [AttachmentStatus.LLM_SUCCESS, AttachmentStatus.LLM_FAILED],
-        'description': 'LLM processing is in progress'
+
+    EmailStatus.LLM_EMAIL_FAILED: {
+        'next': [
+            EmailStatus.LLM_EMAIL_PROCESSING,
+        ],
+        'description': 'LLM email processing failed'
     },
-    AttachmentStatus.LLM_SUCCESS: {
-        'next': [],  # Terminal state
-        'description': 'LLM processing completed successfully'
+
+    EmailStatus.LLM_SUMMARY_PROCESSING: {
+        'next': [
+            EmailStatus.LLM_SUMMARY_SUCCESS,
+            EmailStatus.LLM_SUMMARY_FAILED,
+        ],
+        'description': 'LLM summary generation in progress'
     },
-    AttachmentStatus.LLM_FAILED: {
-        'next': [AttachmentStatus.LLM_PROCESSING],  # Can retry
-        'description': 'LLM processing failed'
+
+    EmailStatus.LLM_SUMMARY_SUCCESS: {
+        'next': [
+            EmailStatus.ISSUE_PROCESSING,
+            EmailStatus.ISSUE_SUCCESS,
+            EmailStatus.COMPLETED
+        ],
+        'description': 'LLM summary generation completed successfully'
+    },
+
+    EmailStatus.LLM_SUMMARY_FAILED: {
+        'next': [
+            EmailStatus.LLM_SUMMARY_PROCESSING,
+        ],
+        'description': 'LLM summary generation failed'
+    },
+
+    EmailStatus.ISSUE_PROCESSING: {
+        'next': [
+            EmailStatus.ISSUE_SUCCESS,
+            EmailStatus.ISSUE_FAILED,
+            EmailStatus.COMPLETED,  # Allow direct completion when no issue needed
+        ],
+        'description': 'Issue creation is in progress or skipped'
+    },
+
+    EmailStatus.ISSUE_SUCCESS: {
+        'next': [
+            EmailStatus.COMPLETED,
+        ],
+        'description': 'Issue creation completed successfully'
+    },
+
+    EmailStatus.ISSUE_FAILED: {
+        'next': [
+            EmailStatus.ISSUE_PROCESSING,
+        ],
+        'description': 'Issue creation failed'
+    },
+
+    EmailStatus.COMPLETED: {
+        'next': [],
+        'description': 'Email processing completed successfully'
     }
 }
 
@@ -116,145 +268,85 @@ ATTACHMENT_STATE_MACHINE = {
 def can_transition_to(current_status: str, target_status: str,
                      state_machine: Dict) -> bool:
     """
-    Check if a status transition is allowed.
+    Check if status transition is allowed.
 
     Args:
         current_status: Current status string
         target_status: Target status string
-        state_machine: State machine configuration
+        state_machine: State machine dictionary
 
     Returns:
-        bool: True if transition is allowed
+        bool: True if transition is allowed, False otherwise
     """
-    try:
-        current_enum = next(
-            status for status in state_machine.keys()
-            if status.value == current_status
-        )
-        target_enum = next(
-            status for status in state_machine.keys()
-            if status.value == target_status
-        )
+    current_enum = None
+    target_enum = None
 
-        return target_enum in state_machine[current_enum]['next']
-    except StopIteration:
+    for status in EmailStatus:
+        if status.value == current_status:
+            current_enum = status
+        if status.value == target_status:
+            target_enum = status
+
+    if current_enum not in state_machine:
         return False
+
+    allowed_next = state_machine[current_enum]['next']
+    return target_enum in allowed_next
 
 
 def get_next_states(current_status: str, state_machine: Dict) -> List[str]:
     """
-    Get all possible next states for a given status.
+    Get all possible next states for current status.
 
     Args:
         current_status: Current status string
-        state_machine: State machine configuration
+        state_machine: State machine dictionary
 
     Returns:
         List[str]: List of possible next status values
     """
-    try:
-        current_enum = next(
-            status for status in state_machine.keys()
-            if status.value == current_status
-        )
-        return [status.value for status in state_machine[current_enum]['next']]
-    except StopIteration:
+    current_enum = None
+
+    for status in EmailStatus:
+        if status.value == current_status:
+            current_enum = status
+            break
+
+    if current_enum not in state_machine:
         return []
+
+    return [state.value for state in state_machine[current_enum]['next']]
 
 
 def get_status_description(status: str, state_machine: Dict) -> str:
     """
-    Get description for a given status.
+    Get description for status.
 
     Args:
-        status: Current status string
-        state_machine: State machine configuration
+        status: Status string
+        state_machine: State machine dictionary
 
     Returns:
-        str: Status description
+        str: Description of the status
     """
-    try:
-        status_enum = next(
-            s for s in state_machine.keys()
-            if s.value == status
-        )
-        return state_machine[status_enum]['description']
-    except StopIteration:
-        return 'Unknown status'
+    current_enum = None
 
+    for status_enum in EmailStatus:
+        if status_enum.value == status:
+            current_enum = status_enum
+            break
 
-# Convenience functions for specific state machines
-def can_transition_email_to(current_status: str,
-                            target_status: str) -> bool:
-    """Check if email status transition is allowed"""
-    return can_transition_to(
-        current_status, target_status, EMAIL_STATE_MACHINE)
+    if current_enum not in state_machine:
+        return "Unknown status"
 
-
-def can_transition_attachment_to(current_status: str,
-                                 target_status: str) -> bool:
-    """Check if attachment status transition is allowed"""
-    return can_transition_to(
-        current_status, target_status, ATTACHMENT_STATE_MACHINE)
-
-
-def get_next_email_states(current_status: str) -> List[str]:
-    """Get next possible email states"""
-    return get_next_states(current_status, EMAIL_STATE_MACHINE)
-
-
-def get_next_attachment_states(current_status: str) -> List[str]:
-    """Get next possible attachment states"""
-    return get_next_states(current_status, ATTACHMENT_STATE_MACHINE)
+    return state_machine[current_enum]['description']
 
 
 def get_initial_email_status() -> str:
-    """Get the initial status for newly created emails"""
+    """
+    Get the initial status for newly created emails.
+
+    Returns:
+        str: Initial status value
+    """
     return EmailStatus.FETCHED.value
-
-
-def get_initial_attachment_status() -> str:
-    """Get the initial status for newly created attachments"""
-    return AttachmentStatus.FETCHED.value
-
-
-def can_skip_ocr_for_attachment(attachment) -> bool:
-    """
-    Check if attachment can skip OCR processing.
-
-    Args:
-        attachment: EmailAttachment instance
-
-    Returns:
-        bool: True if OCR can be skipped
-    """
-    # Non-image attachments can skip OCR
-    return not attachment.is_image
-
-
-def get_attachment_processing_path(attachment) -> List[str]:
-    """
-    Get the processing path for an attachment.
-
-    Args:
-        attachment: EmailAttachment instance
-
-    Returns:
-        List[str]: List of statuses in processing order
-    """
-    if attachment.is_image:
-        # Image attachments: FETCHED -> OCR_PROCESSING -> OCR_SUCCESS ->
-        #                    LLM_PROCESSING -> LLM_SUCCESS
-        return [
-            AttachmentStatus.FETCHED.value,
-            AttachmentStatus.OCR_PROCESSING.value,
-            AttachmentStatus.OCR_SUCCESS.value,
-            AttachmentStatus.LLM_PROCESSING.value,
-            AttachmentStatus.LLM_SUCCESS.value
-        ]
-    else:
-        # Non-image attachments: FETCHED -> LLM_SUCCESS (skip OCR)
-        return [
-            AttachmentStatus.FETCHED.value,
-            AttachmentStatus.LLM_SUCCESS.value
-        ]

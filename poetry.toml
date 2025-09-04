@@ -1,0 +1,20 @@
+# Poetry configuration file
+# This file configures Poetry to use uv as the backend for faster package installation
+
+[installer]
+# Use uv as the installer backend for faster package installation
+backend = "uv"
+
+[installer.uv]
+# uv specific configuration
+python = "3.10"
+
+[virtualenvs]
+# Virtual environment configuration
+create = true
+in-project = false
+prefer-active-python = true
+
+[repositories]
+# Package repositories
+pypi = { url = "https://pypi.org/simple/" }

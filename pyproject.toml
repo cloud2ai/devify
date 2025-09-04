@@ -1,54 +1,190 @@
 [build-system]
-requires = ["setuptools>=61.0"]
-build-backend = "setuptools.build_meta"
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
 
-[project]
+# Poetry specific configuration
+[tool.poetry]
 name = "devify"
 version = "0.1.0"
 description = "Django starter template"
-authors = [
-    {name = "Ray Sun", email = "xiaoquqi@gmail.com"}
-]
-requires-python = ">=3.10"
-dependencies = [
-    "django==5.1.4",
-    "djangorestframework==3.15.2",
-    "djangorestframework_simplejwt==5.3.1",
-    "djangorestframework-camel-case==1.4.2",
-    "dj-rest-auth==7.0.0",
-    "dj-rest-auth[with_social]",
-    "drf-spectacular",
-    "python-dotenv",
-    "dj_database_url==2.3.0",
-    "mysqlclient==2.1.1",
-    "celery==5.3.1",
-    "django-celery-beat==2.7.0",
-    "django_celery_results",
-    "flower==2.0.1",
-    "redis",
-    "gunicorn==20.1.0",
-    "beautifulsoup4>=4.12.0",
-    "email-validator==2.1.1",
-    "devtoolbox @ git+https://github.com/cloud2ai/devtoolbox.git",
-    "devtoolbox[llm] @ git+https://github.com/cloud2ai/devtoolbox.git",
-    "devtoolbox[ocr] @ git+https://github.com/cloud2ai/devtoolbox.git",
-    "django-json-widget>=1.1.1",
+authors = ["Ray Sun <xiaoquqi@gmail.com>"]
+readme = "README.md"
+packages = [{include = "devify"}]
+include = [
+    "devify/**/*.py",
+    "threadline/**/*.py",
+    "accounts/**/*.py",
+    "auth/**/*.py",
+    "core/**/*.py",
 ]
 
-[project.optional-dependencies]
-dev = [
-    "ipdb==0.13.13",
-    "ipython==8.29.0",
-    "mkdocs==1.6.1",
-    "flake8==7.1.1",
-    "mock==5.1.0",
-    "factory-boy==3.3.1",
-    "pytest-django==4.9.0",
-    "coverage==7.6.8",
+[tool.poetry.dependencies]
+python = "^3.10"
+django = "5.1.4"
+djangorestframework = "3.15.2"
+djangorestframework-simplejwt = "5.3.1"
+djangorestframework-camel-case = "1.4.2"
+dj-rest-auth = {extras = ["with_social"], version = "7.0.0"}
+drf-spectacular = "*"
+python-dotenv = "*"
+dj-database-url = "2.3.0"
+mysqlclient = "2.1.1"
+celery = "5.3.1"
+django-celery-beat = "2.7.0"
+django-celery-results = "*"
+flower = "2.0.1"
+redis = "*"
+gunicorn = "20.1.0"
+beautifulsoup4 = "^4.12.0"
+email-validator = "2.1.1"
+django-json-widget = "^1.1.1"
+
+[tool.poetry.group.dev.dependencies]
+ipdb = "0.13.13"
+ipython = "8.29.0"
+mkdocs = "1.6.1"
+flake8 = "7.1.1"
+mock = "5.1.0"
+factory-boy = "3.3.1"
+pytest-django = "4.9.0"
+coverage = "7.6.8"
+
+[tool.poetry.group.test.dependencies]
+pytest = "^8.0.0"
+pytest-django = "^4.9.0"
+pytest-html = "^4.1.0"
+pytest-cov = "^6.1.0"
+pytest-mock = "^3.14.0"
+pytest-sugar = "^1.0.0"
+pytest-xdist = "^3.0.0"
+pytest-metadata = "^3.1.0"
+factory-boy = "^3.3.1"
+mock = "^5.1.0"
+faker = "^33.1.0"
+
+[tool.poetry.group.lint.dependencies]
+flake8 = "^7.1.1"
+black = "^24.0.0"
+isort = "^5.13.0"
+mypy = "^1.8.0"
+pre-commit = "^3.0.0"
+
+[tool.poetry.group.format.dependencies]
+black = "^24.0.0"
+isort = "^5.13.0"
+
+[tool.poetry.scripts]
+test = "pytest:main"
+test-html = "pytest:main"
+test-cov = "pytest:main"
+test-email = "pytest:main"
+lint = "flake8:main"
+format = "black:main"
+sort = "isort:main"
+
+# Pytest configuration
+[tool.pytest.ini_options]
+testpaths = ["threadline/tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = [
+    "-v",
+    "--tb=short",
+    "--strict-markers",
+    "--disable-warnings",
+    "--color=yes",
+]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "integration: marks tests as integration tests",
+    "unit: marks tests as unit tests",
+    "html_parsing: marks tests related to HTML parsing functionality",
+]
+filterwarnings = [
+    "ignore::DeprecationWarning",
+    "ignore::PendingDeprecationWarning",
 ]
 
-[tool.setuptools]
-packages = ["devify"]
+# Coverage configuration
+[tool.coverage.run]
+source = ["threadline"]
+omit = [
+    "*/tests/*",
+    "*/migrations/*",
+    "*/__pycache__/*",
+    "*/venv/*",
+    "*/env/*",
+]
 
-[project.scripts]
-devify-manager = "devify.manage:main"
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "if self.debug:",
+    "if settings.DEBUG",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if 0:",
+    "if __name__ == .__main__.:",
+    "class .*\\bProtocol\\):",
+    "@(abc\\.)?abstractmethod",
+]
+
+[tool.coverage.html]
+directory = "htmlcov"
+
+# Black configuration
+[tool.black]
+line-length = 79
+target-version = ['py310']
+include = '\.pyi?$'
+extend-exclude = '''
+/(
+  # directories
+  \.eggs
+  | \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | build
+  | dist
+)/
+'''
+
+# isort configuration
+[tool.isort]
+profile = "black"
+line_length = 79
+multi_line_output = 3
+include_trailing_comma = true
+force_grid_wrap = 0
+use_parentheses = true
+ensure_newline_before_comments = true
+
+# MyPy configuration
+[tool.mypy]
+python_version = "3.10"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+disallow_untyped_decorators = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_no_return = true
+warn_unreachable = true
+strict_equality = true
+
+[[tool.mypy.overrides]]
+module = [
+    "django.*",
+    "djangorestframework.*",
+    "celery.*",
+    "redis.*",
+    "mysqlclient.*",
+]
+ignore_missing_imports = true

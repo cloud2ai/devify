@@ -6,13 +6,68 @@ from django.urls import reverse
 from django.utils.safestring import mark_safe
 from django.utils.translation import gettext_lazy as _
 from django_json_widget.widgets import JSONEditorWidget
+from django.utils import timezone
+
+
+def format_content_for_admin(content, max_length=1000):
+    """
+    Generic function to format content for admin display with truncation.
+
+    Args:
+        content: The content to format (can be string, dict, list, or other)
+        max_length: Maximum length before truncation (default: 1000)
+
+    Returns:
+        str: Formatted content, truncated if necessary
+    """
+    if not content:
+        return '-'
+
+    try:
+        # Try to parse as JSON if it's a string
+        if isinstance(content, str):
+            try:
+                parsed_content = json.loads(content)
+                formatted_content = json.dumps(
+                    parsed_content, indent=2, ensure_ascii=False
+                )
+            except json.JSONDecodeError:
+                formatted_content = content
+        else:
+            # If already a dict/list, format as JSON
+            formatted_content = json.dumps(content, indent=2, ensure_ascii=False)
+
+        # Truncate if too long
+        if len(formatted_content) > max_length:
+            truncated = (
+                formatted_content[:max_length] +
+                '...\n\n[Content truncated for display. '
+                'Full content available in database.]'
+            )
+            return truncated
+
+        return formatted_content
+
+    except (TypeError, ValueError):
+        # Fallback to string representation
+        text_content = str(content)
+
+        if len(text_content) > max_length:
+            truncated = (
+                text_content[:max_length] +
+                '...\n\n[Content truncated for display. '
+                'Full content available in database.]'
+            )
+            return truncated
+
+        return text_content
 
 from .models import (
     Settings,
     EmailTask,
     EmailMessage,
     EmailAttachment,
-    JiraIssue
+    Issue
 )
 
 
@@ -45,19 +100,21 @@ class SafeJSONEditorWidget(JSONEditorWidget):
     def format_value(self, value):
         """
         Format value for display in widget with proper JSON indentation.
+        Returns the value as-is for the JSON editor to handle formatting.
         """
         if value is None:
             return ''
         if isinstance(value, (dict, list)):
-            return json.dumps(value, indent=2, ensure_ascii=False)
+            # Return the Python object directly, let the JSON editor handle formatting
+            return value
         if isinstance(value, str):
             try:
-                # Try to parse and re-format for consistency
+                # Try to parse and return as Python object for proper display
                 parsed = json.loads(value)
-                return json.dumps(parsed, indent=2, ensure_ascii=False)
+                return parsed
             except json.JSONDecodeError:
                 return value
-        return str(value)
+        return value
 
 
 class FormattedTextEditorWidget(forms.Textarea):
@@ -136,6 +193,20 @@ class EmailAttachmentAdminForm(forms.ModelForm):
         widgets = {
             'ocr_content': FormattedTextEditorWidget,
             'llm_content': FormattedTextEditorWidget
+        }
+
+
+class IssueAdminForm(forms.ModelForm):
+    """
+    Custom admin form for Issue, using SafeJSONEditorWidget for
+    metadata field.
+    """
+
+    class Meta:
+        model = Issue
+        fields = '__all__'
+        widgets = {
+            'metadata': SafeJSONEditorWidget
         }
 
 
@@ -253,6 +324,8 @@ class EmailMessageAdmin(admin.ModelAdmin):
         'raw_content_formatted', 'attachment_details'
     ]
 
+    actions = ['reset_to_fetched']
+
     fieldsets = (
         (_('Email Information'), {
             'fields': (
@@ -353,15 +426,14 @@ class EmailMessageAdmin(admin.ModelAdmin):
         """
         Format OCR content for better display.
         """
-        if not obj.ocr_content:
-            return '-'
-        return str(obj.ocr_content)
+        return format_content_for_admin(obj.ocr_content)
 
     ocr_content_formatted.short_description = _('OCR Content (Formatted)')
 
     def llm_content_formatted(self, obj):
         """
         Format LLM content for better display with JSON formatting.
+        Truncate long content to improve admin readability.
         """
         if not obj.llm_content:
             return '-'
@@ -373,16 +445,43 @@ class EmailMessageAdmin(admin.ModelAdmin):
             else:
                 content = obj.llm_content
 
-            return json.dumps(content, indent=2, ensure_ascii=False)
+            formatted_content = json.dumps(
+                content,
+                indent=2,
+                ensure_ascii=False
+            )
+
+            # Truncate content if too long (max 1000 characters)
+            if len(formatted_content) > 1000:
+                truncated = (
+                    formatted_content[:1000] +
+                    '...\n\n[Content truncated for display. '
+                    'Full content available in database.]'
+                )
+                return truncated
+
+            return formatted_content
         except (json.JSONDecodeError, TypeError):
             # If not JSON, display as formatted text
-            return str(obj.llm_content)
+            text_content = str(obj.llm_content)
+
+            # Truncate content if too long (max 1000 characters)
+            if len(text_content) > 1000:
+                truncated = (
+                    text_content[:1000] +
+                    '...\n\n[Content truncated for display. '
+                    'Full content available in database.]'
+                )
+                return truncated
+
+            return text_content
 
     llm_content_formatted.short_description = _('LLM Content (Formatted)')
 
     def raw_content_formatted(self, obj):
         """
         Format raw content for better display with JSON formatting.
+        Truncate long content to improve admin readability.
         """
         if not obj.raw_content:
             return '-'
@@ -394,10 +493,36 @@ class EmailMessageAdmin(admin.ModelAdmin):
             else:
                 content = obj.raw_content
 
-            return json.dumps(content, indent=2, ensure_ascii=False)
+            formatted_content = json.dumps(
+                content,
+                indent=2,
+                ensure_ascii=False
+            )
+
+            # Truncate content if too long (max 500 characters for admin)
+            if len(formatted_content) > 500:
+                truncated = (
+                    formatted_content[:500] +
+                    '...\n\n[Content truncated for display. '
+                    'Full content available in database.]'
+                )
+                return truncated
+
+            return formatted_content
         except (json.JSONDecodeError, TypeError):
             # If not JSON, display as formatted text
-            return str(obj.raw_content)
+            text_content = str(obj.raw_content)
+
+            # Truncate text content if too long (max 500 characters for admin)
+            if len(text_content) > 500:
+                truncated = (
+                    text_content[:500] +
+                    '...\n\n[Content truncated for display. '
+                    'Full content available in database.]'
+                )
+                return truncated
+
+            return text_content
 
     raw_content_formatted.short_description = _('Raw Content (Formatted)')
 
@@ -406,6 +531,48 @@ class EmailMessageAdmin(admin.ModelAdmin):
         Optimize queryset with select_related for user and task.
         """
         return super().get_queryset(request).select_related('user', 'task')
+
+    def reset_to_fetched(self, request, queryset):
+        """
+        Reset selected emails to FETCHED status for reprocessing.
+        This bypasses state machine validation for admin convenience.
+        """
+        from threadline.state_machine import EmailStatus
+
+        count = 0
+        for email in queryset:
+            if email.status != EmailStatus.FETCHED.value:
+                # Set admin flag to bypass validation
+                email._from_admin = True
+                email.status = EmailStatus.FETCHED.value
+                email.error_message = ''  # Clear any error messages
+                email.save()
+                count += 1
+
+        if count == 1:
+            message = f"1 email has been reset to FETCHED status."
+        else:
+            message = f"{count} emails have been reset to FETCHED status."
+
+        self.message_user(request, message)
+
+    reset_to_fetched.short_description = (
+        "Reset selected emails to FETCHED status"
+    )
+    reset_to_fetched.help_text = (
+        "Force reset email status to FETCHED for reprocessing"
+    )
+
+    def save_model(self, request, obj, form, change):
+        """
+        Override save_model to handle status changes from admin interface.
+        This bypasses state machine validation for admin convenience.
+        """
+        if change:  # Only for updates, not new objects
+            # Set admin flag to bypass validation
+            obj._from_admin = True
+
+        super().save_model(request, obj, form, change)
 
 
 @admin.register(EmailAttachment)
@@ -418,9 +585,9 @@ class EmailAttachmentAdmin(admin.ModelAdmin):
     form = EmailAttachmentAdminForm
     list_display = [
         'filename', 'safe_filename', 'user', 'email_message', 'content_type',
-        'file_size', 'is_image', 'status', 'created_at'
+        'file_size', 'is_image', 'created_at'
     ]
-    list_filter = ['status', 'is_image', 'content_type', 'created_at']
+    list_filter = ['is_image', 'content_type', 'created_at']
     search_fields = [
         'filename', 'safe_filename', 'email_message__subject', 'user__username'
     ]
@@ -434,9 +601,6 @@ class EmailAttachmentAdmin(admin.ModelAdmin):
                 'user', 'email_message', 'filename', 'safe_filename',
                 'content_type', 'file_size', 'is_image'
             )
-        }),
-        (_('Processing Status'), {
-            'fields': ('status', 'error_message'),
         }),
         (_('Content'), {
             'fields': ('ocr_content_formatted', 'llm_content_formatted'),
@@ -452,9 +616,16 @@ class EmailAttachmentAdmin(admin.ModelAdmin):
         }),
     )
 
+    def save_model(self, request, obj, form, change):
+        """
+        Override save_model to handle attachment updates from Django Admin.
+        """
+        super().save_model(request, obj, form, change)
+
     def llm_content_formatted(self, obj):
         """
         Format LLM content for better display with JSON formatting.
+        Truncate long content to improve admin readability.
         """
         if not obj.llm_content:
             return '-'
@@ -466,20 +637,57 @@ class EmailAttachmentAdmin(admin.ModelAdmin):
             else:
                 content = obj.llm_content
 
-            return json.dumps(content, indent=2, ensure_ascii=False)
+            formatted_content = json.dumps(
+                content, indent=2, ensure_ascii=False
+            )
+
+            # Truncate content if too long (max 1000 characters)
+            if len(formatted_content) > 1000:
+                truncated = (
+                    formatted_content[:1000] +
+                    '...\n\n[Content truncated for display. '
+                    'Full content available in database.]'
+                )
+                return truncated
+
+            return formatted_content
         except (json.JSONDecodeError, TypeError):
             # If not JSON, display as formatted text
-            return str(obj.llm_content)
+            text_content = str(obj.llm_content)
+
+            # Truncate content if too long (max 1000 characters)
+            if len(text_content) > 1000:
+                truncated = (
+                    text_content[:1000] +
+                    '...\n\n[Content truncated for display. '
+                    'Full content available in database.]'
+                )
+                return truncated
+
+            return text_content
 
     llm_content_formatted.short_description = _('LLM Content (Formatted)')
 
     def ocr_content_formatted(self, obj):
         """
         Format OCR content for better display.
+        Truncate long content to improve admin readability.
         """
         if not obj.ocr_content:
             return '-'
-        return str(obj.ocr_content)
+
+        text_content = str(obj.ocr_content)
+
+        # Truncate content if too long (max 1000 characters)
+        if len(text_content) > 1000:
+            truncated = (
+                text_content[:1000] +
+                '...\n\n[Content truncated for display. '
+                'Full content available in database.]'
+            )
+            return truncated
+
+        return text_content
 
     ocr_content_formatted.short_description = _('OCR Content (Formatted)')
 
@@ -491,27 +699,48 @@ class EmailAttachmentAdmin(admin.ModelAdmin):
             'user', 'email_message'
         )
 
+    def save_model(self, request, obj, form, change):
+        """
+        Override save_model to handle status changes from admin interface.
+        This bypasses state machine validation for admin convenience.
+        """
+        if change:  # Only for updates, not new objects
+            # Set admin flag to bypass validation
+            obj._from_admin = True
 
-@admin.register(JiraIssue)
-class JiraIssueAdmin(admin.ModelAdmin):
+        super().save_model(request, obj, form, change)
+
+
+@admin.register(Issue)
+class IssueAdmin(admin.ModelAdmin):
     """
-    Admin interface for JIRA issues with issue tracking and URL management.
+    Admin interface for generic issues with engine abstraction.
     """
 
+    form = IssueAdminForm
     list_display = [
-        'jira_issue_key', 'user', 'email_message', 'jira_url',
-        'created_at', 'updated_at'
+        'title', 'engine', 'priority', 'user',
+        'email_message', 'external_id', 'issue_url', 'created_at'
     ]
+    list_filter = ['engine', 'priority', 'created_at']
     search_fields = [
-        'jira_issue_key', 'email_message__subject', 'user__username'
+        'title', 'description', 'external_id',
+        'email_message__subject', 'user__username'
     ]
     readonly_fields = ['created_at', 'updated_at']
 
     fieldsets = (
         (_('Issue Information'), {
             'fields': (
-                'user', 'email_message', 'jira_issue_key', 'jira_url'
+                'title', 'description', 'priority'
             )
+        }),
+        (_('Engine Configuration'), {
+            'fields': ('engine', 'external_id', 'issue_url', 'metadata'),
+            'classes': ('collapse',)
+        }),
+        (_('Relationships'), {
+            'fields': ('user', 'email_message'),
         }),
         (_('Timestamps'), {
             'fields': ('created_at', 'updated_at'),

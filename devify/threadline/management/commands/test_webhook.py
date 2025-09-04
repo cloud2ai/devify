@@ -12,7 +12,10 @@ logger = logging.getLogger(__name__)
 
 
 class Command(BaseCommand):
-    help = 'Test webhook configuration and send a test notification'
+    help = (
+        'Test webhook configuration by sending a test notification '
+        'with specified status'
+    )
 
     def add_arguments(self, parser):
         parser.add_argument(
@@ -28,16 +31,17 @@ class Command(BaseCommand):
             help='Email ID to use in test notification'
         )
         parser.add_argument(
-            '--old-status',
+            '--status',
             type=str,
             required=True,
-            help='Old status for testing. Available values: pending, fetched, ocr_processing, ocr_failed, ocr_success, summary_processing, summary_failed, summary_success, jira_processing, jira_failed, jira_success, attachment_uploading, attachment_upload_failed, attachment_uploaded, success, failed, skipped'
-        )
-        parser.add_argument(
-            '--new-status',
-            type=str,
-            required=True,
-            help='New status for testing. Available values: pending, fetched, ocr_processing, ocr_failed, ocr_success, summary_processing, summary_failed, summary_success, jira_processing, jira_failed, jira_success, attachment_uploading, attachment_upload_failed, attachment_uploaded, success, failed, skipped'
+            help=(
+                'Status for testing. Available values: '
+                'fetched, ocr_processing, ocr_failed, ocr_success, '
+                'llm_email_processing, llm_email_success, llm_email_failed, '
+                'llm_summary_processing, llm_summary_success, '
+                'llm_summary_failed, issue_processing, issue_success, '
+                'issue_failed, completed'
+            )
         )
 
     def handle(self, *args, **options):
@@ -85,21 +89,20 @@ class Command(BaseCommand):
             return
 
         # Send test notification
-        old_status = options['old_status']
-        new_status = options['new_status']
+        status = options['status']
 
         logger.info(f"=== Sending Test Notification ===")
         logger.info(f"User: {username}")
         logger.info(f"Email ID: {email_id}")
-        logger.info(f"Status transition: {old_status} -> {new_status}")
+        logger.info(f"Status transition: {email.status} -> {status}")
         logger.info(f"Webhook URL: {config['url']}")
 
         try:
             # Send test notification synchronously for testing
             result = send_webhook_notification.run(
                 email_id,
-                old_status,
-                new_status
+                email.status,
+                status
             )
 
             logger.info("Test notification sent successfully!")

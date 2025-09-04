@@ -35,3 +35,6 @@ AZURE_OCR_CONFIG = {
     # The endpoint for Azure Document Intelligence
     'endpoint': os.getenv('AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT'),
 }
+
+# LLM output language configuration
+LLM_OUTPUT_LANGUAGE = os.getenv('LLM_OUTPUT_LANGUAGE', 'English')

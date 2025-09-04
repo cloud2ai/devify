@@ -1,142 +1,205 @@
 """
-Tests for state machine configuration
+Tests for unified state machine configuration and functions.
+
+This module tests the unified state machine logic for email processing
+workflows, ensuring proper state transitions and validation.
 """
 
 from django.test import TestCase
+
 from threadline.state_machine import (
-    EmailStatus, AttachmentStatus,
-    can_transition_attachment_to, can_transition_email_to,
-    get_next_attachment_states, get_next_email_states,
-    get_initial_email_status, get_initial_attachment_status,
-    can_skip_ocr_for_attachment, get_attachment_processing_path
+    EmailStatus,
+    can_transition_to,
+    get_next_states,
+    get_status_description,
+    get_initial_email_status,
+    EMAIL_STATE_MACHINE
 )
 
 
 class StateMachineTest(TestCase):
-    """Test state machine configuration and functions"""
+    """
+    Test unified state machine configuration and functions.
 
-    def test_attachment_state_transitions(self):
-        """Test attachment state transitions"""
-        # FETCHED -> OCR_PROCESSING should be allowed
-        self.assertTrue(
-            can_transition_attachment_to('fetched', 'ocr_processing')
-        )
-
-        # FETCHED -> LLM_SUCCESS should be allowed (for non-image attachments)
-        self.assertTrue(
-            can_transition_attachment_to('fetched', 'llm_success')
-        )
-
-        # FETCHED -> LLM_PROCESSING should not be allowed
-        self.assertFalse(
-            can_transition_attachment_to('fetched', 'llm_processing')
-        )
-
-        # OCR_PROCESSING -> OCR_SUCCESS should be allowed
-        self.assertTrue(
-            can_transition_attachment_to('ocr_processing', 'ocr_success')
-        )
-
-        # OCR_PROCESSING -> LLM_PROCESSING should not be allowed
-        self.assertFalse(
-            can_transition_attachment_to('ocr_processing', 'llm_processing')
-        )
-
-        # OCR_SUCCESS -> LLM_PROCESSING should be allowed
-        self.assertTrue(
-            can_transition_attachment_to('ocr_success', 'llm_processing')
-        )
+    This class provides comprehensive testing for the unified state machine
+    implementation, covering email and attachment processing workflows.
+    """
 
     def test_email_state_transitions(self):
-        """Test email state transitions"""
-        # FETCHED -> OCR_PROCESSING should be allowed
+        """
+        Test email state transitions.
+
+        Verifies that email status transitions follow the defined
+        unified state machine rules and business logic.
+        """
+        # Test valid transitions from FETCHED state
         self.assertTrue(
-            can_transition_email_to('fetched', 'ocr_processing')
+            can_transition_to('fetched', 'ocr_processing',
+                            EMAIL_STATE_MACHINE)
+        )
+        self.assertTrue(
+            can_transition_to('fetched', 'ocr_success',
+                            EMAIL_STATE_MACHINE)
         )
 
-        # FETCHED -> SUMMARY_PROCESSING should not be allowed
+        # Test invalid transitions from FETCHED state
         self.assertFalse(
-            can_transition_email_to('fetched', 'summary_processing')
+            can_transition_to('fetched', 'llm_summary_processing',
+                            EMAIL_STATE_MACHINE)
         )
 
-        # OCR_SUCCESS -> SUMMARY_PROCESSING should be allowed
+        # Test valid transitions from OCR_SUCCESS state
         self.assertTrue(
-            can_transition_email_to('ocr_success', 'summary_processing')
+            can_transition_to('ocr_success', 'llm_ocr_processing',
+                            EMAIL_STATE_MACHINE)
+        )
+        # OCR_SUCCESS can only transition to LLM_OCR_PROCESSING in linear flow
+        self.assertFalse(
+            can_transition_to('ocr_success', 'llm_email_processing',
+                            EMAIL_STATE_MACHINE)
+        )
+        self.assertFalse(
+            can_transition_to('ocr_success', 'llm_summary_processing',
+                            EMAIL_STATE_MACHINE)
+        )
+
+        # Test valid transitions from LLM_OCR_SUCCESS state
+        self.assertTrue(
+            can_transition_to('llm_ocr_success', 'llm_email_processing',
+                            EMAIL_STATE_MACHINE)
+        )
+        # LLM_OCR_SUCCESS can only transition to LLM_EMAIL_PROCESSING in linear flow
+        self.assertFalse(
+            can_transition_to('llm_ocr_success', 'llm_summary_processing',
+                            EMAIL_STATE_MACHINE)
+        )
+
+        # Test valid transitions from LLM_EMAIL_SUCCESS state
+        self.assertTrue(
+            can_transition_to('llm_email_success', 'llm_summary_processing',
+                            EMAIL_STATE_MACHINE)
+        )
+        # LLM_EMAIL_SUCCESS can only transition to LLM_SUMMARY_PROCESSING in linear flow
+        self.assertFalse(
+            can_transition_to('llm_email_success', 'issue_processing',
+                            EMAIL_STATE_MACHINE)
+        )
+
+        # Test valid transitions from LLM_SUMMARY_SUCCESS state
+        self.assertTrue(
+            can_transition_to('llm_summary_success', 'issue_processing',
+                            EMAIL_STATE_MACHINE)
+        )
+        self.assertTrue(
+            can_transition_to('llm_summary_success', 'completed',
+                            EMAIL_STATE_MACHINE)
+        )
+
+        # Test valid transitions from ISSUE_SUCCESS state
+        self.assertTrue(
+            can_transition_to('issue_success', 'completed',
+                            EMAIL_STATE_MACHINE)
+        )
+        self.assertTrue(
+            can_transition_to('issue_success', 'fetched',
+                            EMAIL_STATE_MACHINE)
         )
 
     def test_get_next_states(self):
-        """Test getting next possible states"""
-        # FETCHED should have OCR_PROCESSING as next state
-        next_states = get_next_email_states('fetched')
-        self.assertEqual(next_states, ['ocr_processing'])
+        """
+        Test getting next possible states.
 
-        # FETCHED should have OCR_PROCESSING and LLM_SUCCESS as next states
-        next_states = get_next_attachment_states('fetched')
-        self.assertIn('ocr_processing', next_states)
-        self.assertIn('llm_success', next_states)
+        Verifies that the get_next_states function correctly returns
+        all valid next states for given current states.
+        """
+        # Test next states for FETCHED
+        expected_fetched_states = ['ocr_processing', 'ocr_success']
+        actual_fetched_states = get_next_states('fetched', EMAIL_STATE_MACHINE)
+        self.assertEqual(actual_fetched_states, expected_fetched_states)
 
-        # OCR_PROCESSING should have OCR_SUCCESS and OCR_FAILED as next states
-        next_states = get_next_attachment_states('ocr_processing')
-        self.assertIn('ocr_success', next_states)
-        self.assertIn('ocr_failed', next_states)
+        # Test next states for OCR_PROCESSING
+        expected_ocr_processing_states = ['ocr_success', 'ocr_failed', 'fetched']
+        actual_ocr_processing_states = get_next_states('ocr_processing',
+                                                     EMAIL_STATE_MACHINE)
+        self.assertEqual(actual_ocr_processing_states, expected_ocr_processing_states)
 
-        # LLM_SUCCESS should have no next states (terminal)
-        next_states = get_next_attachment_states('llm_success')
-        self.assertEqual(next_states, [])
+        # Test next states for OCR_SUCCESS
+        expected_ocr_success_states = ['llm_ocr_processing']
+        actual_ocr_success_states = get_next_states('ocr_success',
+                                                 EMAIL_STATE_MACHINE)
+        self.assertEqual(actual_ocr_success_states, expected_ocr_success_states)
+
+        # Test next states for COMPLETED
+        expected_completed_states = ['fetched']
+        actual_completed_states = get_next_states('completed', EMAIL_STATE_MACHINE)
+        self.assertEqual(actual_completed_states, expected_completed_states)
 
     def test_initial_states(self):
-        """Test initial states for new objects"""
-        # Email should start with FETCHED status
-        self.assertEqual(get_initial_email_status(), 'fetched')
+        """
+        Test initial states for new objects.
 
-        # Attachment should start with FETCHED status
-        self.assertEqual(get_initial_attachment_status(), 'fetched')
-
-    def test_attachment_processing_path(self):
-        """Test attachment processing path logic"""
-        # Mock attachment objects for testing
-        class MockAttachment:
-            def __init__(self, is_image):
-                self.is_image = is_image
-
-        # Test image attachment path
-        image_attachment = MockAttachment(is_image=True)
-        image_path = get_attachment_processing_path(image_attachment)
-        expected_image_path = ['fetched', 'ocr_processing', 'ocr_success', 'llm_processing', 'llm_success']
-        self.assertEqual(image_path, expected_image_path)
-
-        # Test non-image attachment path
-        non_image_attachment = MockAttachment(is_image=False)
-        non_image_path = get_attachment_processing_path(non_image_attachment)
-        expected_non_image_path = ['fetched', 'llm_success']
-        self.assertEqual(non_image_path, expected_non_image_path)
-
-    def test_can_skip_ocr(self):
-        """Test OCR skip logic"""
-        class MockAttachment:
-            def __init__(self, is_image):
-                self.is_image = is_image
-
-        # Image attachments cannot skip OCR
-        image_attachment = MockAttachment(is_image=True)
-        self.assertFalse(can_skip_ocr_for_attachment(image_attachment))
-
-        # Non-image attachments can skip OCR
-        non_image_attachment = MockAttachment(is_image=False)
-        self.assertTrue(can_skip_ocr_for_attachment(non_image_attachment))
+        Verifies that newly created email objects start with
+        the correct initial status.
+        """
+        # Test initial email status
+        expected_email_status = 'fetched'
+        actual_email_status = get_initial_email_status()
+        self.assertEqual(actual_email_status, expected_email_status)
 
     def test_invalid_states(self):
-        """Test handling of invalid states"""
-        # Invalid current status should return False
+        """
+        Test handling of invalid states.
+
+        Verifies that the state machine functions gracefully handle
+        invalid or unknown status values.
+        """
+        # Test invalid current status
         self.assertFalse(
-            can_transition_attachment_to('invalid_status', 'ocr_processing')
+            can_transition_to('invalid_status', 'ocr_processing',
+                            EMAIL_STATE_MACHINE)
         )
 
-        # Invalid target status should return False
+        # Test invalid target status
         self.assertFalse(
-            can_transition_attachment_to('fetched', 'invalid_status')
+            can_transition_to('fetched', 'invalid_status',
+                            EMAIL_STATE_MACHINE)
         )
 
-        # Invalid status should return empty list for next states
-        next_states = get_next_attachment_states('invalid_status')
-        self.assertEqual(next_states, [])
+        # Test invalid status in get_next_states
+        expected_empty_list = []
+        actual_next_states = get_next_states('invalid_status',
+                                           EMAIL_STATE_MACHINE)
+        self.assertEqual(actual_next_states, expected_empty_list)
+
+    def test_state_descriptions(self):
+        """
+        Test state descriptions.
+
+        Verifies that all states have meaningful descriptions.
+        """
+        # Test that all states have descriptions
+        for status in EmailStatus:
+            description = get_status_description(status.value, EMAIL_STATE_MACHINE)
+            self.assertNotEqual(description, "Unknown status")
+            self.assertIsInstance(description, str)
+            self.assertGreater(len(description), 0)
+
+    def test_state_machine_completeness(self):
+        """
+        Test state machine completeness.
+
+        Verifies that all EmailStatus values are defined in the state machine
+        and have proper next state definitions.
+        """
+        # Test that all EmailStatus values are in the state machine
+        for status in EmailStatus:
+            self.assertIn(status, EMAIL_STATE_MACHINE)
+
+            # Test that each state has next states defined
+            state_info = EMAIL_STATE_MACHINE[status]
+            self.assertIn('next', state_info)
+            self.assertIn('description', state_info)
+
+            # Test that next states are valid EmailStatus values
+            for next_state in state_info['next']:
+                self.assertIn(next_state, EmailStatus)

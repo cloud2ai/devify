@@ -66,7 +66,17 @@ run_migrations() {
     DJANGO_SUPERUSER_USERNAME=${DJANGO_SUPERUSER_USERNAME:-admin}
     DJANGO_SUPERUSER_EMAIL=${DJANGO_SUPERUSER_EMAIL:-admin@example.com}
     DJANGO_SUPERUSER_PASSWORD=${DJANGO_SUPERUSER_PASSWORD:-adminpassword}
-    python manage.py createsuperuser --noinput || log "Superuser already exists."
+
+    # Export environment variables for createsuperuser command
+    export DJANGO_SUPERUSER_USERNAME
+    export DJANGO_SUPERUSER_EMAIL
+    export DJANGO_SUPERUSER_PASSWORD
+
+    python manage.py createsuperuser \
+        --username "$DJANGO_SUPERUSER_USERNAME" \
+        --email "$DJANGO_SUPERUSER_EMAIL" \
+        --noinput \
+        || log "Superuser already exists or creation failed."
 }
 
 collect_static() {

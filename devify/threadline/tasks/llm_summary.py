@@ -1,13 +1,45 @@
 """
 LLM Summary Task using Celery Task class approach.
 
-This module follows the same architecture pattern as ocr.py:
-- Task class with before_start() for initialization
-- run() method for main execution flow
-- Helper methods for specific logic
-- Compatibility wrapper function for existing calls
+ARCHITECTURE DESIGN
+==================
 
-See ocr.py for detailed architecture documentation.
+This module implements the fourth stage of the email processing pipeline,
+following the same clean architecture pattern as OCR task with proper
+state machine integration and centralized force logic handling.
+
+State Machine Integration
+------------------------
+
+Allowed Input States:
+  - LLM_EMAIL_SUCCESS: Previous LLM email processing completed
+    successfully
+  - LLM_SUMMARY_FAILED: Previous summary attempt failed, allows retry
+
+Status Transitions:
+  - LLM_EMAIL_SUCCESS/LLM_SUMMARY_FAILED → LLM_SUMMARY_PROCESSING →
+    LLM_SUMMARY_SUCCESS (normal flow)
+  - LLM_EMAIL_SUCCESS/LLM_SUMMARY_FAILED → LLM_SUMMARY_PROCESSING →
+    LLM_SUMMARY_FAILED (error flow)
+
+Processing Logic
+---------------
+- Generates summary content and title using LLM
+- Combines email content with attachment OCR content
+- Skips processing if summary already exists (unless force=True)
+- Uses user-configured summary prompts for LLM processing
+- Handles both summary content and title generation
+
+Force Mode Behavior
+------------------
+- Bypasses all status checks and validations
+- Skips status updates to prevent state machine corruption
+- Allows reprocessing regardless of current state
+- Processes all image attachments regardless of OCR status
+- Regenerates summary even if content already exists
+
+This implementation follows the established design pattern for consistent
+task architecture across the email processing pipeline.
 """
 
 
@@ -15,15 +47,16 @@ See ocr.py for detailed architecture documentation.
 from celery import Task, shared_task
 import logging
 from typing import Dict, Any
+from django.conf import settings
 
 from threadline.models import EmailMessage, Settings
 from threadline.utils.summary import call_llm
-from threadline.state_machine import AttachmentStatus, EmailStatus
+from threadline.state_machine import EmailStatus
 
 logger = logging.getLogger(__name__)
 
 
-class SummaryTask(Task):
+class LLMSummaryTask(Task):
     """
     LLM Summary generation task using Celery Task class.
 
@@ -51,23 +84,36 @@ class SummaryTask(Task):
         self.email_id = email_id
         self.force = force
         self.email = None
-        self.task_name = "Summary"
+        self.task_name = "LLM_SUMMARY"
+
+        # For EmailMessage Status Control
         self.allowed_statuses = [
-            EmailStatus.OCR_SUCCESS.value,
-            EmailStatus.SUMMARY_FAILED.value
+            EmailStatus.LLM_EMAIL_SUCCESS.value,   # Previous step success
+            EmailStatus.LLM_SUMMARY_FAILED.value  # Current step failed
+                                                  # (retry)
         ]
+        self.next_success_status = EmailStatus.LLM_SUMMARY_SUCCESS.value
+        self.processing_status = EmailStatus.LLM_SUMMARY_PROCESSING.value
+        self.next_failed_status = EmailStatus.LLM_SUMMARY_FAILED.value
 
         # Get email object
         try:
             self.email = EmailMessage.objects.select_related(
                 'user').get(id=email_id)
-            logger.info(f"[Summary] Email object retrieved: {email_id}")
+            # Force refresh to get latest status from database
+            self.email.refresh_from_db()
+            # Cache the current status for consistent use throughout the task
+            self.current_status = self.email.status
+            logger.info(f"[{self.task_name}] Email object retrieved: "
+                       f"{email_id}, current_status: "
+                       f"{self.current_status}")
         except EmailMessage.DoesNotExist:
-            logger.error(f"[Summary] EmailMessage {email_id} not found")
+            logger.error(f"[{self.task_name}] EmailMessage {email_id} "
+                        f"not found")
             raise
 
-        logger.info(f"[Summary] Initialization completed for {email_id}, "
-                    f"force: {force}")
+        logger.info(f"[{self.task_name}] Initialization completed for "
+                   f"{email_id}, force: {force}")
 
     def run(self, email_id: str, force: bool = False) -> str:
         """
@@ -81,84 +127,82 @@ class SummaryTask(Task):
             str: The email_id for the next task in the chain
         """
         try:
-            # Initialize task
-            #
-            # Normal flow: Celery automatically calls before_start before run
-            # Manual testing: Directly calling run method
-            #   Check self.email doesn't exist → Call self.before_start to
-            #   complete initialization
-            #   Continue with business logic
-            if not hasattr(self, 'email'):
-                self.before_start(email_id, force)
+            # Initialize task - always call before_start to ensure force is set
+            self.before_start(email_id, force)
 
-            logger.info(f"[Summary] Start processing: {email_id}, "
-                        f"force: {force}")
+            logger.info(f"[{self.task_name}] Start processing: "
+                        f"{email_id}, force: {force}")
 
-            # Step 1: Pre-execution check (status machine + force parameter)
-            if not self._pre_execution_check():
-                logger.info(f"[Summary] Pre-execution check failed, "
-                            f"skipping to next task: {email_id}")
+            # Step 1: Pre-execution check (skip in force mode)
+            if not self.force and not self._pre_execution_check():
+                logger.info(f"[{self.task_name}] Pre-execution check "
+                           f"failed, skipping to next task: {email_id}")
                 return email_id
 
-            # Step 2: Check if already complete
-            if self._is_already_complete():
+            # Step 2: Check if already complete (skip in force mode)
+            if not self.force and self._is_already_complete():
+                logger.info(f"[{self.task_name}] Email {email_id} "
+                           f"already complete, skipping to next task")
                 return email_id
 
-            # Step 3: Validate LLM content
-            if not self._validate_llm_content():
-                raise ValueError("Email LLM content is missing for "
-                                 "summary generation.")
+            # Step 3: Validate LLM content (skip in force mode)
+            if not self.force and not self.email.llm_content:
+                raise ValueError(f"Email {email_id} LLM content is missing "
+                               f"for summary generation.")
 
-            # Step 4: Set processing status
-            self._set_processing_status()
+            # Step 4: Set processing status (skip in force mode)
+            if not self.force:
+                logger.info(f"[{self.task_name}] Setting processing "
+                           f"status for email {email_id}")
+                self._set_processing_status()
 
-            # Step 5: Execute core business logic and complete task
-            summary_results = self._execute_summary_generation()
+            # Step 5: Execute core business logic
+            summary_results = self._execute_summary_generation(
+                force_mode=self.force)
 
-            logger.info(f"[Summary] Summary generation task completed: "
-                        f"{email_id}")
+            # Step 6: Update email status (skip in force mode)
+            if not self.force:
+                self._update_email_status(summary_results)
+            else:
+                logger.info(f"[{self.task_name}] Force mode: skipping "
+                           f"status updates for {email_id}")
+
+            logger.info(f"[{self.task_name}] Processing completed: "
+                       f"{email_id}")
 
             return email_id
 
         except EmailMessage.DoesNotExist:
-            logger.error(f"[Summary] EmailMessage {email_id} not found")
+            logger.error(f"[{self.task_name}] EmailMessage {email_id} "
+                        f"not found")
             raise
         except Exception as exc:
-            logger.error(f"[Summary] Fatal error for {email_id}: {exc}")
-            # Save error status to email (force mode handling is inside
-            # _save_email)
-            self._save_email(
-                status=EmailStatus.SUMMARY_FAILED.value,
-                error_message=str(exc)
-            )
+            logger.error(f"[{self.task_name}] Fatal error for {email_id}: "
+                        f"{exc}")
+            if not self.force:
+                self._handle_summary_error(exc)
+            else:
+                logger.warning(f"[{self.task_name}] Force mode: skipping "
+                              f"error handling for {email_id}")
             raise
 
     def _pre_execution_check(self) -> bool:
         """
-        Pre-execution check: Check if the task can be executed based on
-        current status and force parameter.
-
-        This is the main pre-execution check that combines:
-        - Status machine validation
-        - Force parameter handling
+        Pre-execution check: Validate if task can be executed based on
+        current email status.
 
         Returns:
             bool: True if execution is allowed
         """
-        if self.force:
-            logger.debug(f"[Summary] Force mode enabled for email "
-                         f"{self.email.id}, skipping status check")
-            return True
-
-        if self.email.status not in self.allowed_statuses:
-            logger.warning(
-                f"Email {self.email.id} cannot be processed in status: "
-                f"{self.email.status}. Allowed: {self.allowed_statuses}"
-            )
+        if self.current_status not in self.allowed_statuses:
+            logger.warning(f"[{self.task_name}] Email {self.email_id} "
+                          f"cannot be processed in status: "
+                          f"{self.current_status}. Allowed: "
+                          f"{self.allowed_statuses}")
             return False
 
-        logger.debug(f"[Summary] Pre-execution check passed for email "
-                     f"{self.email.id}")
+        logger.debug(f"[{self.task_name}] Pre-execution check passed for "
+                    f"email {self.email_id}")
         return True
 
     def _is_already_complete(self) -> bool:
@@ -168,40 +212,35 @@ class SummaryTask(Task):
         Returns:
             bool: True if already complete
         """
-        if self.force:
-            logger.debug(f"[Summary] Force mode enabled for email "
-                         f"{self.email.id}, skipping completion check")
-            return False
+        if self.current_status == self.next_success_status:
+            logger.info(f"[{self.task_name}] Email {self.email_id} already "
+                       f"in {self.next_success_status} state, skipping to "
+                       f"next task")
+            return True
 
-        if self.email.summary_content and self.email.summary_title:
-            logger.info(f"Email {self.email.id} already has summary and "
-                        f"title, skipping to next task")
+        # Check if content exists but status is incorrect
+        if (self.email.summary_content and self.email.summary_title and
+            self.current_status != self.next_success_status):
+            logger.info(f"[{self.task_name}] Email {self.email_id} has "
+                       f"summary content but incorrect status, updating")
+            self._save_email(status=self.next_success_status)
             return True
 
         return False
-
-    def _validate_llm_content(self) -> bool:
-        """
-        Validate that email has LLM content for summary generation.
-
-        Returns:
-            bool: True if LLM content exists
-        """
-        if not self.email.llm_content or not self.email.llm_content.strip():
-            logger.error(f"Email {self.email.id} LLM content is missing for "
-                         f"summary generation")
-            return False
-        return True
 
     def _set_processing_status(self) -> None:
         """
         Set the email to processing status.
         """
-        self._save_email(status=EmailStatus.SUMMARY_PROCESSING.value)
+        self._save_email(status=self.processing_status)
 
-    def _execute_summary_generation(self) -> Dict:
+    def _execute_summary_generation(self, force_mode: bool = False) -> Dict:
         """
         Execute summary generation for the email.
+
+        Args:
+            force_mode: Whether to force processing regardless of existing
+                       content
 
         Returns:
             Dict: Summary generation results
@@ -212,6 +251,10 @@ class SummaryTask(Task):
         )
         summary_prompt = prompt_config['summary_prompt']
         summary_title_prompt = prompt_config['summary_title_prompt']
+        output_language = prompt_config.get(
+            'output_language',
+            settings.LLM_OUTPUT_LANGUAGE
+        )
 
         content = f"Subject: {self.email.subject}\nText Content: " \
                   f"{self.email.llm_content}\n"
@@ -220,15 +263,14 @@ class SummaryTask(Task):
         # In force mode: process all image attachments
         # In normal mode: only process attachments with LLM content
         ocr_contents = []
-        if self.force:
+        if force_mode:
             # Force mode: process all image attachments regardless of status
             image_attachments = self.email.attachments.filter(is_image=True)
         else:
-            # Normal mode: only process LLM_SUCCESS attachments
+            # Normal mode: only process attachments with LLM content
             image_attachments = self.email.attachments.filter(
-                is_image=True,
-                status=AttachmentStatus.LLM_SUCCESS.value
-            )
+                is_image=True
+            ).exclude(llm_content__isnull=True).exclude(llm_content="")
 
         for att in image_attachments:
             if att.llm_content and att.llm_content.strip():
@@ -240,63 +282,68 @@ class SummaryTask(Task):
         if ocr_contents:
             combined_content += "\n\n--- ATTACHMENT OCR CONTENT ---\n\n"
             combined_content += "\n\n".join(ocr_contents)
-            logger.info(f"Included {len(ocr_contents)} OCR contents in summary")
+            logger.info(f"[{self.task_name}] Included {len(ocr_contents)} "
+                       f"OCR contents in summary")
         else:
-            logger.info("No attachment OCR content available for summary")
+            logger.info(f"[{self.task_name}] No attachment OCR content "
+                       f"available for summary")
 
         # Generate summary content and title
         summary_content = self.email.summary_content
         summary_title = self.email.summary_title
 
-        if not summary_content or self.force:
-            summary_content = call_llm(summary_prompt, combined_content)
+        if not summary_content or force_mode:
+            summary_content = call_llm(
+                summary_prompt,
+                combined_content,
+                output_language
+            )
 
-        if not summary_title or self.force:
-            summary_title = call_llm(summary_title_prompt, combined_content)
+        if not summary_title or force_mode:
+            summary_title = call_llm(
+                summary_title_prompt,
+                combined_content,
+                output_language
+            )
 
         summary_content = summary_content.strip() if summary_content else ''
         summary_title = summary_title.strip() if summary_title else ''
 
-        # Save summary content and title (force mode handling is inside
-        # _save_email)
-        self._save_email(
-            status=EmailStatus.SUMMARY_SUCCESS.value,
-            summary_content=summary_content,
-            summary_title=summary_title
-        )
+        # Save content regardless of mode
+        self._save_summary_content(summary_content, summary_title)
 
         return {
+            'success': True,
             'summary_content': summary_content,
             'summary_title': summary_title,
-            'ocr_contents_count': len(ocr_contents)
+            'ocr_contents_count': len(ocr_contents),
+            'content_length': len(summary_content) + len(summary_title)
         }
 
-    def _save_email(
-        self,
-        status: str = "",
-        llm_content: str = "",
-        error_message: str = "",
-        summary_content: str = "",
-        summary_title: str = ""
-    ) -> None:
+    def _update_email_status(self, results: Dict) -> None:
         """
-        Save email with status, error message, and optionally content fields.
-        In force mode, only save content fields, skip status updates.
+        Update email status based on summary generation results.
 
         Args:
-            status: Status to set (only used in non-force mode)
-            error_message: Error message to set (only used in non-force mode)
-            llm_content: LLM content to save (always saved)
-            summary_content: Summary content to save (always saved)
-            summary_title: Summary title to save (always saved)
+            results: Results from _execute_summary_generation
         """
-        # Always save content fields if provided (this is the main purpose of
-        # force mode)
-        update_fields = []
+        if results['success']:
+            self._save_email(status=self.next_success_status)
+        else:
+            error_message = f"Summary generation failed"
+            self._save_email(status=self.next_failed_status,
+                           error_message=error_message)
 
-        if llm_content:
-            self.email.llm_content = llm_content
-            update_fields.append('llm_content')
+    def _save_summary_content(self, summary_content: str,
+                            summary_title: str) -> None:
+        """
+        Save summary content and title to email.
+
+        Args:
+            summary_content: Generated summary content
+            summary_title: Generated summary title
+        """
+        update_fields = []
 
         if summary_content:
             self.email.summary_content = summary_content
@@ -306,44 +353,76 @@ class SummaryTask(Task):
             self.email.summary_title = summary_title
             update_fields.append('summary_title')
 
-        if self.force:
-            # Force mode: only save content, skip status updates
-            if update_fields:
-                self.email.save(update_fields=update_fields)
-                logger.debug(f"[Summary] Force mode: saved content for email "
-                             f"{self.email.id}")
-            return
+        if update_fields:
+            self.email.save(update_fields=update_fields)
+            logger.info(f"[{self.task_name}] Saved summary content for "
+                       f"email {self.email_id}")
 
-        # Non-force mode: save everything
-        self.email.status = status
+    def _handle_summary_error(self, exc: Exception) -> None:
+        """
+        Handle summary generation errors.
+
+        Args:
+            exc: The exception that occurred
+        """
+        error_message = str(exc)
+        self._save_email(status=self.next_failed_status,
+                       error_message=error_message)
+        logger.error(f"[{self.task_name}] Error handled for email "
+                    f"{self.email_id}: {error_message}")
+
+    def _save_email(self, status: str = "", error_message: str = "") -> None:
+        """
+        Save email status and error message.
+
+        Args:
+            status: Status to set
+            error_message: Error message to set
+        """
+        update_fields = []
+
+        if status:
+            self.email.status = status
+            update_fields.append('status')
+
         if error_message:
             self.email.error_message = error_message
-        else:
-            self.email.error_message = ""  # Clear any previous error
+            update_fields.append('error_message')
+        elif status:  # Clear error message when setting new status
+            self.email.error_message = ""
+            update_fields.append('error_message')
 
-        update_fields.extend(['status', 'error_message'])
-        self.email.save(update_fields=update_fields)
-        logger.debug(f"[Summary] Saved email {self.email.id} to {status}")
+        if update_fields:
+            self.email.save(update_fields=update_fields)
+            logger.info(f"[{self.task_name}] Saved email {self.email_id} "
+                       f"to {status}")
 
 
-# Create SummaryTask instance for Celery task registration
-summary_task = SummaryTask()
+# Create LLMSummaryTask instance for Celery task registration
+llm_summary_task_instance = LLMSummaryTask()
 
 
-@shared_task(bind=True)
-def summarize_email_task(self, email_id: str, force: bool = False) -> str:
+@shared_task
+def summarize_email_task(
+    email_id: str,
+    force: bool = False,
+    *args,
+    **kwargs
+) -> str:
     """
     Celery task for generating email summary and title using LLM.
 
-    This is a compatibility wrapper around the SummaryTask class.
+    This is a compatibility wrapper around the LLMSummaryTask class.
 
     Args:
         email_id (str): ID of the email to process
         force (bool): Whether to force processing regardless of current status.
                      When True, skips status checks and allows reprocessing
                      even if the content already exists.
+        *args: Additional positional arguments (ignored)
+        **kwargs: Additional keyword arguments (ignored)
 
     Returns:
         str: The email_id for the next task in the chain
     """
-    return summary_task.run(email_id, force)
+    return llm_summary_task_instance.run(email_id, force)

@@ -3,8 +3,10 @@ Chain Orchestrator for Email Processing Workflow
 
 This module orchestrates the complete email processing chain:
 1. OCR processing for image attachments
-2. LLM processing for email content and attachments
-3. JIRA issue creation
+2. LLM processing for attachments OCR
+3. LLM processing for email body
+4. Email summarization
+5. JIRA issue creation
 
 The chain ensures proper sequencing and error handling.
 """
@@ -15,27 +17,49 @@ from celery import shared_task, chain
 
 from threadline.models import EmailMessage
 from threadline.tasks.ocr import ocr_images_for_email
-from threadline.tasks.jira import submit_issue_to_jira
-from threadline.tasks.llm_email import organize_email_body_task
-from threadline.tasks.llm_attachment import organize_attachments_ocr_task
+from threadline.tasks.llm_email import llm_email_task
+from threadline.tasks.llm_attachment import llm_ocr_task
 from threadline.tasks.llm_summary import summarize_email_task
+from threadline.tasks.issue import create_issue_task
 
 logger = logging.getLogger(__name__)
 
 
-@shared_task(bind=True)
+@shared_task
 def process_email_chain(
-    self, email_id: str, force: bool = False
+    email_id: str, force: bool = False
 ) -> str:
     """
     Main orchestrator task that creates the complete email processing chain.
 
     This task creates a chain of all processing steps:
     1. OCR processing for image attachments
-    2. Attachments OCR organization using LLM (immediately after OCR)
+    2. Attachments OCR organization using LLM
     3. Email body organization using LLM
-    4. Email summarization using LLM
-    5. JIRA issue creation
+    4. Email summarization using LLM (after email and attachment processing)
+    5. JIRA issue creation (after all content is ready)
+
+    STATE MACHINE FLOW
+    ==================
+
+    FETCHED → OCR_PROCESSING → OCR_SUCCESS
+                    ↓
+            LLM_OCR_PROCESSING → LLM_OCR_SUCCESS
+                    ↓
+            LLM_EMAIL_PROCESSING → LLM_EMAIL_SUCCESS
+                    ↓
+            LLM_SUMMARY_PROCESSING → LLM_SUMMARY_SUCCESS
+                    ↓
+            ISSUE_PROCESSING → ISSUE_SUCCESS → COMPLETED
+
+    TASK EXECUTION ORDER
+    ====================
+
+    1. OCR Task: Processes image attachments for text extraction
+    2. LLM Attachments Task: Organizes OCR content using LLM
+    3. LLM Email Task: Processes email body content using LLM
+    4. LLM Summary Task: Generates summary from all processed content
+    5. Issue Task: Creates JIRA issue or marks as completed
 
     Args:
         email_id (str): ID of the email to process
@@ -48,33 +72,46 @@ def process_email_chain(
     """
     try:
         # Validate that the email exists
-        if not EmailMessage.objects.filter(id=email_id).exists():
-            raise EmailMessage.DoesNotExist(
+        email = EmailMessage.objects.get(id=email_id)
+        if not email:
+            raise Exception(
                 f"Email with id {email_id} not found")
 
-        logger.info(f"[Chain] Starting processing chain for email: {email_id}")
+        logger.info(f"[Chain] Starting processing chain for email: "
+                    f"{email_id}, force: {force}")
 
-        # Create the processing chain
+        # Create the processing chain with sequential execution
+        # Note: Using .si() (immutable signature) to pass force parameter
         processing_chain = chain(
-            ocr_images_for_email.s(email_id, force),
-            organize_attachments_ocr_task.s(email_id, force),
-            organize_email_body_task.s(email_id, force),
-            summarize_email_task.s(email_id, force),
-            submit_issue_to_jira.s(email_id, force)
+            # Step 1: OCR processing (required first)
+            ocr_images_for_email.si(email_id, force),
+
+            # Step 2: Attachments OCR organization using LLM
+            llm_ocr_task.si(email_id, force),
+
+            # Step 3: Email body organization using LLM
+            llm_email_task.si(email_id, force),
+
+            # Step 4: Summarization (needs both email and attachment content)
+            summarize_email_task.si(email_id, force),
+
+            # Step 5: Issue creation (needs all content)
+            create_issue_task.si(email_id, force)
         )
 
         # Execute the chain
         result = processing_chain.apply_async()
         logger.info(
             f"[Chain] Processing chain started for email: {email_id}, "
-            f"chain_task_id: {result.id}, initial_state: {result.state}"
+            f"current email status: {email.status}, force: {force}, "
+            f"chain_task_id: {result.id}"
         )
 
         # Log the chain composition for debugging
         logger.debug(
             f"[Chain] Chain composition for email {email_id}: "
-            f"OCR -> Attachment OCR Organization -> Email Organization -> "
-            f"Summarization -> JIRA Creation"
+            f"OCR -> LLM Attachments OCR -> LLM Email Body -> "
+            f"LLM Summary -> Issue Creation"
         )
 
         return email_id

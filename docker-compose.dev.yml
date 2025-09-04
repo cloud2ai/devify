@@ -1,11 +1,13 @@
 services:
   devify-api:
     image: devify:latest
-    container_name: devify-api
+    container_name: devify-api-dev
     restart: unless-stopped
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        USE_MIRROR: ${USE_MIRROR:-true}
     ports:
       - "${DJANGO_HOST_PORT:-8000}:8000"
     env_file:
@@ -29,7 +31,7 @@ services:
 
   devify-worker:
     image: devify:latest
-    container_name: devify-worker
+    container_name: devify-worker-dev
     restart: unless-stopped
     env_file:
       - ./.env
@@ -51,7 +53,7 @@ services:
 
   devify-scheduler:
     image: devify:latest
-    container_name: devify-scheduler
+    container_name: devify-scheduler-dev
     restart: unless-stopped
     env_file:
       - ./.env
@@ -71,7 +73,7 @@ services:
 
   mysql:
     image: mariadb:11.6
-    container_name: devify-mariadb
+    container_name: devify-mariadb-dev
     restart: unless-stopped
     env_file:
       - ./.env
@@ -86,7 +88,7 @@ services:
 
   redis:
     image: redis:alpine
-    container_name: devify-redis
+    container_name: devify-redis-dev
     restart: unless-stopped
     command: redis-server
     volumes:
@@ -97,7 +99,7 @@ services:
 
   flower:
     image: devify:latest
-    container_name: devify-flower
+    container_name: devify-flower-dev
     restart: unless-stopped
     env_file:
       - ./.env
@@ -108,9 +110,9 @@ services:
         condition: service_started
       redis:
         condition: service_started
+    command: flower
     networks:
       - devify_network
-    command: flower
 
 networks:
   devify_network:

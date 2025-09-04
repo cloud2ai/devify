@@ -1,13 +1,56 @@
 import logging
 from celery import shared_task
+from django.contrib.auth import get_user_model
 from django.utils import timezone
 from datetime import timedelta
 
-from ..models import EmailMessage
-from ..state_machine import EmailStatus
-from .chain_orchestrator import process_email_chain
+from threadline.tasks.email_fetch import scan_user_emails
+from threadline.models import EmailMessage
+from threadline.state_machine import EmailStatus
+from threadline.tasks.chain_orchestrator import process_email_chain
 
 logger = logging.getLogger(__name__)
+
+# Configuration for stuck email handling
+# Each item defines: (reset_to_status, description)
+STUCK_STATUS_RESET_MAP = {
+    # Processing states that might get stuck
+    EmailStatus.OCR_PROCESSING.value: (
+        EmailStatus.FETCHED.value,
+        'OCR'
+    ),
+    EmailStatus.LLM_EMAIL_PROCESSING.value: (
+        EmailStatus.FETCHED.value,
+        'LLM_EMAIL'
+    ),
+    EmailStatus.LLM_SUMMARY_PROCESSING.value: (
+        EmailStatus.FETCHED.value,
+        'LLM_SUMMARY'
+    ),
+    EmailStatus.ISSUE_PROCESSING.value: (
+        EmailStatus.FETCHED.value,
+        'Issue'
+    ),
+
+    # Success states that might get stuck in chain
+    # Reset all to FETCHED to restart the entire processing chain
+    EmailStatus.OCR_SUCCESS.value: (
+        EmailStatus.FETCHED.value,
+        'OCR_SUCCESS'
+    ),
+    EmailStatus.LLM_EMAIL_SUCCESS.value: (
+        EmailStatus.FETCHED.value,
+        'LLM_EMAIL_SUCCESS'
+    ),
+    EmailStatus.LLM_SUMMARY_SUCCESS.value: (
+        EmailStatus.FETCHED.value,
+        'LLM_SUMMARY_SUCCESS'
+    ),
+    EmailStatus.ISSUE_SUCCESS.value: (
+        EmailStatus.FETCHED.value,
+        'ISSUE_SUCCESS'
+    ),
+}
 
 
 @shared_task
@@ -32,65 +75,106 @@ def schedule_email_processing_tasks():
 @shared_task
 def schedule_reset_stuck_processing_emails(timeout_minutes=30):
     """
-    Scan and reset emails stuck in PROCESSING states for over timeout_minutes.
+    Scan and reset emails stuck in any state for over timeout_minutes.
 
-    This task identifies emails that have been stuck in processing states
-    for longer than the specified timeout and resets them to appropriate
-    previous states for retry.
+    This task identifies emails that have been stuck in any processing
+    or success state for longer than the specified timeout and resets
+    them to FETCHED state to restart the entire processing chain.
 
     Args:
         timeout_minutes (int): Minutes after which emails are considered stuck
     """
     now = timezone.now()
 
-    # Handle stuck OCR_PROCESSING
-    stuck_ocr_emails = EmailMessage.objects.filter(
-        status=EmailStatus.OCR_PROCESSING.value,
+    # Get all stuck emails in one query using 'in' operator
+    stuck_statuses = list(STUCK_STATUS_RESET_MAP.keys())
+    stuck_emails = EmailMessage.objects.filter(
+        status__in=stuck_statuses,
         updated_at__lt=now - timedelta(minutes=timeout_minutes)
     )
-    for email in stuck_ocr_emails:
+
+    # Process each stuck email
+    reset_results = {}
+    for email in stuck_emails:
+        reset_to_status, description = STUCK_STATUS_RESET_MAP[email.status]
+
         logger.warning(
-            f"Email {email.id} stuck in OCR_PROCESSING for "
-            f"{timeout_minutes}+ minutes, resetting to FETCHED"
+            f"Email {email.id} stuck in {email.status} for "
+            f"{timeout_minutes}+ minutes, resetting to {reset_to_status}"
         )
-        email.status = EmailStatus.FETCHED.value
+
+        # Save the old status for logging
+        old_status = email.status
+
+        # Update the email status and persist the change
+        email.status = reset_to_status
         email.save(update_fields=['status'])
 
-    # Handle stuck SUMMARY_PROCESSING
-    stuck_summary_emails = EmailMessage.objects.filter(
-        status=EmailStatus.SUMMARY_PROCESSING.value,
-        updated_at__lt=now - timedelta(minutes=timeout_minutes)
-    )
-    for email in stuck_summary_emails:
-        logger.warning(
-            f"Email {email.id} stuck in SUMMARY_PROCESSING for "
-            f"{timeout_minutes}+ minutes, resetting to OCR_SUCCESS"
+        # Log the status reset with controlled line length
+        logger.info(
+            "[Scheduler] Reset email %s from %s to %s",
+            email.id,
+            old_status,
+            reset_to_status
         )
-        email.status = EmailStatus.OCR_SUCCESS.value
-        email.save(update_fields=['status'])
 
-    # Handle stuck JIRA_PROCESSING
-    stuck_jira_emails = EmailMessage.objects.filter(
-        status=EmailStatus.JIRA_PROCESSING.value,
-        updated_at__lt=now - timedelta(minutes=timeout_minutes)
-    )
-    for email in stuck_jira_emails:
-        logger.warning(
-            f"Email {email.id} stuck in JIRA_PROCESSING for "
-            f"{timeout_minutes}+ minutes, resetting to SUMMARY_SUCCESS"
-        )
-        email.status = EmailStatus.SUMMARY_SUCCESS.value
-        email.save(update_fields=['status'])
+        # Count resets by description
+        reset_results[description] = reset_results.get(description, 0) + 1
 
     # Log summary if any emails were reset
-    total_reset = (len(stuck_ocr_emails) +
-                   len(stuck_summary_emails) +
-                   len(stuck_jira_emails))
+    total_reset = sum(reset_results.values())
 
     if total_reset > 0:
         logger.info(
-            f"Reset {total_reset} stuck emails: "
-            f"{len(stuck_ocr_emails)} OCR, "
-            f"{len(stuck_summary_emails)} Summary, "
-            f"{len(stuck_jira_emails)} JIRA"
+            "Reset %d stuck emails: %s",
+            total_reset,
+            ", ".join(
+                [
+                    f"{count} {desc}"
+                    for desc, count in reset_results.items()
+                    if count > 0
+                ]
+            ),
         )
+
+
+@shared_task
+def schedule_user_email_scanning():
+    """
+    Schedule email scanning for all active users.
+
+    This task iterates through all users and schedules individual
+    email scanning tasks for each user.
+    """
+
+    User = get_user_model()
+
+    # Get all active users
+    active_users = User.objects.filter(is_active=True)
+
+    logger.info(f"Scheduling email scanning for {active_users.count()} "
+                f"active users")
+
+    # Schedule email scanning for each user
+    for user in active_users:
+        try:
+            # Check if user has email configuration
+            from threadline.models import Settings
+            email_config = Settings.objects.filter(
+                user=user,
+                key='email_config',
+                is_active=True
+            ).first()
+
+            if email_config:
+                logger.info(f"Scheduling email scan for user: {user.username}")
+                scan_user_emails.delay(user.id)
+            else:
+                logger.debug(f"User {user.username} has no email "
+                             "configuration, skipping")
+
+        except Exception as e:
+            logger.error(f"Failed to schedule email scan for user "
+                         f"{user.username}: {e}")
+
+    logger.info("User email scanning scheduling completed")

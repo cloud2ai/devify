@@ -6,8 +6,8 @@ from django.core.management.base import BaseCommand
 import logging
 
 from threadline.tasks import (
-    organize_attachments_ocr_task,
-    organize_email_body_task,
+    llm_ocr_task,
+    llm_email_task,
     summarize_email_task
 )
 
@@ -66,12 +66,12 @@ class Command(BaseCommand):
 
                 # Attachments OCR organization
                 logger.info('Starting attachments OCR organization...')
-                attachments_result = organize_attachments_ocr_task.run(email_id, force=force)
+                attachments_result = llm_ocr_task.run(email_id, force=force)
                 logger.info(f'Attachments task completed successfully')
 
                 # Email body organization
                 logger.info('Starting email body organization...')
-                email_result = organize_email_body_task.run(email_id, force=force)
+                email_result = llm_email_task.run(email_id, force=force)
                 logger.info(f'Email body task completed successfully')
 
                 # Email summarization
@@ -83,12 +83,12 @@ class Command(BaseCommand):
 
             elif task == 'attachments':
                 logger.info('Starting attachments OCR organization...')
-                result = organize_attachments_ocr_task.run(email_id, force=force)
+                result = llm_ocr_task.run(email_id, force=force)
                 logger.info(f'Attachments task completed successfully')
 
             elif task == 'email':
                 logger.info('Starting email body organization...')
-                result = organize_email_body_task.run(email_id, force=force)
+                result = llm_email_task.run(email_id, force=force)
                 logger.info(f'Email body task completed successfully')
 
             elif task == 'summary':

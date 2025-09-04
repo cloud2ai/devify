@@ -8,6 +8,7 @@ processed before content extraction was implemented.
 
 import logging
 from django.core.management.base import BaseCommand, CommandError
+from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
 
@@ -81,7 +82,8 @@ class Command(BaseCommand):
 
             email_client = EmailClient(
                 email_config=dummy_config,
-                email_filter_config=dummy_filter_config
+                email_filter_config=dummy_filter_config,
+                attachment_storage_path=settings.EMAIL_ATTACHMENT_STORAGE_PATH
             )
 
             # Convert raw_content to bytes for EmailClient parsing

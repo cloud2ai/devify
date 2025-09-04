@@ -7,11 +7,27 @@ from django.conf import settings
 logger = logging.getLogger(__name__)
 
 
-def call_llm(prompt, content=None):
+def call_llm(prompt, content=None, output_language=None):
+    """
+    Call LLM with optional output language specification.
+
+    Args:
+        prompt: System prompt for the LLM
+        content: User content to process (optional)
+        output_language: Desired output language (optional)
+
+    Returns:
+        str: LLM response
+    """
     llm_config = AzureOpenAIConfig(**settings.AZURE_OPENAI_CONFIG)
     llm_service = LLMService(llm_config)
 
-    messages = [{"role": "system", "content": prompt}]
+    # Add output language instruction to prompt if specified
+    final_prompt = prompt
+    if output_language:
+        final_prompt = f"Your output language is {output_language}.\n\n{prompt}"
+
+    messages = [{"role": "system", "content": final_prompt}]
     if content:
         messages.append({"role": "user", "content": content})
 

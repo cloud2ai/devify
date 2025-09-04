@@ -6,6 +6,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        USE_MIRROR: ${USE_MIRROR:-false}
     env_file:
       - ./.env
     volumes:

@@ -240,14 +240,132 @@ migrate_data() {
                 exit 1
             fi
 
-            # Insert data
-            if $MARIADB_CMD -e "INSERT INTO \`$new_table\` SELECT * FROM \`$table\`" "$DB_NAME"; then
-                # Verify record count after migration
-                new_count=$($MARIADB_CMD -s -e "SELECT COUNT(*) FROM \`$new_table\`" "$DB_NAME" 2>/dev/null || echo "0")
-                log_success "Migration successful: $table → $new_table ($old_count → $new_count records)"
-            else
-                log_error "Migration failed: $table → $new_table"
+            # Get column information for both tables
+            log_info "Analyzing table structure for safe migration..."
+
+            # Get source table columns
+            source_columns=$($MARIADB_CMD -s -e "
+                SELECT GROUP_CONCAT(COLUMN_NAME ORDER BY ORDINAL_POSITION SEPARATOR ', ')
+                FROM INFORMATION_SCHEMA.COLUMNS
+                WHERE TABLE_SCHEMA = '$DB_NAME' AND TABLE_NAME = '$table'
+                ORDER BY ORDINAL_POSITION
+            " "$DB_NAME" 2>/dev/null || echo "")
+
+            # Get target table columns
+            target_columns=$($MARIADB_CMD -s -e "
+                SELECT GROUP_CONCAT(COLUMN_NAME ORDER BY ORDINAL_POSITION SEPARATOR ', ')
+                FROM INFORMATION_SCHEMA.COLUMNS
+                WHERE TABLE_SCHEMA = '$DB_NAME' AND TABLE_NAME = '$new_table'
+                ORDER BY ORDINAL_POSITION
+            " "$DB_NAME" 2>/dev/null || echo "")
+
+            if [ -z "$source_columns" ] || [ -z "$target_columns" ]; then
+                log_error "Failed to get column information for $table or $new_table"
                 exit 1
+            fi
+
+            log_info "Source table columns: $source_columns"
+            log_info "Target table columns: $target_columns"
+
+            # Find common columns between source and target tables
+            common_columns=$($MARIADB_CMD -s -e "
+                SELECT GROUP_CONCAT(s.COLUMN_NAME ORDER BY s.ORDINAL_POSITION SEPARATOR ', ')
+                FROM INFORMATION_SCHEMA.COLUMNS s
+                INNER JOIN INFORMATION_SCHEMA.COLUMNS t ON s.COLUMN_NAME = t.COLUMN_NAME
+                WHERE s.TABLE_SCHEMA = '$DB_NAME' AND s.TABLE_NAME = '$table'
+                AND t.TABLE_SCHEMA = '$DB_NAME' AND t.TABLE_NAME = '$new_table'
+                ORDER BY s.ORDINAL_POSITION
+            " "$DB_NAME" 2>/dev/null || echo "")
+
+            if [ -z "$common_columns" ]; then
+                log_error "No common columns found between $table and $new_table"
+                exit 1
+            fi
+
+            log_info "Common columns for migration: $common_columns"
+
+            # Insert data using common columns with proper escaping
+            # Convert comma-separated column list to backtick-wrapped format
+            escaped_columns=$(echo "$common_columns" | sed 's/, /`, `/g' | sed 's/^/`/' | sed 's/$/`/')
+
+            # Get missing columns in target table that are NOT NULL and don't have defaults
+            missing_columns=$($MARIADB_CMD -s -e "
+                SELECT GROUP_CONCAT(COLUMN_NAME ORDER BY ORDINAL_POSITION SEPARATOR ', ')
+                FROM INFORMATION_SCHEMA.COLUMNS
+                WHERE TABLE_SCHEMA = '$DB_NAME'
+                AND TABLE_NAME = '$new_table'
+                AND IS_NULLABLE = 'NO'
+                AND COLUMN_DEFAULT IS NULL
+                AND COLUMN_NAME NOT IN ($escaped_columns)
+            " "$DB_NAME" 2>/dev/null || echo "")
+
+            if [ -n "$missing_columns" ]; then
+                log_info "Found NOT NULL columns without defaults: $missing_columns"
+                log_info "These columns will be set to default values during migration"
+
+                # Build INSERT statement with default values for missing columns
+                all_columns="$escaped_columns"
+                default_values=""
+
+                for col in $(echo "$missing_columns" | tr ',' ' '); do
+                    col=$(echo "$col" | tr -d ' ')
+                    if [ -n "$col" ]; then
+                        # Add column to column list
+                        all_columns="$all_columns, \`$col\`"
+
+                        # Determine appropriate default value based on column type
+                        col_type=$($MARIADB_CMD -s -e "
+                            SELECT DATA_TYPE FROM INFORMATION_SCHEMA.COLUMNS
+                            WHERE TABLE_SCHEMA = '$DB_NAME' AND TABLE_NAME = '$new_table' AND COLUMN_NAME = '$col'
+                        " "$DB_NAME" 2>/dev/null || echo "")
+
+                        case "$col_type" in
+                            "datetime"|"timestamp")
+                                default_values="$default_values, NOW()"
+                                ;;
+                            "varchar"|"char"|"text")
+                                default_values="$default_values, ''"
+                                ;;
+                            "int"|"bigint"|"smallint"|"tinyint")
+                                default_values="$default_values, 0"
+                                ;;
+                            "decimal"|"float"|"double")
+                                default_values="$default_values, 0.0"
+                                ;;
+                            "boolean"|"bool")
+                                default_values="$default_values, 0"
+                                ;;
+                            *)
+                                default_values="$default_values, NULL"
+                                ;;
+                        esac
+                    fi
+                done
+
+                # Execute INSERT with all columns including default values
+                insert_sql="INSERT INTO \`$new_table\` ($all_columns) SELECT $escaped_columns$default_values FROM \`$table\`"
+                log_info "Executing INSERT with default values: $insert_sql"
+
+                if $MARIADB_CMD -e "$insert_sql" "$DB_NAME"; then
+                    # Verify record count after migration
+                    new_count=$($MARIADB_CMD -s -e "SELECT COUNT(*) FROM \`$new_table\`" "$DB_NAME" 2>/dev/null || echo "0")
+                    log_success "Migration successful: $table → $new_table ($old_count → $new_count records)"
+                else
+                    log_error "Migration failed: $table → $new_table"
+                    log_error "SQL: $insert_sql"
+                    exit 1
+                fi
+            else
+                # No missing columns, proceed with normal INSERT
+                if $MARIADB_CMD -e "INSERT INTO \`$new_table\` ($escaped_columns) SELECT $escaped_columns FROM \`$table\`" "$DB_NAME"; then
+                    # Verify record count after migration
+                    new_count=$($MARIADB_CMD -s -e "SELECT COUNT(*) FROM \`$new_table\`" "$DB_NAME" 2>/dev/null || echo "0")
+                    log_success "Migration successful: $table → $new_table ($old_count → $new_count records)"
+                else
+                    log_error "Migration failed: $table → $new_table"
+                    log_error "SQL: INSERT INTO \`$new_table\` ($escaped_columns) SELECT $escaped_columns FROM \`$table\`"
+                    exit 1
+                fi
             fi
         else
             log_warning "Source table $table not found, skipping"
