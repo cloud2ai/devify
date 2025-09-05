@@ -7,6 +7,7 @@ It's purely focused on JIRA API interactions.
 
 from datetime import datetime
 import logging
+import os
 import re
 from typing import Dict, Any, Optional
 
@@ -205,39 +206,69 @@ class JiraIssueHandler:
         uploaded_count = 0
         skipped_count = 0
 
-        # Upload image attachments with OCR content to JIRA.
+        # Upload all attachments to JIRA, not just images
         try:
-            image_attachments = email.attachments.filter(is_image=True)
-            for attachment in image_attachments:
-                has_ocr = bool(attachment.ocr_content and
-                               attachment.ocr_content.strip())
-                if has_ocr:
+            all_attachments = email.attachments.all()
+            logger.info(f"Found {len(all_attachments)} total attachments "
+                        f"for email {email.id}")
+
+            for attachment in all_attachments:
+                logger.info(f"Processing attachment: {attachment.filename} "
+                           f"(type: {attachment.content_type}, "
+                           f"is_image: {attachment.is_image}, "
+                           f"size: {attachment.file_size} bytes)")
+
+                # Check if file exists
+                if not os.path.exists(attachment.file_path):
+                    logger.warning(f"Attachment file not found: "
+                                   f"{attachment.file_path}")
+                    skipped_count += 1
+                    continue
+
+                # For image attachments, check if they have OCR content
+                # For non-image attachments, upload directly
+                should_upload = True
+                skip_reason = ""
+
+                if attachment.is_image:
+                    has_ocr = bool(attachment.ocr_content and
+                                   attachment.ocr_content.strip())
+                    if not has_ocr:
+                        should_upload = False
+                        skip_reason = "no OCR content"
+                # Non-image attachments (PDF, documents, etc.) are
+                # uploaded directly
+
+                if should_upload:
                     try:
                         self.client.add_attachment(
                             issue=issue_key,
                             file_path=attachment.file_path
                         )
                         uploaded_count += 1
-                        logger.debug(
-                            f"Uploaded attachment {attachment.safe_filename} "
-                            f"to {issue_key}"
-                        )
+                        logger.info(f"Successfully uploaded attachment "
+                                   f"{attachment.filename} "
+                                   f"({attachment.content_type}) "
+                                   f"to {issue_key}")
                     except Exception as e:
                         logger.warning(
                             f"Failed to upload attachment "
-                            f"{attachment.safe_filename}: {e}"
+                            f"{attachment.filename}: {e}"
                         )
                         skipped_count += 1
                 else:
                     skipped_count += 1
                     logger.debug(
-                        f"Skipped attachment {attachment.safe_filename} "
-                        f"(no OCR content)"
+                        f"Skipped attachment {attachment.filename} "
+                        f"({skip_reason})"
                     )
         except Exception as e:
             logger.error(
                 f"Error uploading attachments to {issue_key}: {e}"
             )
+
+        logger.info(f"Attachment upload completed for {issue_key}: "
+                   f"{uploaded_count} uploaded, {skipped_count} skipped")
 
         return {
             'uploaded_count': uploaded_count,

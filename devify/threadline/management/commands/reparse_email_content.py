@@ -4,6 +4,28 @@ Django management command to reparse email message raw content.
 This command allows re-parsing of existing email messages' raw content to
 extract text and HTML content, which is useful for messages that were
 processed before content extraction was implemented.
+
+Usage examples:
+    # Reparse a single email (default mode)
+    python manage.py reparse_email_content 123
+
+    # Reparse with force (even if content exists)
+    python manage.py reparse_email_content 123 --force
+
+    # Batch processing with range
+    python manage.py reparse_email_content 1-10 --batch
+
+    # Reparse all emails (email_id not required)
+    python manage.py reparse_email_content --all
+
+    # Reparse only emails with specific status
+    python manage.py reparse_email_content --all --status FETCHED
+
+    # Dry run to see what would be processed
+    python manage.py reparse_email_content --all --dry-run
+
+    # Error: email_id is required unless using --all
+    python manage.py reparse_email_content  # This will fail
 """
 
 import logging
@@ -35,105 +57,220 @@ class Command(BaseCommand):
         parser.add_argument(
             'email_id',
             type=int,
-            help='Email message ID to reparse'
+            nargs='?',
+            help='Email message ID to reparse (required unless using --all)'
         )
         parser.add_argument(
             '--force',
             action='store_true',
             help='Force reparse even if content already exists'
         )
+        parser.add_argument(
+            '--batch',
+            action='store_true',
+            help='Process multiple emails (email_id can be a range like 1-10)'
+        )
+        parser.add_argument(
+            '--all',
+            action='store_true',
+            help='Reparse all emails (use with caution)'
+        )
+        parser.add_argument(
+            '--status',
+            type=str,
+            help='Only reparse emails with specific status (e.g., FETCHED)'
+        )
+        parser.add_argument(
+            '--dry-run',
+            action='store_true',
+            help='Show what would be processed without actually doing it'
+        )
 
     def handle(self, *args, **options):
         """
         Execute the command.
         """
-        email_id = options['email_id']
-        force = options.get('force')
+        email_id = options.get('email_id')
+        force = options.get('force', False)
+        batch = options.get('batch', False)
+        all_emails = options.get('all', False)
+        status_filter = options.get('status')
+        dry_run = options.get('dry_run', False)
 
-        try:
-            email = EmailMessage.objects.get(id=email_id)
-        except EmailMessage.DoesNotExist:
-            raise CommandError(f'Email ID {email_id} does not exist')
+        # Validate arguments
+        if not all_emails and not email_id:
+            raise CommandError(
+                'email_id is required unless using --all flag'
+            )
 
-        # Check if content already exists
-        if not force and email.text_content and email.html_content:
+        # Determine which emails to process
+        if all_emails:
+            emails = self._get_all_emails(status_filter)
+        elif batch:
+            if not email_id:
+                raise CommandError('email_id is required for --batch mode')
+            emails = self._get_batch_emails(email_id, status_filter)
+        else:
+            # Single email mode (default)
+            emails = self._get_single_email(email_id)
+
+        if not emails:
             self.stdout.write(
-                self.style.WARNING(
-                    f'Email ID {email_id} already has content. '
-                    f'Use --force to reparse anyway.'
-                )
+                self.style.WARNING('No emails found to process')
             )
             return
 
+        if dry_run:
+            self._show_dry_run(emails, force)
+            return
+
+        # Process emails
+        success_count = 0
+        error_count = 0
+
+        for email in emails:
+            try:
+                if self._reparse_single_email(email, force):
+                    success_count += 1
+                    logger.info(f"Successfully reparsed email ID={email.id}")
+                else:
+                    logger.info(f"Skipped email ID={email.id}: {email.subject}")
+            except Exception as e:
+                error_count += 1
+                logger.error(
+                    f'Failed to reparse email ID={email.id}: {e}',
+                    exc_info=True
+                )
+
+        # Summary - use stdout for final results
         self.stdout.write(
-            f'Reparsing email ID={email_id}: {email.subject}'
+            self.style.SUCCESS(
+                f'Processing complete: {success_count} successful, '
+                f'{error_count} errors'
+            )
+        )
+        logger.info(f"Command completed: {success_count} successful, "
+                    f"{error_count} errors")
+
+    def _get_single_email(self, email_id):
+        """
+        Get a single email by ID.
+        """
+        try:
+            return [EmailMessage.objects.get(id=email_id)]
+        except EmailMessage.DoesNotExist:
+            raise CommandError(f'Email ID {email_id} does not exist')
+
+    def _get_batch_emails(self, email_id, status_filter):
+        """
+        Get emails for batch processing.
+        """
+        # Support range format like "1-10" or single ID
+        if isinstance(email_id, str) and '-' in str(email_id):
+            start_id, end_id = map(int, str(email_id).split('-'))
+            queryset = EmailMessage.objects.filter(
+                id__gte=start_id,
+                id__lte=end_id
+            )
+        else:
+            # Single ID for batch mode
+            queryset = EmailMessage.objects.filter(id=email_id)
+
+        if status_filter:
+            queryset = queryset.filter(status=status_filter)
+
+        return list(queryset.order_by('id'))
+
+    def _get_all_emails(self, status_filter):
+        """
+        Get all emails for processing.
+        """
+        queryset = EmailMessage.objects.all()
+
+        if status_filter:
+            queryset = queryset.filter(status=status_filter)
+
+        return list(queryset.order_by('id'))
+
+    def _show_dry_run(self, emails, force):
+        """
+        Show what would be processed in dry run mode.
+        """
+        self.stdout.write(
+            self.style.WARNING(f'DRY RUN: Would process {len(emails)} emails')
         )
 
-        try:
-            # Create a minimal EmailClient instance for parsing
-            dummy_config = {
-                'username': 'dummy',
-                'password': 'dummy',
-                'host': 'dummy',
-                'port': 993,
-                'use_ssl': True
-            }
-            dummy_filter_config = {}
-
-            email_client = EmailClient(
-                email_config=dummy_config,
-                email_filter_config=dummy_filter_config,
-                attachment_storage_path=settings.EMAIL_ATTACHMENT_STORAGE_PATH
-            )
-
-            # Convert raw_content to bytes for EmailClient parsing
-            raw_content_bytes = email.raw_content.encode('utf-8')
-
-            # Parse email using the unified method
-            parsed_result = email_client.parse_email(raw_content_bytes)
-
-            if not parsed_result:
-                raise Exception(
-                    f'EmailClient failed to parse email ID={email_id}. '
-                    f'Parsing method failed.'
-                )
-
-            # Extract content from parsing result
-            text_content = parsed_result.get('text_content', '')
-            html_content = parsed_result.get('html_content', '')
-            attachments = parsed_result.get('attachments', [])
-
-            logger.info(f"in reparse_email_content: Found {len(attachments)} "
-                        f"attachments")
-
-            # Update email fields
-            with transaction.atomic():
-                email.text_content = text_content
-                email.html_content = html_content
-                email.updated_at = timezone.now()
-                email.save(update_fields=[
-                    'text_content', 'html_content', 'updated_at'
-                ])
-
-                # Process attachments if any
-                if attachments:
-                    logger.debug(f"Attachments: {attachments}")
-                    self._process_attachments(email, attachments)
+        for email in emails:
+            has_content = bool(email.text_content and email.html_content)
+            status = 'SKIP' if has_content and not force else 'PROCESS'
 
             self.stdout.write(
-                self.style.SUCCESS(
-                    f'Successfully reparsed email ID={email_id}'
-                )
+                f'  ID={email.id}: {email.subject[:50]}... '
+                f'[{status}]'
             )
 
-        except Exception as e:
-            logger.error(
-                f'Failed to reparse email ID={email_id}: {e}',
-                exc_info=True
+    def _reparse_single_email(self, email, force):
+        """
+        Reparse a single email message.
+        """
+        # Check if content already exists
+        if not force and email.text_content and email.html_content:
+            logger.info(f"Email ID {email.id} already has content, skipping")
+            return False
+
+        logger.info(f"Reparsing email ID={email.id}: {email.subject}")
+
+        # Create a minimal EmailClient instance for parsing
+        dummy_config = {
+            'username': 'dummy',
+            'password': 'dummy',
+            'host': 'dummy',
+            'port': 993,
+            'use_ssl': True
+        }
+        dummy_filter_config = {}
+
+        email_client = EmailClient(
+            email_config=dummy_config,
+            email_filter_config=dummy_filter_config,
+            attachment_storage_path=settings.EMAIL_ATTACHMENT_STORAGE_PATH
+        )
+
+        # Convert raw_content to bytes for EmailClient parsing
+        raw_content_bytes = email.raw_content.encode('utf-8')
+
+        # Parse email using the unified method
+        parsed_result = email_client.parse_email(raw_content_bytes)
+
+        if not parsed_result:
+            raise Exception(
+                f'EmailClient failed to parse email ID={email.id}. '
+                f'Parsing method failed.'
             )
-            raise CommandError(
-                f'Failed to reparse email ID={email_id}: {e}'
-            )
+
+        # Extract content from parsing result
+        text_content = parsed_result.get('text_content', '')
+        html_content = parsed_result.get('html_content', '')
+        attachments = parsed_result.get('attachments', [])
+
+        logger.info(f"Found {len(attachments)} attachments for email "
+                    f"ID={email.id}")
+
+        # Update email fields
+        with transaction.atomic():
+            email.text_content = text_content
+            email.html_content = html_content
+            email.updated_at = timezone.now()
+            email.save(update_fields=[
+                'text_content', 'html_content', 'updated_at'
+            ])
+
+            # Process attachments if any
+            if attachments:
+                logger.debug(f"Attachments: {attachments}")
+                self._process_attachments(email, attachments)
+
+        return True
 
     def _process_attachments(self, email, attachments):
         """
@@ -188,9 +325,6 @@ class Command(BaseCommand):
                 logger.info(f"Deleted attachment: "
                             f"{existing_attachment.filename} "
                             f"(MD5: {existing_attachment.safe_filename})")
-                self.stdout.write(f"Deleted attachment: "
-                                  f"{existing_attachment.filename} "
-                                  f"(MD5: {existing_attachment.safe_filename})")
             except Exception as e:
                 logger.error(f"Failed to delete attachment {key}: {e}")
 
@@ -224,11 +358,8 @@ class Command(BaseCommand):
                     logger.info(f"Updated attachment: "
                                 f"{existing_attachment.filename} "
                                 f"(MD5: {existing_attachment.safe_filename})")
-                    self.stdout.write(f"Updated attachment: "
-                                      f"{existing_attachment.filename} "
-                                      f"(MD5: {existing_attachment.safe_filename})")
                 else:
-                    logger.info(f"Attachment unchanged: "
+                    logger.debug(f"Attachment unchanged: "
                                 f"{existing_attachment.filename} "
                                 f"(MD5: {existing_attachment.safe_filename})")
 
@@ -252,9 +383,6 @@ class Command(BaseCommand):
                 logger.info(f"Created attachment: "
                             f"{attachment_info['filename']} "
                             f"(MD5: {attachment_info['safe_filename']})")
-                self.stdout.write(f"Created attachment: "
-                                  f"{attachment_info['filename']} "
-                                  f"(MD5: {attachment_info['safe_filename']})")
 
             except Exception as e:
                 logger.error(

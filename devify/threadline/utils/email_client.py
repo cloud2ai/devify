@@ -431,6 +431,101 @@ class EmailClient:
         else:
             return '', ''
 
+    def _detect_image_type(self, payload: bytes, content_type: str,
+                          filename: str) -> bool:
+        """
+        Detect if a file is an image based on file signature (magic bytes).
+
+        This method provides more accurate image detection than relying solely
+        on MIME types, which can be incorrect in some email clients.
+
+        Args:
+            payload: File content as bytes
+            content_type: MIME content type from email
+            filename: Original filename
+
+        Returns:
+            bool: True if file is detected as an image based on signature
+        """
+        if not payload:
+            return False
+
+        # Check file signature (magic bytes) for common image formats
+        if payload.startswith(b'\x89PNG\r\n\x1a\n'):
+            # PNG signature
+            return True
+        elif payload.startswith(b'\xff\xd8\xff'):
+            # JPEG signature
+            return True
+        elif payload.startswith(b'GIF87a') or payload.startswith(b'GIF89a'):
+            # GIF signature
+            return True
+        elif payload.startswith(b'BM'):
+            # BMP signature
+            return True
+        elif payload.startswith(b'RIFF') and b'WEBP' in payload[:12]:
+            # WebP signature
+            return True
+        elif payload.startswith(b'\x00\x00\x01\x00'):
+            # ICO signature
+            return True
+        elif payload.startswith(b'\x00\x00\x02\x00'):
+            # CUR signature
+            return True
+        elif payload.startswith(b'II*\x00') or payload.startswith(b'MM\x00*'):
+            # TIFF signature
+            return True
+        else:
+            # Fall back to MIME type if no signature match
+            return content_type.startswith(self.IMAGE_CONTENT_TYPE_PREFIX)
+
+    def _get_corrected_content_type(
+        self,
+        payload: bytes,
+        content_type: str
+    ) -> str:
+        """
+        Get corrected content type based on file signature.
+
+        This method corrects incorrect MIME types by analyzing the actual
+        file signature (magic bytes) rather than relying on the email's
+        declared content type.
+
+        Args:
+            payload: File content as bytes
+            content_type: Original MIME content type from email
+
+        Returns:
+            str: Corrected content type based on file signature
+
+        Example:
+            Input: payload=b'\x89PNG...', content_type='application/pdf'
+            Output: 'image/png'
+        """
+        if not payload:
+            return content_type
+
+        # Check file signature and return appropriate MIME type
+        if payload.startswith(b'\x89PNG\r\n\x1a\n'):
+            return 'image/png'
+        elif payload.startswith(b'\xff\xd8\xff'):
+            return 'image/jpeg'
+        elif payload.startswith(b'GIF87a') or payload.startswith(b'GIF89a'):
+            return 'image/gif'
+        elif payload.startswith(b'BM'):
+            return 'image/bmp'
+        elif payload.startswith(b'RIFF') and b'WEBP' in payload[:12]:
+            return 'image/webp'
+        elif payload.startswith(b'\x00\x00\x01\x00'):
+            return 'image/x-icon'
+        elif payload.startswith(b'\x00\x00\x02\x00'):
+            return 'image/x-cursor'
+        elif payload.startswith(b'II*\x00') or payload.startswith(b'MM\x00*'):
+            return 'image/tiff'
+        else:
+            # Return original content type if no signature match
+            return content_type
+
     def _is_attachment_or_image(self, content_type: str,
                                 content_disposition: str) -> bool:
         """
@@ -728,7 +823,8 @@ class EmailClient:
             return text_content.strip()
 
         except Exception as e:
-            logger.warning(f"Failed to extract text from HTML with placeholders: {e}")
+            logger.warning(f"Failed to extract text from HTML with "
+                           f"placeholders: {e}")
             return ''
 
     def _get_part_content(self, part) -> str:
@@ -781,7 +877,8 @@ class EmailClient:
         """
         Clean HTML entities from text content.
 
-        Converts HTML entities like &amp;, &lt;, &gt; to their character equivalents
+        Converts HTML entities like &amp;, &lt;, &gt; to their character
+        equivalents
         and removes extra whitespace.
 
         Args:
@@ -860,7 +957,12 @@ class EmailClient:
                 image_placeholders[placeholder] = cid
                 return placeholder
 
-            html_content = re.sub(img_pattern, replace_img_with_placeholder, html_content)
+            # Replace <img> tags with placeholders, controlling line length
+            html_content = re.sub(
+                img_pattern,
+                replace_img_with_placeholder,
+                html_content
+            )
 
             # Step 3: Convert HTML tags to text formatting
             html_content = re.sub(r'<br\s*/?>', '\n', html_content,
@@ -887,13 +989,19 @@ class EmailClient:
             logger.warning(f"Failed to extract text from HTML: {e}")
             return ''
 
-    def _embed_images_in_text(self, text_content: str, image_placeholders: dict) -> str:
+    def _embed_images_in_text(
+        self,
+        text_content: str,
+        image_placeholders: dict
+    ) -> str:
         """
-        Embed image references in text content at positions corresponding to HTML structure.
+        correspond to the original HTML structure.
 
         Strategy:
-        1. If HTML content is available, use positioning algorithm for precise placement
-        2. Otherwise, append images at the end of text as fallback
+        1. If HTML content is available, use a positioning algorithm
+           for precise placement of image references.
+        2. If HTML content is not available, append image references
+           at the end of the text as a fallback.
 
         Args:
             text_content: Text content to embed images into
@@ -916,10 +1024,13 @@ class EmailClient:
                 "Hello world\n\n[IMAGE: image1.jpg]\n[IMAGE: image2.png]"
         """
         # Strategy 1: Use HTML positioning algorithm if available
-        if hasattr(self, "_last_html_content") and getattr(self, "_last_html_content", ""):
-
+        if (
+            hasattr(self, "_last_html_content")
+            and getattr(self, "_last_html_content", "")
+        ):
             logger.info(
-                f"Using HTML positioning algorithm with {len(image_placeholders)} images"
+                "Using HTML positioning algorithm with %d images",
+                len(image_placeholders)
             )
             return embed_images_with_html(
                 text_content,
@@ -1098,13 +1209,18 @@ class EmailClient:
                 f"size={len(payload)} bytes, MD5: {file_md5}"
             )
 
-            # Determine if it's an image
-            is_image = content_type.startswith(self.IMAGE_CONTENT_TYPE_PREFIX)
+            # Determine if the file is an image based on its signature
+            is_image = self._detect_image_type(payload, content_type, filename)
+
+            # Get corrected content type based on file signature
+            corrected_content_type = self._get_corrected_content_type(
+                payload, content_type
+            )
 
             return {
                 'filename': filename,
                 'safe_filename': safe_filename,
-                'content_type': content_type,
+                'content_type': corrected_content_type,
                 'file_size': len(payload),
                 'file_path': file_path,
                 'is_image': is_image

@@ -12,6 +12,7 @@ from .chain_orchestrator import process_email_chain
 
 # Scheduler tasks
 from .scheduler import schedule_email_processing_tasks
+from .scheduler import schedule_user_email_scanning
 
 # Utility tasks
 from .scheduler import schedule_reset_stuck_processing_emails

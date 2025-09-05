@@ -34,9 +34,9 @@ CELERY_TASK_SERIALIZER = 'json'
 # Celery periodic task scheduling configuration, defining tasks that need to
 # run periodically
 CELERY_BEAT_SCHEDULE = {
-    # Email fetching scheduler - runs every 10 minutes
-    'scan_user_emails': {
-        'task': 'threadline.tasks.email_fetch.scan_user_emails',
+    # Email fetching scheduler - runs every minute
+    'schedule_user_email_scanning': {
+        'task': 'threadline.tasks.scheduler.schedule_user_email_scanning',
         'schedule': crontab(minute='*/1'),
         'args': (),
         'kwargs': {},
@@ -53,7 +53,7 @@ CELERY_BEAT_SCHEDULE = {
     # Reset stuck processing emails - runs every 5 minutes
     'reset_stuck_processing_emails': {
         'task': 'threadline.tasks.scheduler.schedule_reset_stuck_processing_emails',
-        'schedule': crontab(minute='*/5'),  # Every 5 minutes
+        'schedule': crontab(minute='*/30'),  # Every 30 minutes
         'args': (),
         'kwargs': {'timeout_minutes': 30},
     },
