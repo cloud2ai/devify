@@ -10,13 +10,6 @@ description = "Django starter template"
 authors = ["Ray Sun <xiaoquqi@gmail.com>"]
 readme = "README.md"
 packages = [{include = "devify"}]
-include = [
-    "devify/**/*.py",
-    "threadline/**/*.py",
-    "accounts/**/*.py",
-    "auth/**/*.py",
-    "core/**/*.py",
-]
 
 [tool.poetry.dependencies]
 python = "^3.10"

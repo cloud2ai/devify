@@ -1,4 +1,0 @@
-recursive-include devify *.so
-recursive-include devify *.mo
-
-recursive-include devify *

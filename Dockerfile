@@ -71,6 +71,9 @@ WORKDIR /opt/devify
 # Copy project files
 COPY devify /opt/devify
 COPY pyproject.toml /opt/devify/
+COPY README.md /opt/devify/
+COPY LICENSE /opt/devify/
+COPY AUTHORS /opt/devify/
 
 # Install project dependencies with mirror selection
 RUN set -eux; \
