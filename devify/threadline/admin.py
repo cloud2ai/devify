@@ -100,18 +100,18 @@ class SafeJSONEditorWidget(JSONEditorWidget):
     def format_value(self, value):
         """
         Format value for display in widget with proper JSON indentation.
-        Returns the value as-is for the JSON editor to handle formatting.
+        Returns JSON string to ensure JavaScript compatibility.
         """
         if value is None:
             return ''
         if isinstance(value, (dict, list)):
-            # Return the Python object directly, let the JSON editor handle formatting
-            return value
+            # Convert Python object to JSON string for JavaScript compatibility
+            return json.dumps(value, indent=2, ensure_ascii=False)
         if isinstance(value, str):
             try:
-                # Try to parse and return as Python object for proper display
+                # Try to parse and reformat as JSON string
                 parsed = json.loads(value)
-                return parsed
+                return json.dumps(parsed, indent=2, ensure_ascii=False)
             except json.JSONDecodeError:
                 return value
         return value
