@@ -70,6 +70,9 @@ from .models import (
     Issue
 )
 
+# Note: All models are already configured in this admin.py file
+# with appropriate display fields, filters, and widgets for JSON fields
+
 
 class SafeJSONEditorWidget(JSONEditorWidget):
     """

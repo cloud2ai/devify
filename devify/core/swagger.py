@@ -195,6 +195,18 @@ class BaseResponseWrapper(serializers.Serializer):
     data = serializers.Field(help_text="Response data")
 
 
+class ErrorResponseSerializer(serializers.Serializer):
+    """
+    Standard error response serializer for API documentation.
+
+    This serializer is used for error responses (4xx, 5xx) to ensure
+    consistent error response format in API documentation.
+    """
+    code = serializers.IntegerField(help_text="Error status code")
+    message = serializers.CharField(help_text="Error message")
+    data = serializers.CharField(allow_null=True, help_text="Error details")
+
+
 def response(serializer_class):
     """
     Create standard response wrapper for single object endpoints.
@@ -229,12 +241,34 @@ def response(serializer_class):
         - PUT /posts/{id}/ - Return updated post
         - DELETE /posts/{id}/ - Return success message
     """
-    class_name = f"SingleResponse_{serializer_class.__name__}"
+    # Handle cases where serializer_class might not have a proper name
+    serializer_name = getattr(serializer_class, '__name__', 'Unknown')
+    if not serializer_name or serializer_name == 'Serializer':
+        serializer_name = f"Serializer_{id(serializer_class)}"
+
+    class_name = f"SingleResponse_{serializer_name}"
     wrapper_class = type(class_name, (BaseResponseWrapper,), {
         'data': serializer_class(help_text="Response data"),
         '__module__': 'core.swagger'
     })
     return wrapper_class
+
+
+def error_response():
+    """
+    Create standard error response serializer for API documentation.
+
+    This function returns a consistent error response serializer
+    for all error status codes (4xx, 5xx) to avoid component
+    name conflicts in OpenAPI schema.
+
+    Returns:
+        ErrorResponseSerializer: Standard error response serializer
+
+    Usage:
+        @extend_schema(responses={400: error_response()})
+    """
+    return ErrorResponseSerializer
 
 
 def list_response(serializer_class):

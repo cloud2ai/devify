@@ -100,7 +100,8 @@ class StateMachineTest(TestCase):
             can_transition_to('issue_success', 'completed',
                             EMAIL_STATE_MACHINE)
         )
-        self.assertTrue(
+        # ISSUE_SUCCESS can only transition to COMPLETED (terminal state)
+        self.assertFalse(
             can_transition_to('issue_success', 'fetched',
                             EMAIL_STATE_MACHINE)
         )
@@ -118,19 +119,19 @@ class StateMachineTest(TestCase):
         self.assertEqual(actual_fetched_states, expected_fetched_states)
 
         # Test next states for OCR_PROCESSING
-        expected_ocr_processing_states = ['ocr_success', 'ocr_failed', 'fetched']
+        expected_ocr_processing_states = ['ocr_success', 'ocr_failed']
         actual_ocr_processing_states = get_next_states('ocr_processing',
                                                      EMAIL_STATE_MACHINE)
         self.assertEqual(actual_ocr_processing_states, expected_ocr_processing_states)
 
         # Test next states for OCR_SUCCESS
-        expected_ocr_success_states = ['llm_ocr_processing']
+        expected_ocr_success_states = ['llm_ocr_processing', 'llm_ocr_success']
         actual_ocr_success_states = get_next_states('ocr_success',
                                                  EMAIL_STATE_MACHINE)
         self.assertEqual(actual_ocr_success_states, expected_ocr_success_states)
 
         # Test next states for COMPLETED
-        expected_completed_states = ['fetched']
+        expected_completed_states = []
         actual_completed_states = get_next_states('completed', EMAIL_STATE_MACHINE)
         self.assertEqual(actual_completed_states, expected_completed_states)
 

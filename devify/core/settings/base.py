@@ -106,6 +106,10 @@ INSTALLED_APPS = [
     # or ReDoc, making it easier to visualize and test API endpoints.
     'drf_spectacular',
 
+    # Django CORS headers package that handles Cross-Origin Resource Sharing (CORS)
+    # headers, allowing frontend applications from different domains to access the API.
+    'corsheaders',
+
     # A Django app that provides support for periodic task scheduling
     # using Celery. It allows you to manage and schedule tasks in a
     # database-backed way, making it easier to handle recurring tasks.
@@ -132,6 +136,12 @@ SITE_ID = 1
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+
+    # CORS middleware should be placed as high as possible in the middleware stack,
+    # especially before any middleware that can generate responses such as
+    # CommonMiddleware or WhiteNoiseMiddleware.
+    'corsheaders.middleware.CorsMiddleware',
+
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -290,6 +300,50 @@ APPEND_SLASH = False
 
 
 # ============================
+# CORS Configuration
+# ============================
+
+# Allow all origins configuration from environment variable
+# Set to 'true' for development convenience, 'false' for production security
+CORS_ALLOW_ALL_ORIGINS = (
+    os.getenv('CORS_ALLOW_ALL_ORIGINS', 'false').lower()
+    in ('true', '1', 'yes', 'on')
+)
+
+# Specific allowed origins from environment variable
+# Only used when CORS_ALLOW_ALL_ORIGINS is False
+CORS_ALLOWED_ORIGINS = os.getenv(
+    'CORS_ALLOWED_ORIGINS',
+    'http://localhost:3000,http://127.0.0.1:3000'
+).split(",")
+
+# Allow credentials to be included in CORS requests
+CORS_ALLOW_CREDENTIALS = True
+
+# Headers that can be used during the actual request
+CORS_ALLOW_HEADERS = [
+    'accept',
+    'accept-encoding',
+    'authorization',
+    'content-type',
+    'dnt',
+    'origin',
+    'user-agent',
+    'x-csrftoken',
+    'x-requested-with',
+]
+
+# Methods that can be used during the actual request
+CORS_ALLOW_METHODS = [
+    'DELETE',
+    'GET',
+    'OPTIONS',
+    'PATCH',
+    'POST',
+    'PUT',
+]
+
+# ============================
 # External Libraries Configuration
 # ============================
 from .celery import *
@@ -305,7 +359,7 @@ SPECTACULAR_SETTINGS = {
     'TITLE': 'Mito API',
     'DESCRIPTION': 'API documentation for Mito project',
     'VERSION': '1.0.0',
-    'SERVE_INCLUDE_SCHEMA': False,
+    'SERVE_INCLUDE_SCHEMA': True,
     'COMPONENT_SPLIT_REQUEST': True,
     'SCHEMA_PATH_PREFIX': '/api/',
     'CONTACT': {
@@ -321,4 +375,10 @@ SPECTACULAR_SETTINGS = {
         {'name': 'categories', 'description': 'Category management endpoints'},
         {'name': 'auth', 'description': 'Authentication endpoints'},
     ],
+    'ENUM_NAME_OVERRIDES': {
+        'EmailMessageStatusEnum': 'EmailMessageStatus',
+        'EmailAttachmentStatusEnum': 'EmailAttachmentStatus',
+        'EmailTaskStatusEnum': 'EmailTaskStatus',
+        'IssueStatusEnum': 'IssueStatus',
+    },
 }

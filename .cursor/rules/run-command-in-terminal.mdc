@@ -1,0 +1,90 @@
+---
+description: Terminal command execution rules for non-interactive debugging
+globs:
+alwaysApply: true
+---
+
+# Terminal Command Execution Rules
+
+## Core Principle
+**Always use non-interactive mode** when executing terminal commands during debugging. Never use interactive methods that require user input, as they will cause processes to hang.
+
+## Prohibited Interactive Commands
+Avoid these interactive approaches:
+- Interactive shell sessions (`bash`, `sh`, `zsh` without `-c`)
+- Interactive Docker containers (`docker exec -it`)
+- Interactive Python shells (`python`, `python manage.py shell`)
+- Interactive package managers (`npm`, `pip` without `--yes`/`-y`)
+- Interactive Git commands (`git add` without specific files)
+
+## Required Non-Interactive Alternatives
+
+### Docker Commands
+```bash
+# ❌ Interactive (prohibited)
+docker exec -it container_name bash
+docker run -it image_name /bin/bash
+
+# ✅ Non-interactive (required)
+docker exec container_name your_command
+docker run image_name your_command
+```
+
+### Python/Django Commands
+```bash
+# ❌ Interactive (prohibited)
+python manage.py shell
+python
+python manage.py dbshell
+
+# ✅ Non-interactive (required)
+python manage.py shell -c "your_command"
+python -c "your_command"
+python manage.py shell -c "from app.models import Model; print(Model.objects.count())"
+```
+
+### Package Management
+```bash
+# ❌ Interactive (prohibited)
+npm install
+pip install package_name
+
+# ✅ Non-interactive (required)
+npm install --yes
+pip install package_name --yes
+```
+
+### Database Operations
+```bash
+# ❌ Interactive (prohibited)
+psql database_name
+mysql -u user database_name
+
+# ✅ Non-interactive (required)
+psql database_name -c "SELECT * FROM table_name;"
+mysql -u user database_name -e "SELECT * FROM table_name;"
+```
+
+### Git Operations
+```bash
+# ❌ Interactive (prohibited)
+git add
+git commit
+
+# ✅ Non-interactive (required)
+git add specific_file.py
+git commit -m "commit message"
+```
+
+## Best Practices
+1. **Always specify exact commands** rather than opening interactive sessions
+2. **Use command chaining** with `&&` or `;` for multiple operations
+3. **Include timeout flags** where available (e.g., `--timeout=30`)
+4. **Redirect output** to files when needed: `command > output.log 2>&1`
+5. **Use background execution** (`&`) for long-running processes only when necessary
+
+## Error Handling
+If a command fails or hangs:
+1. Use `timeout` command to limit execution time
+2. Redirect stderr to capture error messages
+3. Provide fallback non-interactive alternatives
