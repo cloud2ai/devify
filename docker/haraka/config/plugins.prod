@@ -1,0 +1,35 @@
+# Haraka Plugin Configuration for Production Environment
+# Strict validation and domain-based connections only
+
+# CONNECT VALIDATION
+# ----------
+# Reverse DNS lookup for connecting clients
+fcrdns
+
+# HELO/EHLO VALIDATION
+# ----------
+# Validate HELO/EHLO commands
+helo.checks
+
+# MAIL FROM VALIDATION
+# ----------
+# Ensure sender domain is resolvable
+mail_from.is_resolvable
+
+# SPF validation for sender authentication
+spf
+
+# RCPT TO VALIDATION
+# ----------
+# Basic recipient validation (required)
+rcpt_to.in_host_list
+
+# AUTHENTICATION
+# ----------
+# Enable SMTP authentication
+auth/flat_file
+
+# FILE QUEUE
+# ----------
+# Simple file-based email queue (no Redis dependency)
+simple_file_queue

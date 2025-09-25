@@ -16,7 +16,7 @@ services:
       - ./data/django/staticfiles:/opt/devify/core/staticfiles
       - ./data/logs/api:/var/log/gunicorn
       - ./devify:/opt/devify
-      - ./data/email_attachments:/opt/email_attachments
+      - ./data/haraka/emails:/opt/haraka/emails
     networks:
       - devify_network
     depends_on:
@@ -39,7 +39,7 @@ services:
       - ./cache:/opt/cache
       - ./data/logs/worker:/var/log/celery
       - ./devify:/opt/devify
-      - ./data/email_attachments:/opt/email_attachments
+      - ./data/haraka/emails:/opt/haraka/emails
     networks:
       - devify_network
     depends_on:
@@ -111,6 +111,26 @@ services:
       redis:
         condition: service_started
     command: flower
+    networks:
+      - devify_network
+
+  haraka:
+    image: instrumentisto/haraka:latest
+    container_name: devify-haraka-dev
+    restart: unless-stopped
+    env_file:
+      - ./.env
+    ports:
+      - "${HARAKA_SMTP_PORT:-25}:25"
+    volumes:
+        - ./data/haraka/logs:/var/log/haraka
+        - ./data/haraka/emails:/opt/haraka/emails
+        - ./docker/haraka/config/plugins.dev:/etc/haraka/config/plugins:ro
+        - ./docker/haraka/config/host_list.dev:/etc/haraka/config/host_list:ro
+        - ./docker/haraka/config/log.ini:/etc/haraka/config/log.ini:ro
+        - ./docker/haraka/config/smtp.ini:/etc/haraka/config/smtp.ini:ro
+        - ./docker/haraka/config/relay.ini:/etc/haraka/config/relay.ini:ro
+        - ./docker/haraka/plugins/raw_email_saver.js:/etc/haraka/plugins/raw_email_saver.js:ro
     networks:
       - devify_network
 

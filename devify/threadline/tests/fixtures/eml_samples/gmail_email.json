@@ -1,0 +1,38 @@
+{
+  "message_id": "email_286090e770b99e08",
+  "subject": "Re: Urgent: Performance Issues with HyperMotion in Two Migration Projects",
+  "sender": "\"Ray@OneProCloud\" <ray.sun@example.com>",
+  "recipients": "<RAMON.MORALES-LOPEZ@example.com>, <maohongming@example.com>, \t<xuxingzhuang@example.com>",
+  "received_at": "2025-07-31T10:27:26+08:00",
+  "text_content": "Felix,\nPlease set up a meeting to help check this issue.\n\nI think we have some new improvements on Sync Proxy. You can try to make an upgrade for this issue.\n\nThanks.\n\nBest Regards,\nRay Sun (Qi Sun)\nCTO & Co-Founder | OnePro Cloud Limited\nMobile: +86 135 8198 8291\nEmail: ray.sun@OneProCloud.com\n\nOn Thu, Jul 31, 2025 at 8:57 AM <RAMON.MORALES-LOPEZ@example.com> wrote:\n\nGood morning team,\n\nWe are experiencing significant performance issues with HyperMotion in two different, but similar migration projects. In both cases, despite having a 1 Gbps dedicated direct link to the cloud (one to Huawei Cloud and\r\nthe other to Google Cloud), we are observing extremely slow transfer rates when migrating virtual machines larger than 5 GB.\n\nThe reported data transfer rate does not exceed 12 Mbps, and in one particular case, the first snapshot has reached only 25% completion - even though it started over a week ago.\n\nThis behavior is causing concern for both our customers and our internal teams. Therefore, I kindly ask for your support in helping us investigate what might be causing this slowness.\n\nHere some evidence:\n\n[IMAGE: 263e68293c4d83cc566c47164f04585c.png]\n\nFrom the firewall\n\n[IMAGE: f1c9a3806aba72c7524d29639681931f.png]\n\nWe have already reviewed the on-premises VMware infrastructure on our side and have not found any issues or anomalies. Additionally, I increased the synchronization threads to ten in an effort to speed up the process,\r\nbut the improvement was minimal.\n\nAt VM level\n\n[IMAGE: f0ca51439230c64b025ae217778f87e5.jpg]\n\n[IMAGE: 822f2276096508ef965bb19aa78e2c9e.jpg]\n\nWe appreciate your assistance in identifying the root cause as soon as possible.\n\nBest regards,\n\nRamón",
+  "attachments": [
+    {
+      "filename": "image001.png",
+      "safe_filename": "263e68293c4d83cc566c47164f04585c.png",
+      "content_type": "image/png",
+      "file_size": 108186,
+      "is_image": true
+    },
+    {
+      "filename": "image003.png",
+      "safe_filename": "f1c9a3806aba72c7524d29639681931f.png",
+      "content_type": "image/png",
+      "file_size": 26803,
+      "is_image": true
+    },
+    {
+      "filename": "image004.jpg",
+      "safe_filename": "f0ca51439230c64b025ae217778f87e5.jpg",
+      "content_type": "image/jpeg",
+      "file_size": 67785,
+      "is_image": true
+    },
+    {
+      "filename": "image005.jpg",
+      "safe_filename": "822f2276096508ef965bb19aa78e2c9e.jpg",
+      "content_type": "image/jpeg",
+      "file_size": 67987,
+      "is_image": true
+    }
+  ]
+}

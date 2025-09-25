@@ -11,6 +11,7 @@ https://docs.djangoproject.com/en/5.1/ref/settings/
 """
 
 import os
+import warnings
 from pathlib import Path
 
 from django.utils.translation import gettext_lazy as _
@@ -19,6 +20,16 @@ from dotenv import load_dotenv
 from .database import *
 from .globals import *
 from .logging_config import configure_logging
+
+# Suppress specific warnings
+warnings.filterwarnings('ignore', category=SyntaxWarning, module='flanker')
+warnings.filterwarnings('ignore', message='.*invalid escape sequence.*')
+
+# Suppress MariaDB-specific Django model warnings
+SILENCED_SYSTEM_CHECKS = [
+    'models.W036',  # MariaDB does not support unique constraints with conditions
+    'models.W043',  # MariaDB does not support indexes on expressions
+]
 
 # ============================
 # General Settings

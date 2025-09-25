@@ -85,5 +85,16 @@ def configure_logging(log_level="INFO"):
                 'handlers': ['console'],
                 'propagate': False,
             },
+            # Suppress flanker warnings
+            'flanker': {
+                'level': 'ERROR',
+                'handlers': ['console'],
+                'propagate': False,
+            },
+            'flanker.addresslib._parser.parser': {
+                'level': 'ERROR',
+                'handlers': ['console'],
+                'propagate': False,
+            },
         },
     })

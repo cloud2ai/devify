@@ -8,6 +8,7 @@ from django.contrib.auth.models import User
 from django.conf import settings
 
 from threadline.models import Settings
+from threadline.utils.prompt_config_manager import PromptConfigManager
 
 
 class Command(BaseCommand):
@@ -25,6 +26,20 @@ class Command(BaseCommand):
             '--user',
             type=str,
             help="Username to initialize settings for"
+        )
+        parser.add_argument(
+            '--language',
+            type=str,
+            default=settings.DEFAULT_LANGUAGE,
+            help=f"Language for prompt configuration "
+                 f"(default: {settings.DEFAULT_LANGUAGE})"
+        )
+        parser.add_argument(
+            '--scene',
+            type=str,
+            default=settings.DEFAULT_SCENE,
+            help=f"Scene for prompt configuration "
+                 f"(default: {settings.DEFAULT_SCENE})"
         )
         parser.add_argument(
             '--force',
@@ -49,35 +64,57 @@ class Command(BaseCommand):
             )
             return
 
+        language = options['language']
+        scene = options['scene']
         force_update = options['force']
 
         try:
             user = User.objects.get(username=username)
         except User.DoesNotExist:
             self.logger.error(
-                f'User "{username}" does not exist. Please create the user first.'
+                f'User "{username}" does not exist. '
+                f'Please create the user first.'
             )
             return
 
-        # Threadline settings configuration
+        # Initialize PromptConfigManager and generate user config
+        try:
+            config_manager = PromptConfigManager()
+            user_prompt_config = config_manager.generate_user_config(
+                language, scene
+            )
+            self.logger.info(
+                f'Generated prompt config for language: {language}, '
+                f'scene: {scene}'
+            )
+        except Exception as e:
+            self.logger.error(
+                f'Failed to load prompt configuration: {e}'
+            )
+            return
+
+        # Threadline settings configuration with unified email_config
         threadline_settings = {
             'email_config': {
-                'imap_host': 'your-imap-server-hostname',
-                'smtp_ssl_port': 465,
-                'smtp_starttls_port': 587,
-                'imap_ssl_port': 993,
-                'username': 'your-email-username',
-                'password': 'your-email-password',
-                'use_ssl': True,
-                'use_starttls': False
-            },
-            'email_filter_config': {
-                'filters': [],
-                'exclude_patterns': [
-                    'spam',
-                    'newsletter'
-                ],
-                'max_age_days': 7
+                'mode': 'custom_imap',  # 'auto_assign' or 'custom_imap'
+                'imap_config': {
+                    'imap_host': 'your-imap-server-hostname',
+                    'smtp_ssl_port': 465,
+                    'smtp_starttls_port': 587,
+                    'imap_ssl_port': 993,
+                    'username': 'your-email-username',
+                    'password': 'your-email-password',
+                    'use_ssl': True,
+                    'use_starttls': False
+                },
+                'filter_config': {
+                    'filters': [],
+                    'exclude_patterns': [
+                        'spam',
+                        'newsletter'
+                    ],
+                    'max_age_days': 7
+                }
             },
             'issue_config': {
                 'enable': False,
@@ -92,7 +129,8 @@ class Command(BaseCommand):
                     'allow_project_keys': ['PRJ', 'REQ'],
                     'project_prompt': (
                         'The project key is: your-default-project-key, only'
-                        'Only return the project key, do not add any other text.'
+                        'Only return the project key, do not add any '
+                        'other text.'
                         'leave empty if you want to use default project key'
                     ),
                     'default_issue_type': 'your-default-issue-type',
@@ -102,7 +140,8 @@ class Command(BaseCommand):
                     'allow_assignees': ['assignee1', 'assignee2'],
                     'description_prompt': (
                         'Convert the provided content into Jira Markup Wiki '
-                        'format, fully preserving all information and ensuring '
+                        'format, fully preserving all information and '
+                        'ensuring '
                         'clear structure and hierarchy. When appropriate, use '
                         'Jira Wiki syntax elements such as headings, lists, '
                         'tables, blockquotes, and code blocks for formatting. '
@@ -118,80 +157,12 @@ class Command(BaseCommand):
                     )
                 }
             },
-            'prompt_config': {
-                'output_language': settings.LLM_OUTPUT_LANGUAGE,
-                'email_content_prompt': (
-                    (
-                        'Organize the provided email content (which may include '
-                        'chat records or message bodies) in chronological order '
-                        'into a conversation text with minimal polishing (clearly '
-                        'mark any assumptions), without altering any original '
-                        'meaning and retaining all information. Output format: '
-                        '[Date Time] Speaker: Content (on a single line, or '
-                        'wrapped across multiple lines if necessary), with image '
-                        'placeholders [IMAGE: filename.png] placed on separate '
-                        'lines in their original positions. Date and time: if '
-                        'the date is unknown, display only the time; if known, '
-                        'display both date and time. Conversation text must be '
-                        'plain text (excluding emojis, special characters, etc.) '
-                        'with clear structure. Always preserve the original '
-                        'language of the conversation; if the specified output '
-                        'language differs from the original language, include '
-                        'the original text on top and the translated text below. '
-                        'No explanations or additional content should be provided.'
-                    )
-                ),
-                'ocr_prompt': (
-                    'Organize the provided OCR results into plain text output, '
-                    'using Markdown formatting when necessary for code or quoted '
-                    'content (e.g., ``` for code blocks, > for quotes). Describe '
-                    'all explanatory or interpretive content in the specified '
-                    'output language, while keeping all actual OCR text in the '
-                    'original language from the image. Fully retain and describe '
-                    'all content without omission. Clearly highlight any normal, '
-                    'abnormal, or valuable information. Attempt to correct and '
-                    'standardize incomplete, unclear, or potentially erroneous '
-                    'OCR content without altering its original meaning, and mark '
-                    'any uncertain parts as [unclear]. Produce only structured '
-                    'text with necessary Markdown formatting, without any '
-                    'additional explanations, summaries, or unrelated content.'
-                ),
-                'summary_prompt': (
-                    'Based on the provided content (including chronological chat '
-                    'records and OCR-recognized content from images), organize the '
-                    'chat records in chronological order, preserving the original '
-                    'speaker and language for each entry, fully retaining all '
-                    'information, and using Markdown formatting when necessary for '
-                    'code or quoted content. The output should include four sections: '
-                    '1) **Main Content**: list the key points of the current '
-                    'conversation; 2) **Process Description**: provide a detailed '
-                    'description of the problem and its reproduction steps, marking '
-                    'any uncertain information as "unknown"; 3) **Solution** (if '
-                    'unresolved, indicate attempted measures): if the issue is '
-                    'resolved, list the solution; if unresolved, list measures '
-                    'already taken and their results, optionally including possible '
-                    'causes clearly marked as (speculation); 4) **Resolution Status**: '
-                    'indicate whether the issue has been resolved (Yes/No). Output '
-                    'must be well-structured, hierarchically clear plain text, '
-                    'without any additional explanations, summaries, or extra content, '
-                    'while highlighting any normal, abnormal, or valuable information '
-                    'for quick reference.'
-                ),
-                'summary_title_prompt': (
-                    'Based on the chat records, extract a single structured '
-                    'title in the format: [Issue Category][Participant]Title '
-                    'Content; the title should use a verb-object structure, '
-                    'be concise, and accurately express the core problem or '
-                    'requirement, avoiding vague terms, with a maximum length '
-                    'of 300 characters; if the information is unclear, add '
-                    '[To Be Confirmed]; if multiple issues exist, extract '
-                    'only the most critical and central one, generating a '
-                    'single structured title.'
-                )
-            },
+            'prompt_config': user_prompt_config,
             'webhook_config': {
                 'url': '',
-                'events': ['issue_success', 'ocr_failed', 'llm_summary_failed'],
+                'events': [
+                    'issue_success', 'ocr_failed', 'llm_summary_failed'
+                ],
                 'timeout': 10,
                 'retries': 3,
                 'headers': {},
@@ -231,12 +202,14 @@ class Command(BaseCommand):
                 else:
                     skipped_count += 1
                     self.logger.warning(
-                        f'⚠ Skipped existing setting: {key} (use --force to update)'
+                        f'⚠ Skipped existing setting: {key} '
+                        f'(use --force to update)'
                     )
 
         # Summary
         self.logger.info(
-            f'\n🎉 Threadline settings initialization completed for user "{username}"!\n'
+            f'\n🎉 Threadline settings initialization completed for '
+            f'user "{username}"!\n'
             f'Created: {created_count} settings\n'
             f'Updated: {updated_count} settings\n'
             f'Skipped: {skipped_count} settings\n'
@@ -246,12 +219,14 @@ class Command(BaseCommand):
         if created_count > 0 or updated_count > 0:
             self.logger.info(
                 f'\n📝 Next steps:\n'
-                f'1. Visit Django Admin: http://localhost:8000/admin/v1/threadline/settings/\n'
+                f'1. Visit Django Admin: '
+                f'http://localhost:8000/admin/v1/threadline/settings/\n'
                 f'2. Update the following configurations:\n'
                 f'   • email_config - Your email server details\n'
                 f'   • issue_config - Your issue creation settings\n'
                 f'   • prompt_config - Customize AI prompts if needed\n'
-                f'   • webhook_config - Configure external notifications (optional)\n'
+                f'   • webhook_config - Configure external notifications '
+                f'(optional)\n'
                 f'3. Configure periodic tasks in Django Admin:\n'
                 f'   • schedule_email_processing_tasks\n'
                 f'   • reset_stuck_processing_email\n'
@@ -264,11 +239,15 @@ class Command(BaseCommand):
         self.logger.info('Available threadline settings keys:')
 
         settings_info = [
-            ('email_config', 'Email server connection and authentication settings'),
-            ('email_filter_config', 'Email filtering and processing rules'),
-            ('issue_config', 'Issue creation engine configuration (JIRA, email, Slack, etc.)'),
-            ('prompt_config', 'AI prompt templates for email/attachment/summary processing'),
-            ('webhook_config', 'Webhook configuration for external notifications')
+            ('email_config',
+             'Unified email configuration including IMAP settings, '
+             'mode selection, and filtering rules'),
+            ('issue_config',
+             'Issue creation engine configuration (JIRA, email, Slack, etc.)'),
+            ('prompt_config',
+             'AI prompt templates for email/attachment/summary processing'),
+            ('webhook_config',
+             'Webhook configuration for external notifications')
         ]
 
         for key, description in settings_info:
@@ -277,6 +256,9 @@ class Command(BaseCommand):
         self.logger.info(
             f'\nUsage examples:\n'
             f'  python manage.py init_threadline_settings --user admin\n'
-            f'  python manage.py init_threadline_settings --user admin --force\n'
+            f'  python manage.py init_threadline_settings --user admin '
+            f'--language zh-CN --scene product_issue\n'
+            f'  python manage.py init_threadline_settings --user admin '
+            f'--force\n'
             f'  python manage.py init_threadline_settings --list'
         )

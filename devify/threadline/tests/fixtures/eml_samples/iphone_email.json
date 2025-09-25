@@ -1,0 +1,31 @@
+{
+  "message_id": "email_2b9d58669c492d5b",
+  "subject": "微信群\"Infotec 迁移项目交付实施\"的聊天记录",
+  "sender": "lizengyuan <li_zengyuan@163.com>",
+  "recipients": "ai@example.com",
+  "received_at": "2025-09-17T09:34:46+08:00",
+  "text_content": "Dear:\n微信群\"Infotec 迁移项目交付实施\"的聊天记录如下:\n—————  2025-9-16  —————\n李哈哈 14:02\n@华为TD 黄星宇  @罗良炳_云交付 现在9台机器的增量同步都报错了\n李哈哈 14:03\n每次同步完成后，会在850创建一个快照，但是850平台创建快照失败\n李哈哈 14:03\n图片1（可在附件中查看）\n[IMAGE: 06022497cc6cd290d17cdb3420d82a2c.png]\n李哈哈 14:03\n我手动测试创建一个快照，也失败了\n李哈哈 14:05\n图片2（可在附件中查看）\n[IMAGE: c7b0d9bb52e75f12c388b69cbcf62f42.png]\n李哈哈 14:05\n图片3（可在附件中查看）\n[IMAGE: ba2d6155d22024b9e27d8dac8845c9ba.png]\n—————  2025-9-17  —————\n探路者 01:33\n我看应该是存储分配完了\n探路者 01:34\n可用的是0了\n探路者 01:39\n5P用完了\n发自我的 iPhone",
+  "attachments": [
+    {
+      "filename": "图片1.png",
+      "safe_filename": "06022497cc6cd290d17cdb3420d82a2c.png",
+      "content_type": "image/png",
+      "file_size": 150679,
+      "is_image": true
+    },
+    {
+      "filename": "图片2.png",
+      "safe_filename": "c7b0d9bb52e75f12c388b69cbcf62f42.png",
+      "content_type": "image/png",
+      "file_size": 227828,
+      "is_image": true
+    },
+    {
+      "filename": "图片3.png",
+      "safe_filename": "ba2d6155d22024b9e27d8dac8845c9ba.png",
+      "content_type": "image/png",
+      "file_size": 207884,
+      "is_image": true
+    }
+  ]
+}

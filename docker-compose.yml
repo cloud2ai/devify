@@ -15,7 +15,7 @@ services:
       - ./cache:/opt/cache
       - ./data/logs/api:/var/log/gunicorn
       - ./devify:/opt/devify
-      - ./data/email_attachments:/opt/email_attachments
+      - ./data/haraka/email_attachments:/opt/haraka/email_attachments
     networks:
       - devify_network
     depends_on:
@@ -38,7 +38,7 @@ services:
       - ./cache:/opt/cache
       - ./data/logs/worker:/var/log/celery
       - ./devify:/opt/devify
-      - ./data/email_attachments:/opt/email_attachments
+      - ./data/haraka/email_attachments:/opt/haraka/email_attachments
     networks:
       - devify_network
     depends_on:
@@ -118,6 +118,30 @@ services:
       - ./data/logs/redis:/var/log/redis
     networks:
       - devify_network
+
+  haraka:
+    image: instrumentisto/haraka:latest
+    container_name: devify-haraka
+    restart: unless-stopped
+    env_file:
+      - ./.env
+    environment:
+      - APK_INSTALL_PACKAGES=openssl
+    ports:
+      - "${HARAKA_SMTP_PORT:-25}:25"
+      - "${HARAKA_SUBMISSION_PORT:-587}:587"
+    volumes:
+      - ./docker/haraka/config/plugins.prod:/etc/haraka/config/plugins:ro
+      - ./docker/haraka/config/redis.ini:/etc/haraka/config/redis.ini:ro
+      - ./docker/haraka/config/host_list.prod:/etc/haraka/config/host_list:ro
+      - ./docker/haraka/plugins/redis_queue.js:/etc/haraka/plugins/redis_queue.js:ro
+      - ./data/haraka/logs:/var/log/haraka
+      - ./data/haraka/debug:/tmp/haraka_debug
+      - ./data/haraka/email_attachments:/opt/haraka/email_attachments
+    networks:
+      - devify_network
+    depends_on:
+      - redis
 
 networks:
   devify_network:

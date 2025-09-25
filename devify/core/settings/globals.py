@@ -38,3 +38,23 @@ AZURE_OCR_CONFIG = {
 
 # LLM output language configuration
 LLM_OUTPUT_LANGUAGE = os.getenv('LLM_OUTPUT_LANGUAGE', 'English')
+
+# Haraka email system configuration
+AUTO_ASSIGN_EMAIL_DOMAIN = os.getenv(
+    'AUTO_ASSIGN_EMAIL_DOMAIN', 'aimychats.com'
+)
+DEFAULT_LANGUAGE = os.getenv(
+    'DEFAULT_LANGUAGE', 'en-US'
+)
+DEFAULT_SCENE = os.getenv(
+    'DEFAULT_SCENE', 'chat'
+)
+THREADLINE_CONFIG_PATH = os.getenv(
+    'THREADLINE_CONFIG_PATH', '/opt/devify/conf/threadline'
+)
+
+# File-based email processing configuration
+EMAIL_BASE_DIR = os.getenv('EMAIL_BASE_DIR', '/opt/haraka/emails')
+EMAIL_INBOX_DIR = os.getenv('EMAIL_INBOX_DIR', f'{EMAIL_BASE_DIR}/inbox')
+EMAIL_PROCESSING_DIR = os.getenv('EMAIL_PROCESSING_DIR', f'{EMAIL_BASE_DIR}/processing')
+EMAIL_FAILED_DIR = os.getenv('EMAIL_FAILED_DIR', f'{EMAIL_BASE_DIR}/failed')

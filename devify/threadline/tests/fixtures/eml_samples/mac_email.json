@@ -1,0 +1,24 @@
+{
+  "message_id": "email_96b2a729193474bf",
+  "subject": "With attachment new 14:16 markdown new",
+  "sender": "Ray Sun <sunqi.ray@icloud.com>",
+  "recipients": "testuser@devify.local",
+  "received_at": "2025-09-19T16:24:24+08:00",
+  "text_content": "This is a new email\n￼\nAbout Devify\nWhat is Devify?\nPurpose\nDevify is a comprehensive toolkit for AI-driven development lifecycle management. It is designed to accelerate R&D workflows and address pain points that typically require substantial manual effort. Devify brings together a suite of tools that leverage artificial intelligence to automate and optimize various stages of the software development lifecycle. The project was initiated to fulfill internal needs for smarter, more efficient, and streamlined development processes\n￼\n[IMAGE: f88a199b9dd27c35968db5dcc04d130d.png]",
+  "attachments": [
+    {
+      "filename": "截屏 2025-09-17 14.50.15 2.png",
+      "safe_filename": "f88a199b9dd27c35968db5dcc04d130d.png",
+      "content_type": "image/png",
+      "file_size": 399211,
+      "is_image": true
+    },
+    {
+      "filename": "Participants1743386715936.txt",
+      "safe_filename": "3dbc700a4de61d36cdfc3f06c2b8b95e.txt",
+      "content_type": "text/plain",
+      "file_size": 429,
+      "is_image": false
+    }
+  ]
+}

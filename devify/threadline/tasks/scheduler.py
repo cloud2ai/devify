@@ -8,6 +8,7 @@ from threadline.tasks.email_fetch import scan_user_emails
 from threadline.models import EmailMessage
 from threadline.state_machine import EmailStatus
 from threadline.tasks.chain_orchestrator import process_email_chain
+from threadline.utils.email_processor import EmailProcessor, EmailSource
 
 logger = logging.getLogger(__name__)
 
@@ -178,3 +179,39 @@ def schedule_user_email_scanning():
                          f"{user.username}: {e}")
 
     logger.info("User email scanning scheduling completed")
+
+
+@shared_task(bind=True, max_retries=3)
+def process_file_emails_task(self):
+    """
+    Celery task to process file-based emails from Haraka
+    Processes emails from inbox directory and moves them to appropriate folders
+    """
+    try:
+        processor = EmailProcessor(
+            source=EmailSource.FILE,
+            parser_type='flanker'  # Use EmailFlankerParser
+        )
+
+        # Process emails using the unified processor
+        processed_count = 0
+        for parsed_email in processor.process_emails():
+            processed_count += 1
+
+        logger.info(f'File email processing completed: {processed_count} '
+                    f'emails processed')
+
+        return {
+            'processed': processed_count,
+            'status': 'success'
+        }
+
+    except Exception as exc:
+        logger.error(f'File email processing task failed: {exc}')
+
+        # Retry the task with exponential backoff
+        raise self.retry(
+            exc=exc,
+            countdown=60 * (2 ** self.request.retries),
+            max_retries=3
+        )

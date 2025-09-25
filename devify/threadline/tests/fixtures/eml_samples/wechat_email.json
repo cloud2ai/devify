@@ -1,0 +1,24 @@
+{
+  "message_id": "email_db9269ada682cbba",
+  "subject": "微信群\"☀️BJ Dev Team🌛\"的聊天记录",
+  "sender": "\"1159477513\" <1159477513@qq.com>",
+  "recipients": "\"ai\" <ai@example.com>",
+  "received_at": "2025-09-19T17:07:49+08:00",
+  "text_content": "Dear:\n\n微信群\"☀️BJ Dev Team🌛\"的聊天记录如下:\n\n—————  2025-9-19  —————\n\n。。。。  17:06\n\n环境是192.168.8.192，对象存储模式用的agentless   是最新的saas_qa  策略配置的是增量同步   为啥昨天晚上突然开始做全量了  这个原因去哪里看 @刘祥\n\n。。。。  17:06\n\n[IMAGE: 32237e6c9ef0fd29160617447e8e7862.jpg]\n\n。。。。  17:06\n\n[IMAGE: 3604fb6e40bcf0ba3b9726d1c330bc63.jpg]",
+  "attachments": [
+    {
+      "filename": "D96BD401@FE72EC13.651DCD6800000000.jpg",
+      "safe_filename": "32237e6c9ef0fd29160617447e8e7862.jpg",
+      "content_type": "image/jpeg",
+      "file_size": 308934,
+      "is_image": true
+    },
+    {
+      "filename": "5D28322A@B2495B21.651DCD6800000000.jpg",
+      "safe_filename": "3604fb6e40bcf0ba3b9726d1c330bc63.jpg",
+      "content_type": "image/jpeg",
+      "file_size": 206108,
+      "is_image": true
+    }
+  ]
+}

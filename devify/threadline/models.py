@@ -2,6 +2,7 @@ from django.db import models
 from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError
 from django.utils.translation import gettext_lazy as _
+from django.conf import settings
 
 from threadline.state_machine import (
     EmailStatus,
@@ -492,3 +493,97 @@ class Issue(models.Model):
         Override save for any custom logic if needed
         """
         super().save(*args, **kwargs)
+
+
+
+
+class EmailAlias(models.Model):
+    """
+    Email alias management for auto-assign mode users
+
+    Allows users to create additional email aliases that route to their account.
+    All aliases must be unique across the system to prevent conflicts.
+    """
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        verbose_name=_('User'),
+        related_name='email_aliases',
+        help_text=_('User who owns this email alias')
+    )
+    alias = models.CharField(
+        max_length=255,
+        verbose_name=_('Alias'),
+        help_text=_('Email alias name (without domain)')
+    )
+    domain = models.CharField(
+        max_length=255,
+        verbose_name=_('Domain'),
+        help_text=_('Email domain for this alias')
+    )
+    is_active = models.BooleanField(
+        default=True,
+        verbose_name=_('Active'),
+        help_text=_('Whether this alias is active')
+    )
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name=_('Created At')
+    )
+    updated_at = models.DateTimeField(
+        auto_now=True,
+        verbose_name=_('Updated At')
+    )
+
+    class Meta:
+        verbose_name = _('Email Alias')
+        verbose_name_plural = _('Email Aliases')
+        unique_together = ['alias', 'domain']
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['alias', 'domain']),
+            models.Index(fields=['user', 'is_active']),
+            models.Index(fields=['created_at']),
+        ]
+
+    def __str__(self):
+        return f"{self.alias}@{self.domain} -> {self.user.username}"
+
+    def save(self, *args, **kwargs):
+        """Set default domain if not provided"""
+        if not self.domain:
+            self.domain = settings.AUTO_ASSIGN_EMAIL_DOMAIN
+        super().save(*args, **kwargs)
+
+    def full_email_address(self):
+        """Return full email address"""
+        return f"{self.alias}@{self.domain}"
+
+    @classmethod
+    def is_unique(cls, alias, domain=None):
+        """Check if alias is unique across the system"""
+        if domain is None:
+            domain = settings.AUTO_ASSIGN_EMAIL_DOMAIN
+        return not cls.objects.filter(alias=alias, domain=domain).exists()
+
+    @classmethod
+    def find_user_by_email(cls, email_address):
+        """Find user by email address (supports aliases)"""
+        try:
+            alias_name, domain = email_address.split('@')
+            alias_obj = cls.objects.get(
+                alias=alias_name,
+                domain=domain,
+                is_active=True
+            )
+            return alias_obj.user
+        except (cls.DoesNotExist, ValueError):
+            return None
+
+    @classmethod
+    def get_user_aliases(cls, user, active_only=True):
+        """Get all aliases for a user"""
+        queryset = cls.objects.filter(user=user)
+        if active_only:
+            queryset = queryset.filter(is_active=True)
+        return queryset.order_by('alias')

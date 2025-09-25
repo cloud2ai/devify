@@ -8,7 +8,7 @@ from celery import shared_task
 from django.contrib.auth.models import User
 
 from threadline.models import EmailAttachment, EmailMessage, EmailTask, Settings
-from threadline.utils.email_client import EmailClient
+from threadline.utils.email_processor import EmailProcessor
 from django.conf import settings
 from threadline.state_machine import EmailStatus
 
@@ -19,27 +19,24 @@ DEFAULT_EMAIL_FETCH_DAYS = 7
 
 def get_user_email_settings(user_id):
     """
-    Get user email settings directly from Settings table.
-    Returns tuple of (email_config, email_filter_config) or (None, None).
+    Get user email settings from unified email_config in Settings table.
+    Returns email_config dict with imap_config and filter_config sections,
+    or None if not found.
     """
-    user_settings = Settings.objects.filter(
-        user_id=user_id,
-        key__in=['email_config', 'email_filter_config'],
-        is_active=True
-    ).values('key', 'value')
+    try:
+        email_setting = Settings.objects.get(
+            user_id=user_id,
+            key='email_config',
+            is_active=True
+        )
+        email_config = email_setting.value
+    except Settings.DoesNotExist:
+        logger.warning(f"No email_config found for user {user_id}")
+        return None
 
-    email_config = None
-    email_filter_config = None
-
-    for setting in user_settings:
-        if setting['key'] == 'email_config':
-            email_config = setting['value']
-        elif setting['key'] == 'email_filter_config':
-            email_filter_config = setting['value']
-
-    # Provide default email_filter_config if not found
-    if not email_filter_config:
-        email_filter_config = {
+    # Ensure filter_config exists with defaults
+    if 'filter_config' not in email_config:
+        email_config['filter_config'] = {
             'folder': 'INBOX',
             'filters': [],
             'exclude_patterns': [
@@ -49,25 +46,26 @@ def get_user_email_settings(user_id):
             'max_age_days': DEFAULT_EMAIL_FETCH_DAYS
         }
 
-    # If 'last_email_fetch_time' exists in email_filter_config, use it as the
-    # starting point for fetching emails; otherwise, default to 7 days ago.
-    if email_filter_config:
-        last_fetch_time = email_filter_config.get('last_email_fetch_time')
-        if last_fetch_time:
-            # Parse ISO format datetime with timezone
-            since_dt = datetime.fromisoformat(last_fetch_time)
-            # Convert to timezone-aware datetime if naive
-            if timezone.is_naive(since_dt):
-                since_dt = timezone.make_aware(since_dt)
-            # Convert to local timezone for IMAP search
-            since_dt = timezone.localtime(since_dt)
-        else:
-            since_dt = timezone.now() - timedelta(
-                days=DEFAULT_EMAIL_FETCH_DAYS)
-        email_filter_config['since'] = since_dt.strftime('%d-%b-%Y')
-    logger.info(f"Filter email config: {email_filter_config}")
+    filter_config = email_config['filter_config']
 
-    return email_config, email_filter_config
+    # Handle last_email_fetch_time for incremental fetching
+    last_fetch_time = filter_config.get('last_email_fetch_time')
+    if last_fetch_time:
+        # Parse ISO format datetime with timezone
+        since_dt = datetime.fromisoformat(last_fetch_time)
+        # Convert to timezone-aware datetime if naive
+        if timezone.is_naive(since_dt):
+            since_dt = timezone.make_aware(since_dt)
+        # Convert to local timezone for IMAP search
+        since_dt = timezone.localtime(since_dt)
+    else:
+        since_dt = timezone.now() - timedelta(
+            days=DEFAULT_EMAIL_FETCH_DAYS)
+
+    filter_config['since'] = since_dt.strftime('%d-%b-%Y')
+    logger.info(f"Email config loaded for user {user_id}")
+
+    return email_config
 
 
 def _save_email_attachments(user, email_msg, attachments):
@@ -131,7 +129,7 @@ def scan_user_emails(self, user_id):
         user = User.objects.get(id=user_id)
         logger.info(f"Starting email fetch for user {user.username}")
 
-        email_config, email_filter_config = get_user_email_settings(user_id)
+        email_config = get_user_email_settings(user_id)
         if not email_config:
             logger.warning(
                 f"Skipping email fetch for user {user.username} "
@@ -139,9 +137,8 @@ def scan_user_emails(self, user_id):
             )
             return
 
-        client = EmailClient(
+        client = EmailProcessor(
             email_config,
-            email_filter_config,
             settings.TMP_EMAIL_ATTACHMENT_STORAGE_PATH
         )
 
@@ -184,16 +181,16 @@ def scan_user_emails(self, user_id):
         if new_emails:
             max_received = max(mail['received_at'] for mail in new_emails)
             # Set the last email fetch time in ISO format
-            email_filter_config[
+            email_config['filter_config'][
                 'last_email_fetch_time'
             ] = max_received.isoformat()
 
-            # Update settings directly
+            # Update unified email_config
             Settings.objects.filter(
                 user_id=user_id,
-                key='email_filter_config',
+                key='email_config',
                 is_active=True
-            ).update(value=email_filter_config)
+            ).update(value=email_config)
 
         email_task.status = EmailTask.TaskStatus.COMPLETED
         email_task.emails_processed = len(new_emails)

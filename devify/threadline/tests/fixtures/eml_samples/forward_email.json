@@ -1,0 +1,17 @@
+{
+  "message_id": "email_db507db76d433177",
+  "subject": "一线运维工单转派，工单编号：INC10290",
+  "sender": "\"Helpdesk\" <helpdesk@example.com>",
+  "recipients": "<ai@example.com>",
+  "received_at": "2025-09-19T05:51:56+00:00",
+  "text_content": "工单编号：INC10290，已指派给二线运维团队，请及时处理，\n\n    工单概要：\n\n创建人：DianZheng\n\n公司：OnePro\n\n类别：HyperMotion\n\n子类别：生产端Agent代理\n\n优先级：P1\n\n简短描述：这是一个测试的工单\n\n描述：这是一个测试的工单\n\n[IMAGE: ecd224a2cb99be33a4fa4bd09033968a.png]\n\n沟通记录：DianZheng:这是一个测试的回复\n\nDianZheng:这是一个测试的回复\n\nDianZheng:这是一个测试的回复\n\n 更多信息，请点击登录服务支持平台进行工单查看及处理：[[工单详情](https://support.example.com/target/incident.do?sys_id=522f79684b1b4f9f86adde6e9add5a69)]",
+  "attachments": [
+    {
+      "filename": "noName",
+      "safe_filename": "ecd224a2cb99be33a4fa4bd09033968a.png",
+      "content_type": "image/png",
+      "file_size": 149829,
+      "is_image": true
+    }
+  ]
+}

@@ -1,0 +1,24 @@
+{
+  "message_id": "email_f27cd36f3d7d593a",
+  "subject": "BWR",
+  "sender": "Ray Sun <sunqi.ray@icloud.com>",
+  "recipients": "ai@example.com",
+  "received_at": "2025-09-16T09:30:57+08:00",
+  "text_content": "Good evening, just to let you know that several machines have already been migrated. Today, Juan Gabriel contacted me regarding a support issue with a Fedora 34 server. I told him it was likely due to kernel version 5.14.9-200.\nAlthough, checking the support matrix for Fedora, it only shows version 17.\nFor any of these reasons, do you know if there's a procedure for migrating this machine?\n@⁨~Ivan Rivera⁩ we don't support this os version at present.\nThis is our os support matrix list: https://example.feishu.cn/sheets/VRqksSPEPhRTPStp3kVcItXNnyh?sheet=0MJNYC\nThanks Carlton, yes, I had already consulted it and it was the same thing I told the engineer, anyway I thank you for confirming the information,\nYou are welcome.\n@⁨~Ivan Rivera⁩ just to confirm, as I can remember the state government is using VMware as source right?\nHi Michael, yes, indeed in the case of this machine it comes from a VMware 6.7, they also have some in Fusion Compute but those have not yet been migrated.\nThanks Ivan! In this case compatibility happens on destination site, that will be easier for RD helps the spinup, @⁨Xingzhuang Xu⁩ will bridge this\nOh, thank you very much. They told the engineer to leave it configured and wait to see if it can be started.\n\n发自我的 iPhone\n[IMAGE: b1c1c440483aa50f3b5f68dc628fa0e9.jpg]\n[IMAGE: fb80ee63fd1f6f4be9f0430f3adcaa10.jpg]",
+  "attachments": [
+    {
+      "filename": "PHOTO-2025-09-12-10-32-50.jpg",
+      "safe_filename": "b1c1c440483aa50f3b5f68dc628fa0e9.jpg",
+      "content_type": "image/jpeg",
+      "file_size": 24022,
+      "is_image": true
+    },
+    {
+      "filename": "PHOTO-2025-09-12-10-33-35.jpg",
+      "safe_filename": "fb80ee63fd1f6f4be9f0430f3adcaa10.jpg",
+      "content_type": "image/jpeg",
+      "file_size": 229108,
+      "is_image": true
+    }
+  ]
+}

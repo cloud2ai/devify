@@ -1,0 +1,9 @@
+# Production domains for email acceptance
+# Only accept emails for these domains
+
+# Main production domain
+devify.com
+
+# Alternative production domains
+mail.devify.com
+aimychats.com

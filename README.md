@@ -33,6 +33,56 @@ This project is a robust AI workflow and agent system, architected with Django a
 
 Notably, the AI workflow and process control in this project are implemented using a custom state machine tailored to business requirements, rather than relying on existing frameworks such as LangChain or Dify. This approach ensures that the workflow logic remains flexible, maintainable, and closely aligned with real-world use cases.
 
+## Development
+
+### Testing with Nox
+
+This project uses [Nox](https://nox.thea.codes/) for development task automation. Nox provides a unified interface for running tests, code formatting, and other development tasks.
+
+#### Available Nox Sessions
+
+```bash
+# Run all tests
+nox -s tests
+
+# Run EML email parsing tests
+nox -s eml_tests
+
+# Run unit tests only
+nox -s unit_tests
+
+# Run API tests only
+nox -s api_tests
+
+# Run functional tests only
+nox -s functional_tests
+
+# Generate test coverage report
+nox -s coverage
+
+# Auto format code
+nox -s format
+
+# Code quality check
+nox -s lint
+
+# Django system check
+nox -s django_check
+
+# Start development server
+nox -s runserver
+```
+
+#### Installation
+
+```bash
+# Install nox
+pip install nox
+
+# Or using uv (faster)
+uv pip install nox
+```
+
 ## How to run Devify?
 
 Devify supports both development and production environments using Docker. Please note the following differences:

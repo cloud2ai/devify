@@ -1,5 +1,5 @@
-# Use official Python 3.12 slim image
-FROM python:3.12-slim
+# Use official Python 3.12 on Ubuntu 24.04 LTS
+FROM ubuntu:24.04
 
 # Build argument to control mirror usage
 ARG USE_MIRROR=false
@@ -11,30 +11,34 @@ ENV PYTHONUNBUFFERED=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
     DEBIAN_FRONTEND=noninteractive
 
-# Setup mirrors based on build argument
+# Install ca-certificates first to avoid SSL certificate issues
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates
+
+# Setup mirrors based on build argument (before installing packages)
 RUN set -eux; \
     if [ "$USE_MIRROR" = "true" ]; then \
-        echo "Setting up Chinese mirrors..."; \
-        # Replace URLs in debian.sources file
-        if [ -f /etc/apt/sources.list.d/debian.sources ]; then \
-            echo "Updating debian.sources with Chinese mirrors..."; \
-            # Replace main Debian sources
-            sed -i 's|http://deb.debian.org/debian|https://mirrors.tuna.tsinghua.edu.cn/debian|g' /etc/apt/sources.list.d/debian.sources; \
-            # Replace security sources
-            sed -i 's|http://deb.debian.org/debian-security|https://mirrors.tuna.tsinghua.edu.cn/debian-security|g' /etc/apt/sources.list.d/debian.sources; \
-            echo "✓ Chinese mirrors configured in debian.sources"; \
-            echo "Current debian.sources content:"; \
-            cat /etc/apt/sources.list.d/debian.sources; \
-        else \
-            echo "debian.sources file not found, using default sources"; \
-        fi; \
+        echo "Setting up Chinese mirrors for Ubuntu 24.04 LTS..."; \
+        # Backup original sources
+        cp /etc/apt/sources.list /etc/apt/sources.list.backup; \
+        # Replace with Chinese mirrors
+        echo "deb https://mirrors.tuna.tsinghua.edu.cn/ubuntu/ noble main restricted universe multiverse" > /etc/apt/sources.list; \
+        echo "deb https://mirrors.tuna.tsinghua.edu.cn/ubuntu/ noble-updates main restricted universe multiverse" >> /etc/apt/sources.list; \
+        echo "deb https://mirrors.tuna.tsinghua.edu.cn/ubuntu/ noble-backports main restricted universe multiverse" >> /etc/apt/sources.list; \
+        echo "deb https://mirrors.tuna.tsinghua.edu.cn/ubuntu/ noble-security main restricted universe multiverse" >> /etc/apt/sources.list; \
+        echo "✓ Chinese mirrors configured for Ubuntu 24.04 LTS (Noble Numbat)"; \
+        echo "Current sources.list content:"; \
+        cat /etc/apt/sources.list; \
     else \
-        echo "Using default Debian sources"; \
+        echo "Using default Ubuntu sources"; \
     fi; \
     apt-get update
 
-# Install system dependencies
+# Install Python 3.12, pip and system dependencies in one step
+# libmagic is for python-magic which is a library for file type detection
 RUN apt-get install -y --no-install-recommends \
+    python3.12 \
+    python3.12-dev \
+    python3-pip \
     build-essential \
     git \
     curl \
@@ -45,13 +49,20 @@ RUN apt-get install -y --no-install-recommends \
     zlib1g-dev \
     libjpeg-dev \
     libpng-dev \
+    libmagic1 \
+    libmagic-dev \
     procps \
     htop \
     net-tools \
     iputils-ping \
     dnsutils \
     mariadb-client \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && update-alternatives --install /usr/bin/python python /usr/bin/python3.12 1 \
+    && update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.12 1
+
+# Disable externally-managed-environment restriction for container environment
+RUN rm -f /usr/lib/python3.12/EXTERNALLY-MANAGED
 
 # Install uv using pip with mirror selection
 RUN set -eux; \
@@ -74,7 +85,7 @@ COPY pyproject.toml /opt/devify/
 
 # Install project dependencies with mirror selection
 RUN set -eux; \
-    . /root/.bashrc; \
+    export PATH="/root/.local/bin:$PATH"; \
     if [ "$USE_MIRROR" = "true" ]; then \
         echo "Using Chinese PyPI mirror for dependencies"; \
         uv pip compile pyproject.toml -o requirements.txt --index-url https://pypi.tuna.tsinghua.edu.cn/simple; \
