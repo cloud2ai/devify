@@ -182,43 +182,25 @@ class EmailTaskSerializer(serializers.ModelSerializer):
     Main serializer for EmailTask model - used for display
     """
 
-    user = UserSerializer(read_only=True)
-    user_id = serializers.IntegerField(write_only=True)
-    status_display = serializers.CharField(source='get_status_display', read_only=True)
+    status_display = serializers.CharField(
+        source='get_status_display',
+        read_only=True
+    )
+    task_type_display = serializers.CharField(
+        source='get_task_type_display',
+        read_only=True
+    )
 
     class Meta:
         model = EmailTask
         fields = [
-            'id', 'user', 'user_id', 'status', 'status_display',
-            'emails_processed', 'emails_created_issues',
-            'started_at', 'completed_at', 'error_message',
-            'created_at'
+            'id', 'task_type', 'task_type_display', 'status',
+            'status_display', 'started_at', 'completed_at',
+            'error_message', 'details', 'task_id', 'created_at'
         ]
         read_only_fields = [
-            'id', 'status', 'emails_processed', 'emails_created_issues',
-            'started_at', 'completed_at', 'created_at'
+            'id', 'status', 'started_at', 'completed_at', 'created_at'
         ]
-
-    def validate_user_id(self, value):
-        """
-        Validate user exists and user can access it
-        """
-        try:
-            user = User.objects.get(id=value)
-        except User.DoesNotExist:
-            raise serializers.ValidationError(
-                _("User with this ID does not exist")
-            )
-
-        # Check if user can access this task
-        request = self.context.get('request')
-        if request and hasattr(request, 'user'):
-            if request.user != user and not request.user.is_superuser:
-                raise serializers.ValidationError(
-                    _("You can only create tasks for yourself")
-                )
-
-        return value
 
 
 class EmailTaskCreateSerializer(serializers.ModelSerializer):

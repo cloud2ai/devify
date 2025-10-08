@@ -29,8 +29,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from threadline.models import EmailAttachment, EmailMessage
-from threadline.utils.email_flanker_parser import EmailFlankerParser
-from threadline.utils.email_parser import EmailParser
+from threadline.utils.email import EmailFlankerParser, EmailParser
 
 logger = logging.getLogger(__name__)
 
@@ -500,9 +499,7 @@ class Command(BaseCommand):
         logger.info(f"Reparsing email ID={email.id}: {email.subject}")
 
         # Use direct parser instead of EmailProcessor
-        attachment_dir = getattr(
-            settings, 'EMAIL_ATTACHMENT_STORAGE_PATH', '/tmp/attachments'
-        )
+        attachment_dir = settings.EMAIL_ATTACHMENT_DIR
 
         if self.parser_type == 'legacy':
             parser = EmailParser(attachment_dir)

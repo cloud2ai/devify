@@ -247,7 +247,7 @@ LANGUAGES = (
 # are displayed and stored. For example, setting it to 'UTC' will make Django
 # use Coordinated Universal Time. Change it to the appropriate time zone,
 # such as 'Asia/Shanghai', for users in a specific region.
-TIME_ZONE = 'UTC'
+TIME_ZONE = 'Asia/Shanghai'
 
 # USE_I18N: Enables internationalization support. When set to True, Django
 # loads translation files and handles language-specific functionalities. Set
@@ -360,6 +360,7 @@ CORS_ALLOW_METHODS = [
 from .celery import *
 from .rest import *
 from .swagger import *
+from .cache import *
 
 # ============================
 # DRF Spectacular Configuration

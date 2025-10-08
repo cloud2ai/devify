@@ -6,12 +6,6 @@ For global constants, please define them in the utils module.
 
 import os
 
-# Email attachment storage configuration
-EMAIL_ATTACHMENT_STORAGE_PATH = os.getenv(
-    'EMAIL_ATTACHMENT_STORAGE_PATH', '/tmp/attachments')
-TMP_EMAIL_ATTACHMENT_STORAGE_PATH = os.getenv(
-    'TMP_EMAIL_ATTACHMENT_STORAGE_PATH', '/tmp/tmp_attachments')
-
 # Azure OpenAI configuration
 AZURE_OPENAI_CONFIG = {
     # The API base URL
@@ -53,8 +47,36 @@ THREADLINE_CONFIG_PATH = os.getenv(
     'THREADLINE_CONFIG_PATH', '/opt/devify/conf/threadline'
 )
 
-# File-based email processing configuration
-EMAIL_BASE_DIR = os.getenv('EMAIL_BASE_DIR', '/opt/haraka/emails')
-EMAIL_INBOX_DIR = os.getenv('EMAIL_INBOX_DIR', f'{EMAIL_BASE_DIR}/inbox')
-EMAIL_PROCESSING_DIR = os.getenv('EMAIL_PROCESSING_DIR', f'{EMAIL_BASE_DIR}/processing')
-EMAIL_FAILED_DIR = os.getenv('EMAIL_FAILED_DIR', f'{EMAIL_BASE_DIR}/failed')
+# Haraka email system configuration
+HARAKA_EMAIL_BASE_DIR = os.getenv(
+    'HARAKA_EMAIL_BASE_DIR', '/opt/haraka/emails'
+)
+
+# Email attachment storage configuration
+EMAIL_ATTACHMENT_DIR = os.getenv(
+    'EMAIL_ATTACHMENT_DIR', '/opt/email_attachments')
+TMP_EMAIL_ATTACHMENT_DIR = '/tmp/email_attachments'
+
+
+# Task Timeout Configuration
+TASK_TIMEOUT_MINUTES = os.getenv('TASK_TIMEOUT_MINUTES', 10)
+
+# Email Cleanup Configuration
+EMAIL_CLEANUP_CONFIG = {
+    # Inbox directory timeout in hours
+    'inbox_timeout_hours': int(
+        os.getenv('EMAIL_CLEANUP_INBOX_TIMEOUT_HOURS', '1')
+    ),
+    # Processed directory timeout in minutes
+    'processed_timeout_minutes': int(
+        os.getenv('EMAIL_CLEANUP_PROCESSED_TIMEOUT_MINUTES', '10')
+    ),
+    # Failed directory timeout in minutes
+    'failed_timeout_minutes': int(
+        os.getenv('EMAIL_CLEANUP_FAILED_TIMEOUT_MINUTES', '10')
+    ),
+    # EmailTask retention period in days
+    'email_task_retention_days': int(
+        os.getenv('EMAIL_CLEANUP_TASK_RETENTION_DAYS', '3')
+    ),
+}

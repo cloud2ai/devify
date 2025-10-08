@@ -23,6 +23,16 @@ from .views.email_alias import (
     EmailAliasDetailAPIView,
     EmailAliasValidationAPIView
 )
+from .views.monitoring import (
+    task_metrics,
+    task_status_summary,
+    email_processing_metrics,
+    monitoring_dashboard,
+    clear_metrics_cache,
+    health_check,
+    simple_metrics,
+    simple_health
+)
 
 # URL patterns for Threadline API endpoints
 urlpatterns = [
@@ -46,4 +56,17 @@ urlpatterns = [
          name='threadlines-list'),
     path('threadlines/<int:pk>', EmailMessageDetailAPIView.as_view(),
          name='threadlines-detail'),
+
+    # Monitoring endpoints
+    # API endpoints (require authentication)
+    path('api/task-metrics/', task_metrics, name='task_metrics'),
+    path('api/task-status/', task_status_summary, name='task_status_summary'),
+    path('api/email-metrics/', email_processing_metrics, name='email_processing_metrics'),
+    path('api/dashboard/', monitoring_dashboard, name='monitoring_dashboard'),
+    path('api/clear-cache/', clear_metrics_cache, name='clear_metrics_cache'),
+    path('api/health/', health_check, name='health_check'),
+
+    # Simple endpoints for external monitoring
+    path('metrics/', simple_metrics, name='simple_metrics'),
+    path('health/', simple_health, name='simple_health'),
 ]

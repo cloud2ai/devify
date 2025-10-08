@@ -31,7 +31,7 @@ from django.utils import timezone
 
 from threadline.models import Settings, EmailTask
 from threadline.tasks import scan_user_emails
-from threadline.utils.email_processor import EmailProcessor, EmailSource
+from threadline.utils.email import EmailProcessor, EmailSource
 
 # Initialize logger for this module
 logger = logging.getLogger(__name__)

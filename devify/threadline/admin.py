@@ -188,25 +188,26 @@ class EmailTaskAdmin(admin.ModelAdmin):
     """Admin interface for EmailTask model."""
 
     list_display = [
-        'id', 'user', 'status', 'emails_processed', 'created_at'
+        'id', 'task_type', 'status', 'created_at'
     ]
-    list_filter = ['status', 'created_at']
-    search_fields = ['user__username', 'id']
+    list_filter = ['status', 'task_type', 'created_at']
+    search_fields = ['id', 'task_id', 'task_type']
     readonly_fields = ['created_at']
 
     fieldsets = (
         (_('Task Information'), {
-            'fields': ('user', 'status')
+            'fields': ('task_type', 'status', 'task_id')
         }),
         (_('Progress'), {
-            'fields': (
-                'started_at', 'completed_at', 'emails_processed',
-                'emails_created_issues'
-            ),
+            'fields': ('started_at', 'completed_at'),
             'classes': ('collapse',)
         }),
         (_('Error Information'), {
             'fields': ('error_message',),
+            'classes': ('collapse',)
+        }),
+        (_('Details'), {
+            'fields': ('details',),
             'classes': ('collapse',)
         }),
         (_('Timestamps'), {
@@ -215,9 +216,10 @@ class EmailTaskAdmin(admin.ModelAdmin):
         }),
     )
 
-    def get_queryset(self, request):
-        """Optimize queryset with select_related."""
-        return super().get_queryset(request).select_related('user')
+    # JSON widget for details field
+    formfield_overrides = {
+        models.JSONField: {'widget': JSONEditorWidget}
+    }
 
 
 @admin.register(EmailMessage)
@@ -349,7 +351,7 @@ class EmailAttachmentAdmin(admin.ModelAdmin):
 
     list_display = [
         'id', 'filename', 'email_message_link', 'content_type',
-        'file_size', 'is_image'
+        'file_size', 'is_image', 'created_at', 'updated_at'
     ]
     list_filter = ['content_type', 'is_image', 'created_at']
     search_fields = ['filename', 'content_type']
@@ -477,13 +479,12 @@ class EmailAliasAdmin(admin.ModelAdmin):
     """Admin interface for EmailAlias model"""
     list_display = [
         'alias',
-        'domain',
         'user',
         'full_email_address_display',
         'is_active',
         'created_at'
     ]
-    list_filter = ['domain', 'is_active', 'created_at']
+    list_filter = ['is_active', 'created_at']
     search_fields = ['alias', 'user__username', 'user__email']
     readonly_fields = ['created_at', 'updated_at', 'full_email_address_display']
     ordering = ['-created_at']
@@ -491,7 +492,7 @@ class EmailAliasAdmin(admin.ModelAdmin):
 
     fieldsets = (
         (_('Basic Information'), {
-            'fields': ('user', 'alias', 'domain', 'is_active')
+            'fields': ('user', 'alias', 'is_active')
         }),
         (_('Email Address'), {
             'fields': ('full_email_address_display',),
@@ -502,6 +503,12 @@ class EmailAliasAdmin(admin.ModelAdmin):
             'classes': ('collapse',)
         }),
     )
+
+    @admin.display(description=_('Domain'))
+    def domain_display(self, obj):
+        """Display domain for the alias"""
+        from django.conf import settings
+        return settings.AUTO_ASSIGN_EMAIL_DOMAIN
 
     def full_email_address_display(self, obj):
         """Display full email address in admin"""

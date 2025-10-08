@@ -4,11 +4,15 @@ from django.contrib.auth import get_user_model
 from django.utils import timezone
 from datetime import timedelta
 
-from threadline.tasks.email_fetch import scan_user_emails
 from threadline.models import EmailMessage
 from threadline.state_machine import EmailStatus
 from threadline.tasks.chain_orchestrator import process_email_chain
-from threadline.utils.email_processor import EmailProcessor, EmailSource
+from threadline.tasks.email_fetch import imap_email_fetch, haraka_email_fetch
+from threadline.tasks.cleanup import (EmailCleanupManager,
+                                      EmailTaskCleanupManager)
+from threadline.utils.task_cleanup import cleanup_stale_tasks
+from threadline.utils.task_lock import prevent_duplicate_task
+from django.conf import settings
 
 logger = logging.getLogger(__name__)
 
@@ -52,6 +56,46 @@ STUCK_STATUS_RESET_MAP = {
         'ISSUE_SUCCESS'
     ),
 }
+
+
+@shared_task
+@prevent_duplicate_task("email_fetch", timeout=settings.TASK_TIMEOUT_MINUTES)
+def schedule_email_fetch():
+    """
+    Unified email fetch scheduler
+
+    This is the main entry point for all email fetching operations.
+    Schedules both IMAP and Haraka email fetch tasks.
+
+    Responsibilities:
+    1. Check task locks (handled by decorator)
+    2. Clean up stale tasks
+    3. Schedule both IMAP and Haraka email fetch tasks
+    4. Task lock mechanism (TASK_TIMEOUT_MINUTES timeout)
+    5. Error handling and monitoring
+    """
+    try:
+        logger.info("Starting unified email fetch scheduling")
+
+        # Check unclosed state machines
+        cleanup_stale_tasks()
+
+        # Schedule both email fetch tasks
+        imap_result = imap_email_fetch.delay()
+        haraka_result = haraka_email_fetch.delay()
+
+        logger.info(f"IMAP email fetch task started: {imap_result.id}")
+        logger.info(f"Haraka email fetch task started: {haraka_result.id}")
+
+        return {
+            "imap_task_id": imap_result.id,
+            "haraka_task_id": haraka_result.id,
+            "status": "scheduled"
+        }
+
+    except Exception as exc:
+        logger.error(f"Email fetch scheduling failed: {exc}")
+        raise
 
 
 @shared_task
@@ -140,78 +184,46 @@ def schedule_reset_stuck_processing_emails(timeout_minutes=30):
 
 
 @shared_task
-def schedule_user_email_scanning():
+@prevent_duplicate_task("haraka_cleanup", timeout=30)
+def schedule_haraka_cleanup():
     """
-    Schedule email scanning for all active users.
+    Haraka email files cleanup scheduler
 
-    This task iterates through all users and schedules individual
-    email scanning tasks for each user.
-    """
-
-    User = get_user_model()
-
-    # Get all active users
-    active_users = User.objects.filter(is_active=True)
-
-    logger.info(f"Scheduling email scanning for {active_users.count()} "
-                f"active users")
-
-    # Schedule email scanning for each user
-    for user in active_users:
-        try:
-            # Check if user has email configuration
-            from threadline.models import Settings
-            email_config = Settings.objects.filter(
-                user=user,
-                key='email_config',
-                is_active=True
-            ).first()
-
-            if email_config:
-                logger.info(f"Scheduling email scan for user: {user.username}")
-                scan_user_emails.delay(user.id)
-            else:
-                logger.debug(f"User {user.username} has no email "
-                             "configuration, skipping")
-
-        except Exception as e:
-            logger.error(f"Failed to schedule email scan for user "
-                         f"{user.username}: {e}")
-
-    logger.info("User email scanning scheduling completed")
-
-
-@shared_task(bind=True, max_retries=3)
-def process_file_emails_task(self):
-    """
-    Celery task to process file-based emails from Haraka
-    Processes emails from inbox directory and moves them to appropriate folders
+    This task schedules the cleanup of Haraka email files from all directories.
+    It runs independently of the main email processing workflow.
     """
     try:
-        processor = EmailProcessor(
-            source=EmailSource.FILE,
-            parser_type='flanker'  # Use EmailFlankerParser
-        )
+        logger.info("Starting Haraka email files cleanup scheduler")
 
-        # Process emails using the unified processor
-        processed_count = 0
-        for parsed_email in processor.process_emails():
-            processed_count += 1
+        cleanup_manager = EmailCleanupManager()
+        result = cleanup_manager.cleanup_haraka_files()
 
-        logger.info(f'File email processing completed: {processed_count} '
-                    f'emails processed')
-
-        return {
-            'processed': processed_count,
-            'status': 'success'
-        }
+        logger.info(f"Haraka cleanup completed: {result}")
+        return result
 
     except Exception as exc:
-        logger.error(f'File email processing task failed: {exc}')
+        logger.error(f"Haraka cleanup scheduling failed: {exc}")
+        raise
 
-        # Retry the task with exponential backoff
-        raise self.retry(
-            exc=exc,
-            countdown=60 * (2 ** self.request.retries),
-            max_retries=3
-        )
+
+@shared_task
+@prevent_duplicate_task("email_task_cleanup", timeout=30)
+def schedule_email_task_cleanup():
+    """
+    EmailTask records cleanup scheduler
+
+    This task schedules the cleanup of old EmailTask records.
+    It runs independently of the main email processing workflow.
+    """
+    try:
+        logger.info("Starting EmailTask cleanup scheduler")
+
+        task_cleanup_manager = EmailTaskCleanupManager()
+        result = task_cleanup_manager.cleanup_email_tasks()
+
+        logger.info(f"EmailTask cleanup completed: {result}")
+        return result
+
+    except Exception as exc:
+        logger.error(f"EmailTask cleanup scheduling failed: {exc}")
+        raise

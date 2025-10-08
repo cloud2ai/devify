@@ -1,8 +1,9 @@
-from django.db import models
 from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError
-from django.utils.translation import gettext_lazy as _
 from django.conf import settings
+from django.db import models
+from django.utils.translation import gettext_lazy as _
+from django.utils import timezone
 
 from threadline.state_machine import (
     EmailStatus,
@@ -126,7 +127,7 @@ class Settings(models.Model):
 
 class EmailTask(models.Model):
     """
-    Email scanning task execution records
+    Task execution records for various background tasks
     """
     class TaskStatus(models.TextChoices):
         PENDING = 'pending', _('Pending')
@@ -134,12 +135,35 @@ class EmailTask(models.Model):
         COMPLETED = 'completed', _('Completed')
         FAILED = 'failed', _('Failed')
         CANCELLED = 'cancelled', _('Cancelled')
+        SKIPPED = 'skipped', _('Skipped')
 
-    user = models.ForeignKey(
-        User,
-        on_delete=models.CASCADE,
-        verbose_name=_('User'),
-        related_name='email_tasks'
+    class TaskType(models.TextChoices):
+        IMAP_FETCH = 'IMAP_EMAIL_FETCH', _('IMAP Email Fetch')
+        HARAKA_FETCH = 'HARAKA_EMAIL_FETCH', _('Haraka Email Fetch')
+        HARAKA_CLEANUP = 'HARAKA_CLEANUP', _('Haraka Cleanup')
+        TASK_CLEANUP = 'TASK_CLEANUP', _('EmailTask Cleanup')
+
+    # Note: Removed user field - EmailTask should be a global background task
+    # user = models.ForeignKey(
+    #     User,
+    #     on_delete=models.CASCADE,
+    #     verbose_name=_('User'),
+    #     related_name='email_tasks',
+    #     null=True,
+    #     blank=True,
+    #     help_text=_('User for user-specific tasks, null for global tasks')
+    # )
+    task_type = models.CharField(
+        max_length=20,
+        choices=TaskType.choices,
+        verbose_name=_('Task Type'),
+        help_text=_('Type of task being executed')
+    )
+    task_id = models.CharField(
+        max_length=255,
+        blank=True,
+        verbose_name=_('Celery Task ID'),
+        help_text=_('Celery task ID for tracking')
     )
     status = models.CharField(
         max_length=20,
@@ -157,31 +181,31 @@ class EmailTask(models.Model):
         blank=True,
         verbose_name=_('Completed At')
     )
-    emails_processed = models.IntegerField(
-        default=0,
-        verbose_name=_('Emails Processed')
-    )
-    emails_created_issues = models.IntegerField(
-        default=0,
-        verbose_name=_('Issues Created')
-    )
     error_message = models.TextField(
         blank=True,
         verbose_name=_('Error Message')
     )
+    details = models.JSONField(
+        default=list,
+        verbose_name=_('Execution Details'),
+        help_text=_('Detailed execution log and status information')
+    )
+
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        verbose_name = _('Email Task')
-        verbose_name_plural = _('Email Tasks')
+        verbose_name = _('Task')
+        verbose_name_plural = _('Tasks')
         ordering = ['-created_at']
         indexes = [
-            models.Index(fields=['user', 'status']),
+            models.Index(fields=['status']),
+            models.Index(fields=['task_type']),
             models.Index(fields=['created_at']),
+            models.Index(fields=['status', 'created_at']),
         ]
 
     def __str__(self):
-        return f"Task {self.id} - {self.user.username} - {self.status}"
+        return f"EmailTask({self.id}): {self.task_type}-{self.status}"
 
 
 class EmailMessage(models.Model):
@@ -495,8 +519,6 @@ class Issue(models.Model):
         super().save(*args, **kwargs)
 
 
-
-
 class EmailAlias(models.Model):
     """
     Email alias management for auto-assign mode users
@@ -514,12 +536,7 @@ class EmailAlias(models.Model):
     alias = models.CharField(
         max_length=255,
         verbose_name=_('Alias'),
-        help_text=_('Email alias name (without domain)')
-    )
-    domain = models.CharField(
-        max_length=255,
-        verbose_name=_('Domain'),
-        help_text=_('Email domain for this alias')
+        help_text=_('Email alias name (domain is auto-assigned)')
     )
     is_active = models.BooleanField(
         default=True,
@@ -538,42 +555,35 @@ class EmailAlias(models.Model):
     class Meta:
         verbose_name = _('Email Alias')
         verbose_name_plural = _('Email Aliases')
-        unique_together = ['alias', 'domain']
+        unique_together = ['alias']
         ordering = ['-created_at']
         indexes = [
-            models.Index(fields=['alias', 'domain']),
+            models.Index(fields=['alias']),
             models.Index(fields=['user', 'is_active']),
             models.Index(fields=['created_at']),
         ]
 
     def __str__(self):
-        return f"{self.alias}@{self.domain} -> {self.user.username}"
-
-    def save(self, *args, **kwargs):
-        """Set default domain if not provided"""
-        if not self.domain:
-            self.domain = settings.AUTO_ASSIGN_EMAIL_DOMAIN
-        super().save(*args, **kwargs)
+        return f"{self.alias}@{settings.AUTO_ASSIGN_EMAIL_DOMAIN} -> {self.user.username}"
 
     def full_email_address(self):
         """Return full email address"""
-        return f"{self.alias}@{self.domain}"
+        return f"{self.alias}@{settings.AUTO_ASSIGN_EMAIL_DOMAIN}"
 
     @classmethod
-    def is_unique(cls, alias, domain=None):
+    def is_unique(cls, alias):
         """Check if alias is unique across the system"""
-        if domain is None:
-            domain = settings.AUTO_ASSIGN_EMAIL_DOMAIN
-        return not cls.objects.filter(alias=alias, domain=domain).exists()
+        return not cls.objects.filter(alias=alias).exists()
 
     @classmethod
     def find_user_by_email(cls, email_address):
         """Find user by email address (supports aliases)"""
         try:
             alias_name, domain = email_address.split('@')
+            if domain != settings.AUTO_ASSIGN_EMAIL_DOMAIN:
+                return None
             alias_obj = cls.objects.get(
                 alias=alias_name,
-                domain=domain,
                 is_active=True
             )
             return alias_obj.user

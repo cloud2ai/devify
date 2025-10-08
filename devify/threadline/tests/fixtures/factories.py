@@ -85,10 +85,9 @@ class EmailTaskFactory(DjangoModelFactory):
     class Meta:
         model = EmailTask
 
-    user = factory.SubFactory(UserFactory)
+    # Note: Removed user field - EmailTask is now a global background task
     status = 'pending'
-    emails_processed = 0
-    emails_created_issues = 0
+    task_type = 'IMAP_EMAIL_FETCH'
 
 
 class EmailMessageFactory(DjangoModelFactory):

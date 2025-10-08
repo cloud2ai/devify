@@ -11,10 +11,10 @@ from .issue import create_issue_task
 from .chain_orchestrator import process_email_chain
 
 # Scheduler tasks
+from .scheduler import schedule_email_fetch
 from .scheduler import schedule_email_processing_tasks
-from .scheduler import schedule_user_email_scanning
 
 # Utility tasks
 from .scheduler import schedule_reset_stuck_processing_emails
-from .email_fetch import scan_user_emails
+from .email_fetch import fetch_user_imap_emails as scan_user_emails
 from .notifications import send_webhook_notification

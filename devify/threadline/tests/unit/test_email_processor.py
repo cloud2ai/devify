@@ -1,5 +1,5 @@
 """
-Comprehensive tests for email_processor.py functionality.
+Comprehensive tests for email processor functionality.
 
 This module tests the EmailProcessor class capabilities including:
 - HTML parsing and text extraction
@@ -18,7 +18,7 @@ Future extensions can include:
 import pytest
 from unittest.mock import Mock, patch
 
-from devify.threadline.utils.email_parser import EmailParser
+from devify.threadline.utils.email import EmailParser
 
 
 @pytest.fixture

@@ -61,7 +61,7 @@ class EmailParser:
     IMAGE_CONTENT_TYPE_PREFIX = 'image/'
 
     def __init__(
-        self, attachment_storage_path: str = '/tmp/attachments'
+        self, attachment_dir: str = '/tmp/email_attachments'
     ):
         """
         Initialize email parser.
@@ -70,7 +70,7 @@ class EmailParser:
             This parser is OBSOLETE. Use :class:`EmailFlankerParser` instead.
 
         Args:
-            attachment_storage_path: Path for storing email attachments
+            attachment_dir: Directory for storing email attachments
         """
         import warnings
         warnings.warn(
@@ -79,7 +79,7 @@ class EmailParser:
             DeprecationWarning,
             stacklevel=2
         )
-        self.attachment_storage_path = attachment_storage_path
+        self.attachment_dir = attachment_dir
 
     def parse_from_bytes(self, email_data: bytes) -> Optional[Dict]:
         """
@@ -1138,7 +1138,7 @@ class EmailParser:
         """
         try:
             # Create attachment directory
-            os.makedirs(self.attachment_storage_path, exist_ok=True)
+            os.makedirs(self.attachment_dir, exist_ok=True)
 
             # Generate MD5-based filename for consistency
             # This ensures same content always has same safe_filename
@@ -1148,7 +1148,7 @@ class EmailParser:
 
             # Check if file already exists with same MD5
             file_path = os.path.join(
-                self.attachment_storage_path, safe_filename
+                self.attachment_dir, safe_filename
             )
 
             if os.path.exists(file_path):

@@ -1,206 +1,323 @@
+"""
+Email Fetch Tasks
+
+Provides unified email fetching tasks for both IMAP and Haraka email sources.
+
+File: devify/threadline/tasks/email_fetch.py
+"""
+
 import logging
-import os
-import shutil
-from datetime import datetime, timedelta
-from django.utils import timezone
+from typing import Dict
 
 from celery import shared_task
 from django.contrib.auth.models import User
-
-from threadline.models import EmailAttachment, EmailMessage, EmailTask, Settings
-from threadline.utils.email_processor import EmailProcessor
+from django.utils import timezone
 from django.conf import settings
-from threadline.state_machine import EmailStatus
+from django.db.models import Prefetch
+
+from threadline.models import EmailTask, Settings
+from threadline.utils.email import (
+    EmailProcessor,
+    EmailSaveService,
+)
+from threadline.utils.task_cleanup import cleanup_stale_tasks
+from threadline.utils.task_lock import (
+    acquire_task_lock,
+    prevent_duplicate_task,
+    release_task_lock
+)
+from threadline.utils.task_tracer import TaskTracer
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_EMAIL_FETCH_DAYS = 7
 
 
-def get_user_email_settings(user_id):
+@shared_task
+@prevent_duplicate_task(
+    "imap_email_fetch",
+    timeout=settings.TASK_TIMEOUT_MINUTES
+)
+def imap_email_fetch():
     """
-    Get user email settings from unified email_config in Settings table.
-    Returns email_config dict with imap_config and filter_config sections,
-    or None if not found.
+    IMAP email fetch task
+
+    Responsibilities:
+    1. Traverse all active users' IMAP configurations
+    2. Process emails for each user independently
+    3. Update EmailTask statistics
+    4. Use unified email save service
+    5. Independent error handling and monitoring
     """
+    tracer = TaskTracer('IMAP_EMAIL_FETCH')
+
     try:
-        email_setting = Settings.objects.get(
-            user_id=user_id,
-            key='email_config',
-            is_active=True
-        )
-        email_config = email_setting.value
-    except Settings.DoesNotExist:
-        logger.warning(f"No email_config found for user {user_id}")
-        return None
+        logger.info("Starting IMAP email fetch task")
 
-    # Ensure filter_config exists with defaults
-    if 'filter_config' not in email_config:
-        email_config['filter_config'] = {
-            'folder': 'INBOX',
-            'filters': [],
-            'exclude_patterns': [
-                'spam',
-                'newsletter'
-            ],
-            'max_age_days': DEFAULT_EMAIL_FETCH_DAYS
+        # Create email fetch task record
+        task_id = getattr(imap_email_fetch.request, "id", "") or ""
+        tracer.create_task([])
+        tracer.set_task_id(task_id)
+        tracer.append_task("INIT", "IMAP email fetch task started")
+
+        users_with_email_config = User.objects.filter(
+            is_active=True,
+            settings__key="email_config",
+            settings__is_active=True
+        ).prefetch_related(
+            Prefetch('settings', queryset=Settings.objects.filter(
+                key="email_config",
+                is_active=True
+            ))
+        ).distinct()
+
+        processed_count = 0
+        error_count = 0
+        emails_processed = 0
+
+        for user in users_with_email_config:
+            try:
+                tracer.append_task(
+                    "USER_PROCESS", f"Starting to process user {user.id}")
+
+                # Get email config from prefetched settings (guaranteed
+                # to exist)
+                email_config_setting = user.settings.first()
+                email_config = email_config_setting.value
+
+                # Only check if IMAP config exists (since we already filtered
+                # for email_config)
+                if "imap_config" not in email_config:
+                    logger.debug(f"User {user.id} has no IMAP config, skipping")
+                    tracer.append_task(
+                        "USER_SKIP",
+                        f"User {user.id} has no IMAP config, skipping")
+                    continue
+
+                # Fetch emails for each user with pre-fetched config
+                result = fetch_user_imap_emails(user.id, email_config)
+                processed_count += 1
+                emails_processed += result.get("emails_processed", 0)
+
+                tracer.append_task(
+                    "USER_SUCCESS",
+                    f"User {user.id} processing completed: {result}")
+
+            except Exception as exc:
+                error_count += 1
+                tracer.append_task(
+                    "USER_ERROR",
+                    f"User {user.id} processing failed: {str(exc)}",
+                    {"level": "ERROR"})
+                logger.error(f"Failed to process user {user.id}: {exc}")
+
+        # Complete task
+        message = (
+            f"IMAP email fetch completed: {processed_count} users, "
+            f"{error_count} errors"
+        )
+        tracer.append_task("COMPLETE", message, {
+            'processed_users': processed_count,
+            'emails_processed': emails_processed,
+            'error_count': error_count
+        })
+        tracer.complete_task(tracer.task.details)
+        logger.info(message)
+
+        return {
+            "processed_users": processed_count,
+            "emails_processed": emails_processed,
+            "error_count": error_count,
+            "status": "completed"
         }
 
-    filter_config = email_config['filter_config']
-
-    # Handle last_email_fetch_time for incremental fetching
-    last_fetch_time = filter_config.get('last_email_fetch_time')
-    if last_fetch_time:
-        # Parse ISO format datetime with timezone
-        since_dt = datetime.fromisoformat(last_fetch_time)
-        # Convert to timezone-aware datetime if naive
-        if timezone.is_naive(since_dt):
-            since_dt = timezone.make_aware(since_dt)
-        # Convert to local timezone for IMAP search
-        since_dt = timezone.localtime(since_dt)
-    else:
-        since_dt = timezone.now() - timedelta(
-            days=DEFAULT_EMAIL_FETCH_DAYS)
-
-    filter_config['since'] = since_dt.strftime('%d-%b-%Y')
-    logger.info(f"Email config loaded for user {user_id}")
-
-    return email_config
-
-
-def _save_email_attachments(user, email_msg, attachments):
-    """
-    Move attachments to target dir and create EmailAttachment records.
-    Use the basename of att['file_path'] as the filename to avoid conflicts.
-    """
-    message_id = email_msg.message_id
-    attachment_dir = os.path.join(
-        settings.EMAIL_ATTACHMENT_STORAGE_PATH,
-        message_id
-    )
-    os.makedirs(attachment_dir, exist_ok=True)
-    logger.info(f"Created attachment directory: {attachment_dir}")
-
-    created_attachments = []
-    for att in attachments:
-        logger.info(f"Attachment meta: {att}")
-        old_path = att.get('file_path', '')
-        # Use the processed unique filename
-        filename = os.path.basename(old_path)
-        if old_path and os.path.exists(old_path):
-            new_path = os.path.join(attachment_dir, filename)
-            try:
-                shutil.move(old_path, new_path)
-                logger.info(f"Moved attachment {filename} to {new_path}")
-                att['file_path'] = new_path
-            except Exception as move_err:
-                logger.error(f"Failed to move attachment "
-                             f"{filename}: {move_err}")
-                new_path = old_path
-        else:
-            logger.warning(f"Attachment file not found: {old_path}")
-            new_path = old_path
-
-        email_att = EmailAttachment.objects.create(
-            user=user,
-            email_message=email_msg,
-            filename=att.get('filename', 'unknown'),
-            safe_filename=att.get('safe_filename', ''),
-            content_type=att.get('content_type', ''),
-            file_size=att.get('file_size', 0),
-            file_path=new_path,
-            is_image=att.get('is_image', False),
-        )
-
-        logger.info(f"EmailAttachment created: {email_att}")
-        created_attachments.append(email_att)
-    return created_attachments
-
-
-@shared_task(bind=True)
-def scan_user_emails(self, user_id):
-    """
-    Fetch new emails for a specific user and save as EmailMessage.
-    Use last_email_fetch_time in email_filter_config for incremental fetch.
-    """
-    email_task = None
-    try:
-        # Get user and settings in one query
-        user = User.objects.get(id=user_id)
-        logger.info(f"Starting email fetch for user {user.username}")
-
-        email_config = get_user_email_settings(user_id)
-        if not email_config:
-            logger.warning(
-                f"Skipping email fetch for user {user.username} "
-                f"due to missing email_config"
+    except Exception as exc:
+        logger.error(f"IMAP email fetch failed: {exc}")
+        if tracer.task:
+            tracer.fail_task(
+                tracer.task.details if tracer.task.details else [],
+                str(exc)
             )
-            return
+        raise
 
-        client = EmailProcessor(
-            email_config,
-            settings.TMP_EMAIL_ATTACHMENT_STORAGE_PATH
+
+@shared_task
+@prevent_duplicate_task("haraka_email_fetch",
+                        timeout=settings.TASK_TIMEOUT_MINUTES)
+def haraka_email_fetch():
+    """
+    Haraka email fetch task
+
+    Responsibilities:
+    1. Fetch all Haraka emails
+    2. Filter and assign emails to users based on content
+    3. Use unified email save service
+    4. Independent error handling and monitoring
+    """
+    tracer = TaskTracer('HARAKA_EMAIL_FETCH')
+
+    try:
+        logger.info("Starting Haraka email fetch task")
+
+        # Create email fetch task record
+        task_id = getattr(haraka_email_fetch.request, "id", "") or ""
+        tracer.create_task([])
+        tracer.set_task_id(task_id)
+        tracer.append_task("INIT", "Haraka email fetch task started")
+
+        # Create email save service and pre-load user mappings for performance
+        save_service = EmailSaveService()
+        save_service.load_user_mappings()  # Load all users and aliases once
+
+        # Use existing EmailProcessor to process Haraka emails
+        processor = EmailProcessor(
+            source="file",
+            parser_type="flanker"
         )
 
-        # Set email task to running
-        email_task = EmailTask.objects.create(
-            user=user,
-            status=EmailTask.TaskStatus.RUNNING
-        )
+        processed_count = 0
+        error_count = 0
 
-        new_emails = []
-        for mail in client.scan_emails():
-            message_id = mail['message_id']
-            if not EmailMessage.objects.filter(
-                user=user, message_id=message_id).exists():
-                logger.info(f"Found new email with message_id: {message_id}")
-                email_msg = EmailMessage.objects.create(
-                    user=user,
-                    task=email_task,
-                    subject=mail['subject'],
-                    sender=mail['sender'],
-                    recipients=mail['recipients'],
-                    received_at=mail['received_at'],
-                    raw_content=mail['raw_content'],
-                    html_content=mail['html_content'],
-                    text_content=mail['text_content'],
-                    message_id=message_id,
-                    status=EmailStatus.FETCHED.value,
+        # Process all Haraka emails (global processing, auto-assign users)
+        for email_data in processor.process_emails():
+            try:
+                # Find corresponding user based on email recipient info
+                user = save_service.find_user_by_recipient(email_data)
+                if not user:
+                    logger.warning(
+                        f"No user found for email recipient: "
+                        f"{email_data.get("recipients")}"
+                    )
+                    # Add execution log for skipped email due to no user found
+                    tracer.append_task(
+                        "EMAIL_SKIP",
+                        (
+                            "No user found for recipients: "
+                            f"{email_data.get('recipients')}"
+                        ),
+                        {"level": "WARNING"}
+                    )
+                    continue
+
+                # Save email directly to corresponding user
+                email_msg = save_service.save_email(
+                    user.id,
+                    email_data,
+                    task_id=tracer.task_id
                 )
-                attachments = mail.get('attachments', [])
-                logger.info(f"mail['attachments'] = {attachments}")
-                logger.info(f"Number of attachments: {len(attachments)}")
+                processed_count += 1
 
-                _save_email_attachments(user, email_msg, attachments)
-                new_emails.append(mail)
-            else:
-                logger.warning(f"Skipping email with "
-                               f"subject: {mail['subject']}")
+                tracer.append_task(
+                    "EMAIL_SUCCESS",
+                    f"Email saved: {email_msg.id} for user {user.id}"
+                )
+                logger.info(
+                    f"Haraka email saved: {email_msg.id} "
+                    f"for user {user.id}"
+                )
 
-        # Update last_email_fetch_time if new emails fetched
-        if new_emails:
-            max_received = max(mail['received_at'] for mail in new_emails)
-            # Set the last email fetch time in ISO format
-            email_config['filter_config'][
-                'last_email_fetch_time'
-            ] = max_received.isoformat()
+            except Exception as exc:
+                error_count += 1
+                tracer.append_task(
+                    "EMAIL_ERROR",
+                    f"Failed to process email: {str(exc)}",
+                    {"level": "ERROR"}
+                )
+                logger.error(f"Failed to process Haraka email: {exc}")
 
-            # Update unified email_config
-            Settings.objects.filter(
-                user_id=user_id,
-                key='email_config',
-                is_active=True
-            ).update(value=email_config)
+        # Complete task
+        message = (
+            f"Haraka email fetch completed: {processed_count} emails, "
+            f"{error_count} errors"
+        )
+        tracer.append_task("COMPLETE", message, {
+            'emails_processed': processed_count,
+            'error_count': error_count
+        })
+        tracer.complete_task(tracer.task.details)
+        logger.info(message)
 
-        email_task.status = EmailTask.TaskStatus.COMPLETED
-        email_task.emails_processed = len(new_emails)
-        email_task.save(update_fields=['status', 'emails_processed'])
-        logger.info(f"Fetched {len(new_emails)} new emails "
-                    f"for user {user.username}")
+        return {
+            "emails_processed": processed_count,
+            "errors": error_count,
+            "status": "completed"
+        }
 
-    except Exception as e:
-        logger.error(f"Failed to fetch emails for user {user_id}: {e}")
-        if email_task:
-            email_task.status = EmailTask.TaskStatus.FAILED
-            email_task.error_message = str(e)
-            email_task.save(update_fields=['status', 'error_message'])
+    except Exception as exc:
+        logger.error(f"Haraka email fetch failed: {exc}")
+        if tracer.task:
+            tracer.fail_task(
+                tracer.task.details if tracer.task.details else [],
+                str(exc)
+            )
+        raise
+
+
+@shared_task
+@prevent_duplicate_task(
+    "fetch_user_imap_emails",
+    user_id_param="user_id",
+    timeout=300
+)
+def fetch_user_imap_emails(user_id: int, email_config: dict):
+    """
+    Fetch IMAP emails for specific user
+
+    Args:
+        user_id: User ID
+        email_config: Pre-fetched email configuration (required for optimization)
+    """
+    try:
+        # Validate email config
+        if not email_config or "imap_config" not in email_config:
+            logger.warning(f"User {user_id} has no IMAP config")
+            return {"status": "skipped", "reason": "no_imap_config"}
+
+        # Use existing EmailProcessor to process emails
+        processor = EmailProcessor(
+            source="imap",
+            parser_type="flanker",
+            email_config=email_config["imap_config"]
+        )
+
+        save_service = EmailSaveService()
+        processed_count = 0
+        error_count = 0
+
+        # Process emails
+        for email_data in processor.process_emails():
+            try:
+                # Save email to database
+                save_service.save_email(user_id, email_data)
+                processed_count += 1
+            except Exception as exc:
+                error_count += 1
+                logger.error(f"Failed to save email: {exc}")
+
+        result = {
+            "emails_processed": processed_count,
+            "errors": error_count,
+            "status": "completed"
+        }
+
+        logger.info(f"IMAP email fetch completed for user {user_id}: {result}")
+        return result
+
+    except Exception as exc:
+        logger.error(f"IMAP email fetch failed for user {user_id}: {exc}")
+        raise
+
+
+@shared_task
+def cleanup_old_tasks():
+    """
+    Periodic task cleanup
+    """
+    try:
+        from threadline.utils.task_cleanup import cleanup_old_tasks as cleanup_func
+        result = cleanup_func(days_old=1)
+        logger.info(f"Task cleanup completed: {result}")
+        return result
+
+    except Exception as exc:
+        logger.error(f"Task cleanup failed: {exc}")
+        raise

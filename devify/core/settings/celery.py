@@ -34,9 +34,9 @@ CELERY_TASK_SERIALIZER = 'json'
 # Celery periodic task scheduling configuration, defining tasks that need to
 # run periodically
 CELERY_BEAT_SCHEDULE = {
-    # Email fetching scheduler - runs every minute
-    'schedule_user_email_scanning': {
-        'task': 'threadline.tasks.scheduler.schedule_user_email_scanning',
+    # Unified email fetching scheduler - runs every minute
+    'schedule_email_fetch': {
+        'task': 'threadline.tasks.email_fetch.schedule_email_fetch',
         'schedule': crontab(minute='*/1'),
         'args': (),
         'kwargs': {},
@@ -50,11 +50,27 @@ CELERY_BEAT_SCHEDULE = {
         'kwargs': {},
     },
 
-    # Reset stuck processing emails - runs every 5 minutes
+    # Reset stuck processing emails - runs every 30 minutes
     'reset_stuck_processing_emails': {
         'task': 'threadline.tasks.scheduler.schedule_reset_stuck_processing_emails',
-        'schedule': crontab(minute='*/30'),  # Every 30 minutes
+        'schedule': crontab(minute='*/30'),
         'args': (),
         'kwargs': {'timeout_minutes': 30},
+    },
+
+    # Haraka email files cleanup - runs daily at 2 AM
+    'schedule_haraka_cleanup': {
+        'task': 'threadline.tasks.scheduler.schedule_haraka_cleanup',
+        'schedule': crontab(hour=2, minute=0),
+        'args': (),
+        'kwargs': {},
+    },
+
+    # EmailTask records cleanup - runs daily at 3 AM
+    'schedule_email_task_cleanup': {
+        'task': 'threadline.tasks.scheduler.schedule_email_task_cleanup',
+        'schedule': crontab(hour=3, minute=0),
+        'args': (),
+        'kwargs': {},
     },
 }

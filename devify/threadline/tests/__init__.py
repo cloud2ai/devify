@@ -1,1 +1,5 @@
-# Tests package for threadline
+"""
+Threadline tests package
+
+This package contains all tests for the threadline application.
+"""

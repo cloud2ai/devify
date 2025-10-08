@@ -59,14 +59,14 @@ class EmailFlankerParser:
     IMAGE_CONTENT_TYPE_PREFIX = "image/"
     MESSAGE_ID_HASH_LENGTH = 16
 
-    def __init__(self, attachment_storage_path: str = "/tmp/attachments"):
+    def __init__(self, attachment_dir: str = "/tmp/email_attachments"):
         """
         Initialize email parser using flanker.
 
         Args:
-            attachment_storage_path: Path for storing email attachments
+            attachment_dir: Directory for storing email attachments
         """
-        self.attachment_storage_path = attachment_storage_path
+        self.attachment_dir = attachment_dir
         self.file_detector = FileTypeDetector()
         self.image_processor = EmailImageProcessor()
 
@@ -914,7 +914,7 @@ class EmailFlankerParser:
         """
         try:
             # Create attachment storage directory
-            os.makedirs(self.attachment_storage_path, exist_ok=True)
+            os.makedirs(self.attachment_dir, exist_ok=True)
 
             # Generate MD5 hash for consistent filename
             if isinstance(payload, str):
@@ -932,7 +932,7 @@ class EmailFlankerParser:
 
             # Check if file with same MD5 already exists
             file_path = os.path.join(
-                self.attachment_storage_path, safe_filename
+                self.attachment_dir, safe_filename
             )
 
             if os.path.exists(file_path):

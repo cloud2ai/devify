@@ -18,7 +18,7 @@ Future extensions can include:
 import pytest
 from unittest.mock import Mock, patch
 
-from devify.threadline.utils.email_processor import EmailProcessor
+from devify.threadline.utils.email import EmailProcessor
 
 
 @pytest.fixture

@@ -23,7 +23,7 @@ os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'devify.core.settings')
 try:
     import django
     django.setup()
-    from devify.threadline.utils.email_flanker_parser import EmailFlankerParser
+    from devify.threadline.utils.email import EmailFlankerParser
 except ImportError:
     pytest.skip(
         "Cannot import Django or email parser",

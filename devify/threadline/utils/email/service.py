@@ -6,12 +6,23 @@ processing.
 """
 
 import logging
+import os
+import shutil
+from django.conf import settings
 from typing import Dict, List, Optional
 
 from django.contrib.auth.models import User
+from django.db.models import Q
 from django.utils import timezone
+from django.conf import settings
 
-from threadline.models import EmailMessage, EmailStatus, EmailAlias
+from threadline.models import (
+    EmailAlias,
+    EmailAttachment,
+    EmailMessage,
+    EmailStatus,
+    Settings,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -28,10 +39,9 @@ class EmailSaveService:
     """
 
     def __init__(self):
-        # Cache user email mappings to avoid repeated queries
-        self._user_email_cache = {}
-        self._alias_cache = {}
-        self._cache_loaded = False
+        self._email_to_user_map = {}
+        self._user_cache = {}
+        self._mappings_loaded = False
 
     def save_email(
         self,
@@ -51,7 +61,6 @@ class EmailSaveService:
             EmailMessage instance
         """
         try:
-            # Prepare create data
             create_data = {
                 'user_id': user_id,
                 'subject': email_data['subject'],
@@ -65,14 +74,11 @@ class EmailSaveService:
                 'status': EmailStatus.FETCHED.value,
             }
 
-            # Add task if provided
             if task_id:
                 create_data['task_id'] = task_id
 
-            # Create EmailMessage record
             email_msg = EmailMessage.objects.create(**create_data)
 
-            # Process attachments
             attachments = email_data.get('attachments', [])
             if attachments:
                 self.process_attachments(user_id, email_msg, attachments)
@@ -90,24 +96,87 @@ class EmailSaveService:
         attachments: List[Dict]
     ):
         """
-        Process email attachments
+        Process email attachments from parsed metadata
 
         Args:
             user_id: User ID
             email_msg: EmailMessage instance
-            attachments: List of attachment data
+            attachments: List of attachment metadata from parser
         """
         try:
-            # TODO: Implement attachment processing logic
-            # This would involve:
-            # 1. Saving attachment files to storage
-            # 2. Creating EmailAttachment records
-            # 3. Linking attachments to email message
-
             logger.info(
                 f"Processing {len(attachments)} attachments for "
                 f"email {email_msg.id}"
             )
+
+            # Create user-specific attachment directory
+            user_attachment_dir = os.path.join(
+                settings.EMAIL_ATTACHMENT_DIR,
+                f"email_{email_msg.id}"
+            )
+            os.makedirs(user_attachment_dir, exist_ok=True)
+
+            for attachment_data in attachments:
+                try:
+                    # Extract attachment information from parser metadata
+                    filename = attachment_data.get('filename', 'unknown')
+                    content_type = attachment_data.get(
+                        'content_type',
+                        'application/octet-stream'
+                    )
+                    file_size = attachment_data.get('file_size', 0)
+                    source_file_path = attachment_data.get('file_path', '')
+                    # Get safe filename for attachment.
+                    # Fallback to original filename if safe_filename is not
+                    # present.
+                    safe_filename = attachment_data.get(
+                        'safe_filename', filename
+                    )
+
+                    # Skip processing if source file path is missing or file
+                    # does not exist
+                    if (
+                        not source_file_path or
+                        not os.path.exists(source_file_path)
+                    ):
+                        logger.warning(
+                            f"Skipping attachment {filename}: "
+                            f"file not found at {source_file_path}"
+                        )
+                        continue
+
+                    # Copy file to user-specific directory
+                    dest_file_path = os.path.join(
+                        user_attachment_dir, safe_filename)
+                    shutil.copy2(source_file_path, dest_file_path)
+
+                    # Determine if it's an image
+                    is_image = content_type.startswith('image/')
+
+                    # Create EmailAttachment record
+                    EmailAttachment.objects.create(
+                        user_id=user_id,
+                        email_message=email_msg,
+                        filename=filename,
+                        safe_filename=safe_filename,
+                        content_type=content_type,
+                        file_size=file_size,
+                        file_path=dest_file_path,
+                        is_image=is_image
+                    )
+
+                    logger.info(
+                        f"Attachment {filename} processed successfully, "
+                        f"size={file_size} bytes, copied to {dest_file_path}"
+                    )
+
+                except Exception as exc:
+                    logger.error(f"Failed to process attachment "
+                                 f"{filename}: {exc}")
+                    continue
+
+            logger.info(f"Successfully processed {len(attachments)} "
+                        f"attachments")
 
         except Exception as exc:
             logger.error(
@@ -115,9 +184,71 @@ class EmailSaveService:
             )
             raise
 
+    def load_user_mappings(self):
+        """
+        Load auto_assign users and their aliases into memory for batch
+        processing optimization.
+        Only loads users who have auto_assign mode enabled.
+        This method should be called once at the start of batch
+        email processing.
+        """
+        if self._mappings_loaded:
+            return
+
+        logger.info("Loading auto_assign user mappings for batch processing...")
+
+        # Get all email configs and filter in Python due to JSONField query limitations
+        all_email_settings = Settings.objects.filter(
+            key='email_config',
+            is_active=True
+        ).values('user_id', 'value')
+
+        auto_assign_user_ids = {
+            setting['user_id']
+            for setting in all_email_settings
+            if setting['value'].get('mode') == 'auto_assign'
+        }
+
+        if not auto_assign_user_ids:
+            logger.info("No auto_assign users found")
+            self._mappings_loaded = True
+            return
+
+        users = User.objects.filter(
+            id__in=auto_assign_user_ids,
+            is_active=True
+        ).values('id', 'email', 'username')
+
+        default_domain = settings.AUTO_ASSIGN_EMAIL_DOMAIN
+        aliases = EmailAlias.objects.filter(
+            user_id__in=auto_assign_user_ids,
+            is_active=True
+        ).values('alias', 'user_id')
+
+        alias_map = {alias['user_id']: alias['alias'] for alias in aliases}
+
+        for user in users:
+            user_id = user['id']
+
+            if user_id in alias_map:
+                alias = alias_map[user_id]
+                email_address = f"{alias}@{default_domain}"
+            else:
+                email_address = f"{user['username']}@{default_domain}"
+
+            self._user_cache[user_id] = {
+                'id': user_id,
+                'email': email_address,
+                'username': user['username']
+            }
+
+            self._email_to_user_map[email_address] = user_id
+
+        self._mappings_loaded = True
+
     def find_user_by_recipient(self, email_data: Dict) -> Optional[User]:
         """
-        Find user based on email recipient addresses (optimized version)
+        Find user based on email recipient addresses (optimized batch version)
 
         Args:
             email_data: Parsed email data
@@ -126,29 +257,23 @@ class EmailSaveService:
             User instance or None if no user found
         """
         try:
-            # Ensure cache is loaded
-            self._load_user_cache()
-
-            # Find user based on recipient addresses
             recipients = email_data.get('recipients', [])
             if not recipients:
                 logger.warning("No recipients found in email")
                 return None
 
-            # Find matching users in cache
             for recipient in recipients:
-                # 1. First check user email cache
-                user_id = self._user_email_cache.get(recipient)
+                user_id = self._email_to_user_map.get(recipient)
                 if user_id:
-                    user = User.objects.get(id=user_id)
-                    logger.debug(f"Found user by email: {user.username}")
-                    return user
-
-                # 2. Check email aliases cache
-                user_id = self._alias_cache.get(recipient)
-                if user_id:
-                    user = User.objects.get(id=user_id)
-                    logger.debug(f"Found user by alias: {user.username}")
+                    user_data = self._user_cache[user_id]
+                    logger.debug(
+                        f"Found user: {user_data['username']}"
+                    )
+                    user = User(
+                        id=user_data['id'],
+                        email=user_data['email'],
+                        username=user_data['username']
+                    )
                     return user
 
             logger.warning(f"No user found for recipients: {recipients}")
@@ -157,42 +282,3 @@ class EmailSaveService:
         except Exception as exc:
             logger.error(f"Failed to find user by recipient: {exc}")
             return None
-
-    def _load_user_cache(self):
-        """
-        Load user email and alias cache
-        """
-        if self._cache_loaded:
-            return
-
-        logger.info("Loading user email cache...")
-
-        # Batch load all user emails
-        users = User.objects.filter(is_active=True).values(
-            'id', 'email'
-        )
-        for user in users:
-            email = user['email']
-            if email:
-                self._user_email_cache[email] = user['id']
-
-        # Batch load all email aliases
-        aliases = EmailAlias.objects.filter(
-            is_active=True
-        ).values('alias', 'domain', 'user_id')
-        for alias in aliases:
-            email_address = f"{alias['alias']}@{alias['domain']}"
-            self._alias_cache[email_address] = alias['user_id']
-
-        self._cache_loaded = True
-        logger.info(
-            f"User cache loaded: {len(self._user_email_cache)} emails, "
-            f"{len(self._alias_cache)} aliases"
-        )
-
-    def refresh_cache(self):
-        """Refresh user cache"""
-        self._cache_loaded = False
-        self._user_email_cache.clear()
-        self._alias_cache.clear()
-        self._load_user_cache()
