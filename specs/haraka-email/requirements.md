@@ -62,7 +62,7 @@ Settings表中的一条记录（合并email_filter_config）：
   "key": "email_config",
   "value": {
     "email_mode": "custom_imap",
-    "auto_assign_domain": "aimychats.com",
+    "auto_assign_domain": "devify.local",
     "custom_imap_config": {
       "imap_host": "imap.example.com",
       "imap_port": 993,
@@ -234,4 +234,4 @@ scene_prompt_config:
 15. WHEN 邮件发送到虚拟邮箱时 THEN 系统 SHALL 通过 Haraka SMTP 服务器接收邮件
 16. WHEN Haraka 接收到邮件时 THEN 系统 SHALL 自动推送邮件数据到 Redis 队列
 17. WHEN 系统处理 Redis 队列中的邮件时 THEN 系统 SHALL 根据收件人地址映射到对应的用户
-18. IF 系统域名未配置 THEN 系统 SHALL 使用默认域名 "aimychats.com"
+18. IF 系统域名未配置 THEN 系统 SHALL 使用默认域名 "devify.local"

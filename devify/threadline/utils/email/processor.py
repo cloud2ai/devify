@@ -68,7 +68,8 @@ class EmailProcessor:
         parser_type: Union[ParserType, str] = ParserType.FLANKER,
         email_config: Optional[Dict] = None,
         attachment_dir: str = settings.TMP_EMAIL_ATTACHMENT_DIR,
-        file_config: Optional[Dict] = None
+        file_config: Optional[Dict] = None,
+        user_context: Optional[str] = None
     ):
         """
         Initialize unified email processor.
@@ -82,6 +83,7 @@ class EmailProcessor:
             attachment_dir: Directory for storing email attachments
             file_config: File system configuration (required for file
                        source)
+            user_context: User context for logging (e.g., username or user ID)
         """
         # Convert string parameters to enums
         if isinstance(source, str):
@@ -96,6 +98,7 @@ class EmailProcessor:
 
         self.attachment_dir = attachment_dir
         self.email_config = email_config or {}
+        self.user_context = user_context
 
         # Initialize parser based on type
         self._init_parser()
@@ -126,8 +129,11 @@ class EmailProcessor:
             self.filter_config = self.email_config.get(
                 'filter_config', {}
             )
-            self.imap_client = IMAPClient(self.imap_config,
-                                        self.filter_config)
+            self.imap_client = IMAPClient(
+                self.imap_config,
+                self.filter_config,
+                user_context=self.user_context
+            )
             logger.info("Initialized IMAP client")
 
         elif self.source == EmailSource.FILE:

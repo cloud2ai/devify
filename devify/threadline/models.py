@@ -58,20 +58,27 @@ class Settings(models.Model):
         ]
 
     def __str__(self):
-        return f"{self.user.username} - {self.key}: {str(self.value)[:50]}"
+        value_str = str(self.value)[:50]
+        return f"{self.user.username} - {self.key}: {value_str}"
 
     @classmethod
-    def get_user_config(cls, user, config_key: str,
-                        required_fields: list = None):
+    def get_user_config(
+        cls,
+        user,
+        config_key: str,
+        required_fields: list = None
+    ):
         """
         Get user's configuration by key and validate required fields.
 
-        This method provides a centralized way to access user configurations
-        across tasks, views, and management commands.
+        This method provides a centralized way to access
+        user configurations across tasks, views, and
+        management commands.
 
         Args:
             user: User instance
-            config_key: Configuration key (e.g., 'prompt_config', 'email_config')
+            config_key: Configuration key
+                (e.g., 'prompt_config', 'email_config')
             required_fields: List of required field keys to validate
 
         Returns:
@@ -103,17 +110,23 @@ class Settings(models.Model):
             return config_value
 
         except cls.DoesNotExist:
-            raise ValueError(
-                f"User {user.username} has no active {config_key} setting"
+            error_msg = (
+                f"User {user.username} has no active "
+                f"{config_key} setting"
             )
+            raise ValueError(error_msg)
 
     @classmethod
-    def get_user_prompt_config(cls, user,
-                               required_prompts: list = None) -> dict:
+    def get_user_prompt_config(
+        cls,
+        user,
+        required_prompts: list = None
+    ) -> dict:
         """
         Get user's prompt configuration and validate required prompts.
 
-        This is a convenience method for the commonly used prompt_config.
+        This is a convenience method for the commonly used
+        prompt_config.
 
         Args:
             user: User instance
@@ -122,7 +135,11 @@ class Settings(models.Model):
         Returns:
             dict: Prompt configuration
         """
-        return cls.get_user_config(user, 'prompt_config', required_prompts)
+        return cls.get_user_config(
+            user,
+            'prompt_config',
+            required_prompts
+        )
 
 
 class EmailTask(models.Model):
@@ -130,29 +147,18 @@ class EmailTask(models.Model):
     Task execution records for various background tasks
     """
     class TaskStatus(models.TextChoices):
-        PENDING = 'pending', _('Pending')
         RUNNING = 'running', _('Running')
         COMPLETED = 'completed', _('Completed')
         FAILED = 'failed', _('Failed')
         CANCELLED = 'cancelled', _('Cancelled')
-        SKIPPED = 'skipped', _('Skipped')
 
     class TaskType(models.TextChoices):
         IMAP_FETCH = 'IMAP_EMAIL_FETCH', _('IMAP Email Fetch')
         HARAKA_FETCH = 'HARAKA_EMAIL_FETCH', _('Haraka Email Fetch')
         HARAKA_CLEANUP = 'HARAKA_CLEANUP', _('Haraka Cleanup')
         TASK_CLEANUP = 'TASK_CLEANUP', _('EmailTask Cleanup')
+        STUCK_EMAIL_RESET = 'STUCK_EMAIL_RESET', _('Stuck Email Reset')
 
-    # Note: Removed user field - EmailTask should be a global background task
-    # user = models.ForeignKey(
-    #     User,
-    #     on_delete=models.CASCADE,
-    #     verbose_name=_('User'),
-    #     related_name='email_tasks',
-    #     null=True,
-    #     blank=True,
-    #     help_text=_('User for user-specific tasks, null for global tasks')
-    # )
     task_type = models.CharField(
         max_length=20,
         choices=TaskType.choices,
@@ -168,7 +174,7 @@ class EmailTask(models.Model):
     status = models.CharField(
         max_length=20,
         choices=TaskStatus.choices,
-        default=TaskStatus.PENDING,
+        default=TaskStatus.RUNNING,
         verbose_name=_('Task Status')
     )
     started_at = models.DateTimeField(
@@ -313,6 +319,30 @@ class EmailMessage(models.Model):
     def __str__(self):
         return f"{self.subject} - {self.sender}"
 
+    def set_status(self, status: str, error_message: str = None) -> None:
+        """
+        Set email status and optionally error message.
+
+        When transitioning to SUCCESS status, error_message is
+        automatically cleared to ensure clean state.
+
+        Args:
+            status: New status value
+            error_message: Optional error message to save
+        """
+        update_fields = ['status']
+        self.status = status
+
+        # Clear error_message when transitioning to SUCCESS
+        if status == EmailStatus.SUCCESS.value:
+            self.error_message = ''
+            update_fields.append('error_message')
+        elif error_message:
+            self.error_message = error_message
+            update_fields.append('error_message')
+
+        self.save(update_fields=update_fields)
+
     def save(self, *args, **kwargs):
         """
         Override save to automatically validate status transitions
@@ -328,19 +358,27 @@ class EmailMessage(models.Model):
         if self.pk:
             try:
                 old_instance = EmailMessage.objects.get(pk=self.pk)
-                if (old_instance.status != self.status and
-                    not can_transition_to(
-                        old_instance.status, self.status, EMAIL_STATE_MACHINE)):
-                    # Get valid next states using the state machine function
+                status_changed = old_instance.status != self.status
+                if status_changed and not can_transition_to(
+                    old_instance.status,
+                    self.status,
+                    EMAIL_STATE_MACHINE
+                ):
+                    # Get valid next states using the state machine
                     valid_transitions = get_next_states(
-                        old_instance.status, EMAIL_STATE_MACHINE)
-                    raise ValidationError(
+                        old_instance.status,
+                        EMAIL_STATE_MACHINE
+                    )
+                    transitions_str = ', '.join(valid_transitions)
+                    error_msg = (
                         f"Invalid email status transition from "
                         f"{old_instance.status} to {self.status}. "
-                        f"Valid transitions: {', '.join(valid_transitions)}"
+                        f"Valid transitions: {transitions_str}"
                     )
+                    raise ValidationError(error_msg)
             except EmailMessage.DoesNotExist:
-                pass  # New object, no validation needed
+                # New object, no validation needed
+                pass
 
         super().save(*args, **kwargs)
 
@@ -400,10 +438,8 @@ class EmailAttachment(models.Model):
         verbose_name=_('OCR Content'),
         help_text=_('Text content recognized from image attachment')
     )
-    """
-    Content processed/organized by LLM for this attachment,
-    such as post-processed OCR result.
-    """
+    # Content processed/organized by LLM for this attachment
+    # such as post-processed OCR result
     llm_content = models.TextField(
         blank=True,
         null=True,
@@ -523,8 +559,9 @@ class EmailAlias(models.Model):
     """
     Email alias management for auto-assign mode users
 
-    Allows users to create additional email aliases that route to their account.
-    All aliases must be unique across the system to prevent conflicts.
+    Allows users to create additional email aliases that route to
+    their account. All aliases must be unique across the system to
+    prevent conflicts.
     """
     user = models.ForeignKey(
         User,
@@ -564,7 +601,10 @@ class EmailAlias(models.Model):
         ]
 
     def __str__(self):
-        return f"{self.alias}@{settings.AUTO_ASSIGN_EMAIL_DOMAIN} -> {self.user.username}"
+        email_addr = (
+            f"{self.alias}@{settings.AUTO_ASSIGN_EMAIL_DOMAIN}"
+        )
+        return f"{email_addr} -> {self.user.username}"
 
     def full_email_address(self):
         """Return full email address"""

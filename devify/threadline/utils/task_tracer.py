@@ -206,7 +206,6 @@ class TaskTracer:
                 EmailTask.TaskStatus.COMPLETED,
                 EmailTask.TaskStatus.FAILED,
                 EmailTask.TaskStatus.CANCELLED,
-                EmailTask.TaskStatus.SKIPPED,
             ]:
                 self.task.completed_at = timezone.now()
 

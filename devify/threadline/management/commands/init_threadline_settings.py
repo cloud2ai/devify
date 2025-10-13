@@ -96,7 +96,9 @@ class Command(BaseCommand):
         # Threadline settings configuration with unified email_config
         threadline_settings = {
             'email_config': {
-                'mode': 'custom_imap',  # 'auto_assign' or 'custom_imap'
+                # Default to 'auto_assign' for simplified multi-user setup
+                # Change to 'custom_imap' if users need individual IMAP config
+                'mode': 'auto_assign',
                 'imap_config': {
                     'imap_host': 'your-imap-server-hostname',
                     'smtp_ssl_port': 465,
@@ -161,7 +163,7 @@ class Command(BaseCommand):
             'webhook_config': {
                 'url': '',
                 'events': [
-                    'issue_success', 'ocr_failed', 'llm_summary_failed'
+                    'failed', 'completed'
                 ],
                 'timeout': 10,
                 'retries': 3,
@@ -228,7 +230,7 @@ class Command(BaseCommand):
                 f'   • webhook_config - Configure external notifications '
                 f'(optional)\n'
                 f'3. Configure periodic tasks in Django Admin:\n'
-                f'   • schedule_email_processing_tasks\n'
+                f'   • schedule_email_fetch\n'
                 f'   • reset_stuck_processing_email\n'
                 f'4. Test webhook configuration:\n'
                 f'   • python manage.py test_webhook'

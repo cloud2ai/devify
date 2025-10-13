@@ -12,13 +12,13 @@ from django.utils import timezone
 
 from threadline.models import EmailTask, Settings
 from threadline.tasks.email_fetch import (
-    schedule_email_fetch,
     imap_email_fetch,
     haraka_email_fetch,
     fetch_user_imap_emails,
-    cleanup_old_tasks,
-    startup_cleanup
+    cleanup_old_tasks
 )
+from threadline.tasks.scheduler import schedule_email_fetch
+from threadline.utils.task_cleanup import startup_cleanup
 
 
 class EmailFetchTasksTest(TestCase):

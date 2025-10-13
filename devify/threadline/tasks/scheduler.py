@@ -4,59 +4,21 @@ from django.contrib.auth import get_user_model
 from django.utils import timezone
 from datetime import timedelta
 
-from threadline.models import EmailMessage
+from threadline.models import EmailMessage, EmailTask
 from threadline.state_machine import EmailStatus
-from threadline.tasks.chain_orchestrator import process_email_chain
 from threadline.tasks.email_fetch import imap_email_fetch, haraka_email_fetch
 from threadline.tasks.cleanup import (EmailCleanupManager,
                                       EmailTaskCleanupManager)
 from threadline.utils.task_cleanup import cleanup_stale_tasks
 from threadline.utils.task_lock import prevent_duplicate_task
+from threadline.utils.task_tracer import TaskTracer
 from django.conf import settings
 
 logger = logging.getLogger(__name__)
 
 # Configuration for stuck email handling
-# Each item defines: (reset_to_status, description)
-STUCK_STATUS_RESET_MAP = {
-    # Processing states that might get stuck
-    EmailStatus.OCR_PROCESSING.value: (
-        EmailStatus.FETCHED.value,
-        'OCR'
-    ),
-    EmailStatus.LLM_EMAIL_PROCESSING.value: (
-        EmailStatus.FETCHED.value,
-        'LLM_EMAIL'
-    ),
-    EmailStatus.LLM_SUMMARY_PROCESSING.value: (
-        EmailStatus.FETCHED.value,
-        'LLM_SUMMARY'
-    ),
-    EmailStatus.ISSUE_PROCESSING.value: (
-        EmailStatus.FETCHED.value,
-        'Issue'
-    ),
-
-    # Success states that might get stuck in chain
-    # Reset all to FETCHED to restart the entire processing chain
-    EmailStatus.OCR_SUCCESS.value: (
-        EmailStatus.FETCHED.value,
-        'OCR_SUCCESS'
-    ),
-    EmailStatus.LLM_EMAIL_SUCCESS.value: (
-        EmailStatus.FETCHED.value,
-        'LLM_EMAIL_SUCCESS'
-    ),
-    EmailStatus.LLM_SUMMARY_SUCCESS.value: (
-        EmailStatus.FETCHED.value,
-        'LLM_SUMMARY_SUCCESS'
-    ),
-    EmailStatus.ISSUE_SUCCESS.value: (
-        EmailStatus.FETCHED.value,
-        'ISSUE_SUCCESS'
-    ),
-}
-
+# Only PROCESSING state can get stuck, but using list for future extensibility
+STUCK_EMAIL_STATUSES = [EmailStatus.PROCESSING.value]
 
 @shared_task
 @prevent_duplicate_task("email_fetch", timeout=settings.TASK_TIMEOUT_MINUTES)
@@ -66,6 +28,9 @@ def schedule_email_fetch():
 
     This is the main entry point for all email fetching operations.
     Schedules both IMAP and Haraka email fetch tasks.
+
+    Note: Email processing will be triggered automatically when each
+    fetch task completes, ensuring timely processing.
 
     Responsibilities:
     1. Check task locks (handled by decorator)
@@ -77,10 +42,16 @@ def schedule_email_fetch():
     try:
         logger.info("Starting unified email fetch scheduling")
 
-        # Check unclosed state machines
-        cleanup_stale_tasks()
+        # Clean up stale tasks for IMAP and Haraka fetch
+        cleanup_stale_tasks(
+            task_types=[
+                EmailTask.TaskType.IMAP_FETCH,
+                EmailTask.TaskType.HARAKA_FETCH
+            ]
+        )
 
         # Schedule both email fetch tasks
+        # Processing will be triggered automatically when each completes
         imap_result = imap_email_fetch.delay()
         haraka_result = haraka_email_fetch.delay()
 
@@ -99,88 +70,76 @@ def schedule_email_fetch():
 
 
 @shared_task
-def schedule_email_processing_tasks():
-    """
-    Unified scheduler for driving email processing tasks based on status.
-
-    This scheduler now uses the new chain-based approach for better
-    workflow management and error handling.
-    """
-    # Schedule complete processing chain for emails that are ready to start
-    for email in EmailMessage.objects.filter(
-        status=EmailStatus.FETCHED.value
-    ):
-        logger.info(
-            f"Scheduling complete processing chain for email id={email.id}, "
-            f"subject={email.subject}"
-        )
-        process_email_chain.delay(email.id)
-
-
-@shared_task
+@prevent_duplicate_task(
+    "stuck_email_reset", timeout=settings.TASK_TIMEOUT_MINUTES)
 def schedule_reset_stuck_processing_emails(timeout_minutes=30):
     """
-    Scan and reset emails stuck in any state for over timeout_minutes.
+    Scan and mark emails stuck in PROCESSING state as FAILED.
 
-    This task identifies emails that have been stuck in any processing
-    or success state for longer than the specified timeout and resets
-    them to FETCHED state to restart the entire processing chain.
+    Only emails in PROCESSING state can get stuck. To avoid infinite retry
+    loops, stuck emails are marked as FAILED and require manual intervention.
+
+    Uses lock mechanism to prevent duplicate execution.
 
     Args:
         timeout_minutes (int): Minutes after which emails are considered stuck
     """
-    now = timezone.now()
-
-    # Get all stuck emails in one query using 'in' operator
-    stuck_statuses = list(STUCK_STATUS_RESET_MAP.keys())
-    stuck_emails = EmailMessage.objects.filter(
-        status__in=stuck_statuses,
-        updated_at__lt=now - timedelta(minutes=timeout_minutes)
+    cleanup_stale_tasks(
+        timeout_minutes=settings.TASK_TIMEOUT_MINUTES,
+        task_types=EmailTask.TaskType.STUCK_EMAIL_RESET
     )
 
-    # Process each stuck email
-    reset_results = {}
-    for email in stuck_emails:
-        reset_to_status, description = STUCK_STATUS_RESET_MAP[email.status]
+    tracer = TaskTracer(EmailTask.TaskType.STUCK_EMAIL_RESET)
+    tracer.create_task({
+        'timeout_minutes': timeout_minutes,
+        'started': timezone.now().isoformat()
+    })
 
-        logger.warning(
-            f"Email {email.id} stuck in {email.status} for "
-            f"{timeout_minutes}+ minutes, resetting to {reset_to_status}"
+    try:
+        now = timezone.now()
+
+        stuck_emails = EmailMessage.objects.filter(
+            status__in=STUCK_EMAIL_STATUSES,
+            updated_at__lt=now - timedelta(minutes=timeout_minutes)
         )
 
-        # Save the old status for logging
-        old_status = email.status
+        failed_count = 0
+        for email in stuck_emails:
+            logger.warning(
+                f"Email {email.id} stuck in {EmailStatus.PROCESSING.name} "
+                f"for {timeout_minutes}+ minutes, marking as "
+                f"{EmailStatus.FAILED.name}"
+            )
 
-        # Update the email status and persist the change
-        email.status = reset_to_status
-        email.save(update_fields=['status'])
+            email.status = EmailStatus.FAILED.value
+            email.error_message = (
+                f"Processing stuck for over {timeout_minutes} minutes. "
+                f"Requires manual intervention."
+            )
+            email.save(update_fields=['status', 'error_message'])
 
-        # Log the status reset with controlled line length
-        logger.info(
-            "[Scheduler] Reset email %s from %s to %s",
-            email.id,
-            old_status,
-            reset_to_status
-        )
+            failed_count += 1
 
-        # Count resets by description
-        reset_results[description] = reset_results.get(description, 0) + 1
+        if failed_count > 0:
+            logger.info(
+                f"Marked {failed_count} stuck emails as "
+                f"{EmailStatus.FAILED.name}"
+            )
 
-    # Log summary if any emails were reset
-    total_reset = sum(reset_results.values())
+        tracer.complete_task({
+            'failed_count': failed_count,
+            'completed_at': timezone.now().isoformat()
+        })
 
-    if total_reset > 0:
-        logger.info(
-            "Reset %d stuck emails: %s",
-            total_reset,
-            ", ".join(
-                [
-                    f"{count} {desc}"
-                    for desc, count in reset_results.items()
-                    if count > 0
-                ]
-            ),
-        )
+        return {
+            'failed_count': failed_count,
+            'status': 'completed'
+        }
+
+    except Exception as exc:
+        tracer.fail_task({'error': str(exc)}, str(exc))
+        logger.error(f"Stuck email reset failed: {exc}")
+        raise
 
 
 @shared_task

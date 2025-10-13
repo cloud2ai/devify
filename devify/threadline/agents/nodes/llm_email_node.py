@@ -1,0 +1,222 @@
+"""
+LLM Email processing node for email content.
+
+This node processes email text content using LLM to extract structured
+information. It operates purely on State without database access.
+"""
+
+import logging
+import re
+from typing import Dict, Any
+from django.conf import settings
+
+from threadline.agents.nodes.base_node import BaseLangGraphNode
+from threadline.agents.email_state import EmailState, add_node_error
+from threadline.utils.summary import call_llm
+
+logger = logging.getLogger(__name__)
+
+
+class LLMEmailNode(BaseLangGraphNode):
+    """
+    LLM Email processing node.
+
+    This node processes email text content using LLM
+    to extract and organize structured information.
+
+    State Input Requirements:
+    - text_content: Email text content to process
+    - prompt_config: User's prompt configuration (from workflow_prepare)
+    - attachments: List of attachment data with OCR content
+
+    Responsibilities:
+    - Check for email text content in State
+    - Read prompt configuration from State (no database access)
+    - Replace image placeholders with LLM-processed OCR content
+    - Execute LLM processing on email content
+    - Update State with llm_content
+    - Skip if email already has LLM content (unless force mode)
+    - Handle LLM errors gracefully
+    """
+
+    def __init__(self):
+        super().__init__("llm_email_node")
+
+    def can_enter_node(self, state: EmailState) -> bool:
+        """
+        Check if LLM Email node can enter.
+
+        LLM Email node can enter if:
+        - No errors in previous nodes (or force mode)
+        - Has email text content to process
+
+        Args:
+            state (EmailState): Current email state
+
+        Returns:
+            bool: True if node can enter, False otherwise
+        """
+        if not super().can_enter_node(state):
+            return False
+
+        text_content = state.get('text_content', '').strip()
+        if not text_content:
+            self.logger.error(
+                "No email text content available for LLM processing"
+            )
+            return False
+
+        return True
+
+    def execute_processing(self, state: EmailState) -> EmailState:
+        """
+        Execute LLM processing on email content.
+
+        Reads email content from State, replaces image placeholders with
+        OCR content, performs LLM processing, and updates State with
+        LLM results.
+
+        Args:
+            state (EmailState): Current email state
+
+        Returns:
+            EmailState: Updated state with LLM results
+        """
+        force = state.get('force', False)
+        text_content = state.get('text_content', '')
+        llm_content = state.get('llm_content', '')
+
+        if not force and llm_content:
+            self.logger.info(
+                f"Email already has LLM content, skipping in normal mode"
+            )
+            return state
+
+        content_with_ocr = self._replace_image_placeholders_with_ocr(
+            text_content,
+            state.get('attachments', [])
+        )
+
+        prompt_config = state.get('prompt_config')
+        if not prompt_config:
+            error_message = 'No prompt_config found in State'
+            self.logger.error(error_message)
+            return add_node_error(state, self.node_name, error_message)
+
+        email_content_prompt = prompt_config.get('email_content_prompt')
+        if not email_content_prompt:
+            error_message = 'Missing email_content_prompt in prompt_config'
+            self.logger.error(error_message)
+            return add_node_error(state, self.node_name, error_message)
+
+        output_language = prompt_config.get(
+            'output_language',
+            settings.LLM_OUTPUT_LANGUAGE
+        )
+
+        try:
+            self.logger.info("Processing email content with LLM")
+
+            llm_result = call_llm(
+                email_content_prompt,
+                content_with_ocr,
+                output_language
+            )
+            llm_content = llm_result.strip() if llm_result else ''
+
+            if llm_content:
+                self.logger.info("LLM email processing successful")
+                return {
+                    **state,
+                    'llm_content': llm_content
+                }
+            else:
+                self.logger.warning(
+                    "LLM email processing completed - no content generated"
+                )
+                return {
+                    **state,
+                    'llm_content': ''
+                }
+
+        except Exception as e:
+            self.logger.error(f"LLM email processing failed: {e}")
+            error_message = f'LLM email processing failed: {str(e)}'
+            updated_state = add_node_error(
+                state,
+                self.node_name,
+                error_message
+            )
+            updated_state['llm_content'] = ''
+            return updated_state
+
+    def _replace_image_placeholders_with_ocr(
+        self,
+        content: str,
+        attachments: list
+    ) -> str:
+        """
+        Replace [IMAGE: filename] placeholders with actual OCR content.
+
+        This method finds all image placeholders in the content and replaces
+        them with the corresponding LLM-processed OCR content from attachments.
+
+        Args:
+            content: Email content with image placeholders
+            attachments: List of attachment states
+
+        Returns:
+            str: Content with image placeholders replaced by OCR content
+        """
+        image_placeholder_pattern = r'\[IMAGE:\s*([^\]]+)\]'
+        placeholders = re.findall(image_placeholder_pattern, content)
+
+        if not placeholders:
+            self.logger.debug("No image placeholders found in email content")
+            return content
+
+        self.logger.info(
+            f"Found {len(placeholders)} image placeholders: {placeholders}"
+        )
+
+        ocr_content_map = {}
+        for att in attachments:
+            if att.get('is_image') and att.get('llm_content', '').strip():
+                safe_filename = att.get('safe_filename') or att.get('filename')
+                if safe_filename:
+                    ocr_content_map[safe_filename] = att['llm_content'].strip()
+                    self.logger.debug(
+                        f"Mapped {safe_filename} to OCR content "
+                        f"({len(att['llm_content'])} chars)"
+                    )
+
+        self.logger.info(
+            f"Created OCR content map with {len(ocr_content_map)} entries"
+        )
+
+        replaced_count = 0
+        for filename in placeholders:
+            filename_stripped = filename.strip()
+            if filename_stripped in ocr_content_map:
+                placeholder = f"[IMAGE: {filename}]"
+                ocr_content = ocr_content_map[filename_stripped]
+                content = content.replace(
+                    placeholder,
+                    f"\n[OCR Content for {filename_stripped}]:\n"
+                    f"{ocr_content}\n"
+                )
+                replaced_count += 1
+                self.logger.debug(
+                    f"Replaced placeholder for {filename_stripped}"
+                )
+            else:
+                self.logger.warning(
+                    f"No OCR content found for image placeholder: "
+                    f"{filename_stripped}"
+                )
+
+        self.logger.info(
+            f"Replaced {replaced_count}/{len(placeholders)} image placeholders"
+        )
+
+        return content

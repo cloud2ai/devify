@@ -1,7 +1,8 @@
 """
 Factory Boy factories for Threadline models
 
-This module provides factories for creating test data for all Threadline models.
+This module provides factories for creating test data for all
+Threadline models.
 """
 
 import factory
@@ -26,7 +27,9 @@ class UserFactory(DjangoModelFactory):
         model = User
 
     username = factory.Sequence(lambda n: f'testuser{n}')
-    email = factory.LazyAttribute(lambda obj: f'{obj.username}@example.com')
+    email = factory.LazyAttribute(
+        lambda obj: f'{obj.username}@example.com'
+    )
     first_name = factory.Faker('first_name')
     last_name = factory.Faker('last_name')
     is_active = True
@@ -56,7 +59,9 @@ class SettingsFactory(DjangoModelFactory):
 
     user = factory.SubFactory(UserFactory)
     key = factory.Sequence(lambda n: f'test_setting_{n}')
-    value = factory.LazyFunction(lambda: {'theme': 'light', 'language': 'en'})
+    value = factory.LazyFunction(
+        lambda: {'theme': 'light', 'language': 'en'}
+    )
     description = factory.Faker('sentence', nb_words=6)
     is_active = True
 
@@ -85,8 +90,7 @@ class EmailTaskFactory(DjangoModelFactory):
     class Meta:
         model = EmailTask
 
-    # Note: Removed user field - EmailTask is now a global background task
-    status = 'pending'
+    status = 'running'
     task_type = 'IMAP_EMAIL_FETCH'
 
 
@@ -119,13 +123,17 @@ class EmailAttachmentFactory(DjangoModelFactory):
     class Meta:
         model = EmailAttachment
 
+    user = factory.SubFactory(UserFactory)
     email_message = factory.SubFactory(EmailMessageFactory)
     filename = factory.Faker('file_name', extension='pdf')
+    safe_filename = factory.LazyAttribute(lambda obj: obj.filename)
     content_type = 'application/pdf'
-    file_size = factory.Faker('random_int', min=1024, max=10485760)  # 1KB to 10MB
-    file_path = factory.LazyAttribute(lambda obj: f'/uploads/{obj.filename}')
-    content = factory.Faker('text', max_nb_chars=500)
-    status = 'fetched'
+    # 1KB to 10MB
+    file_size = factory.Faker('random_int', min=1024, max=10485760)
+    file_path = factory.LazyAttribute(
+        lambda obj: f'/uploads/{obj.safe_filename}'
+    )
+    is_image = False
 
 
 class IssueFactory(DjangoModelFactory):
@@ -140,11 +148,22 @@ class IssueFactory(DjangoModelFactory):
     email_message = factory.SubFactory(EmailMessageFactory)
     title = factory.Faker('sentence', nb_words=8)
     description = factory.Faker('text', max_nb_chars=1000)
-    priority = factory.Iterator(['low', 'medium', 'high', 'critical', 'urgent'])
-    engine = factory.Iterator(['jira', 'email', 'slack', 'github', 'gitlab'])
+    priority = factory.Iterator(
+        ['low', 'medium', 'high', 'critical', 'urgent']
+    )
+    engine = factory.Iterator(
+        ['jira', 'email', 'slack', 'github', 'gitlab']
+    )
     external_id = factory.Sequence(lambda n: f'ISSUE-{n}')
-    issue_url = factory.LazyAttribute(lambda obj: f'https://{obj.engine}.example.com/issues/{obj.external_id}')
-    metadata = factory.LazyFunction(lambda: {'project': 'TEST', 'assignee': 'testuser'})
+    issue_url = factory.LazyAttribute(
+        lambda obj: (
+            f'https://{obj.engine}.example.com/'
+            f'issues/{obj.external_id}'
+        )
+    )
+    metadata = factory.LazyFunction(
+        lambda: {'project': 'TEST', 'assignee': 'testuser'}
+    )
 
 
 # Specialized factories for specific test scenarios
@@ -195,7 +214,7 @@ class EmailMessageWithSummaryFactory(EmailMessageFactory):
     summary_content = factory.Faker('text', max_nb_chars=300)
     summary_priority = factory.Iterator(['low', 'medium', 'high'])
     llm_content = factory.Faker('text', max_nb_chars=800)
-    status = 'llm_summary_success'
+    status = 'success'
 
 
 class IssueWithMetadataFactory(IssueFactory):

@@ -36,20 +36,11 @@ CELERY_TASK_SERIALIZER = 'json'
 CELERY_BEAT_SCHEDULE = {
     # Unified email fetching scheduler - runs every minute
     'schedule_email_fetch': {
-        'task': 'threadline.tasks.email_fetch.schedule_email_fetch',
+        'task': 'threadline.tasks.scheduler.schedule_email_fetch',
         'schedule': crontab(minute='*/1'),
         'args': (),
         'kwargs': {},
     },
-
-    # Email processing scheduler - runs every minute
-    'schedule_email_processing_tasks': {
-        'task': 'threadline.tasks.scheduler.schedule_email_processing_tasks',
-        'schedule': crontab(minute='*/1'),
-        'args': (),
-        'kwargs': {},
-    },
-
     # Reset stuck processing emails - runs every 30 minutes
     'reset_stuck_processing_emails': {
         'task': 'threadline.tasks.scheduler.schedule_reset_stuck_processing_emails',

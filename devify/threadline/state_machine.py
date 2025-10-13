@@ -1,52 +1,52 @@
 """
 State Machine Configuration for Email Processing Workflow
 
-This module defines the state machine rules for both EmailMessage and
-EmailAttachment models, making state transitions more explicit and easier
-to maintain.
+This module defines the state machine rules for EmailMessage models.
 
-Design Logic Overview:
-=====================
+SIMPLIFIED STATE MACHINE (LangGraph-based)
+===========================================
 
-1. Linear Processing Flow:
-   - FETCHED -> OCR -> LLM_EMAIL -> LLM_SUMMARY -> ISSUE -> COMPLETED
-   - Each stage must complete successfully before proceeding to the next
-   - Failed stages can retry by returning to their processing state
+This state machine has been simplified from 19 states to 4 states
+to align with the LangGraph architecture.
 
-2. Error Handling Strategy:
-   - FAILED states always transition back to their respective PROCESSING state
-   - This enables automatic retry without manual intervention
-   - Stuck tasks are detected and reset by the scheduler
+States:
+-------
+- FETCHED: Email has been fetched and ready for processing
+- PROCESSING: Email is being processed through the workflow
+- FAILED: Processing failed, can be retried
+- SUCCESS: All processing completed successfully (terminal state)
 
-3. Parallel Processing Support:
-   - Currently supports sequential processing for stability and reliability
-   - Future enhancement: OCR and email content processing can run in parallel
-   - Chain orchestrator manages the processing sequence and dependencies
+State Transitions:
+-----------------
+FETCHED → PROCESSING (chain orchestrator starts processing)
+PROCESSING → SUCCESS (all tasks succeed)
+PROCESSING → FAILED (any task fails)
+FAILED → PROCESSING (retry)
 
-4. Flexible Completion Paths:
-   - LLM_SUMMARY_SUCCESS can proceed to either ISSUE_PROCESSING or COMPLETED
-   - COMPLETED state is terminal and cannot transition to other states
-   - Issue creation is optional based on user configuration
+Key Design Principles:
+---------------------
+1. Database status shows overall progress only
+   (not individual step status)
+2. Detailed step-by-step progress is managed by
+   LangGraph internal state
+3. Error details are logged, not reflected in status
+4. Simpler state model = easier debugging, monitoring,
+   and maintenance
+5. Individual tasks (OCR, LLM, etc.) focus on business logic,
+   not status management
+6. SUCCESS is the terminal state; error_message is cleared
+   on success transitions
 
-5. Success State Skipping:
-   - Adjacent SUCCESS states can directly transition to the next SUCCESS state
-   - This allows skipping intermediate processing stages when conditions are met
-   - Example: OCR_SUCCESS can directly go to LLM_EMAIL_SUCCESS if content exists
+Migration from Old States:
+-------------------------
+Old detailed states have been migrated to simplified states:
+- All *_PROCESSING states → PROCESSING
+- All *_SUCCESS states → SUCCESS
+- All *_FAILED states → FAILED
+- FETCHED remains unchanged
+- COMPLETED has been removed (SUCCESS is now terminal)
 
-6. State Validation:
-   - All transitions are validated against the state machine rules
-   - Force mode bypasses validation for manual reprocessing
-   - Prevents invalid state transitions that could corrupt workflow
-
-7. Recovery Mechanisms:
-   - Automatic retry for failed processing stages
-   - Timeout-based stuck task detection and reset
-   - Graceful degradation when external services are unavailable
-
-8. Monitoring and Debugging:
-   - Clear state descriptions for each status
-   - Comprehensive logging of state transitions
-   - Easy identification of workflow bottlenecks
+See migration file: 0007_migrate_to_simplified_statuses.py
 """
 
 from enum import Enum
@@ -57,38 +57,24 @@ class EmailStatus(Enum):
     """
     Email processing status enumeration.
 
-    Unified status for email and attachment processing workflow.
+    Simplified status for LangGraph-based email processing workflow.
+
+    This enum has been simplified from 19 states to 4 states:
+    - FETCHED: Email has been fetched and ready for processing
+    - PROCESSING: Email is being processed through the workflow
+    - SUCCESS: All processing completed successfully (terminal state)
+    - FAILED: Processing failed, can be retried
+
+    Detailed progress tracking is handled by LangGraph internal state,
+    not stored in the database.
     """
-    # Email fetch status
+    # Initial state
     FETCHED = 'fetched'
 
-    # OCR processing status
-    OCR_PROCESSING = 'ocr_processing'
-    OCR_SUCCESS = 'ocr_success'
-    OCR_FAILED = 'ocr_failed'
-
-    # LLM OCR processing status
-    LLM_OCR_PROCESSING = 'llm_ocr_processing'
-    LLM_OCR_SUCCESS = 'llm_ocr_success'
-    LLM_OCR_FAILED = 'llm_ocr_failed'
-
-    # LLM email content processing status
-    LLM_EMAIL_PROCESSING = 'llm_email_processing'
-    LLM_EMAIL_SUCCESS = 'llm_email_success'
-    LLM_EMAIL_FAILED = 'llm_email_failed'
-
-    # LLM summary generation status
-    LLM_SUMMARY_PROCESSING = 'llm_summary_processing'
-    LLM_SUMMARY_SUCCESS = 'llm_summary_success'
-    LLM_SUMMARY_FAILED = 'llm_summary_failed'
-
-    # Issue creation status
-    ISSUE_PROCESSING = 'issue_processing'
-    ISSUE_SUCCESS = 'issue_success'
-    ISSUE_FAILED = 'issue_failed'
-
-    # Completion status
-    COMPLETED = 'completed'
+    # Processing states
+    PROCESSING = 'processing'
+    SUCCESS = 'success'
+    FAILED = 'failed'
 
     @classmethod
     def choices(cls):
@@ -99,171 +85,43 @@ class EmailStatus(Enum):
             List of tuples with (value, display_name)
         """
         return [
-            # Email fetch status
             (cls.FETCHED.value, 'Fetched'),
-
-            # OCR processing status
-            (cls.OCR_PROCESSING.value, 'OCR Processing'),
-            (cls.OCR_SUCCESS.value, 'OCR Success'),
-            (cls.OCR_FAILED.value, 'OCR Failed'),
-
-            # LLM OCR processing status
-            (cls.LLM_OCR_PROCESSING.value, 'LLM OCR Processing'),
-            (cls.LLM_OCR_SUCCESS.value, 'LLM OCR Success'),
-            (cls.LLM_OCR_FAILED.value, 'LLM OCR Failed'),
-
-            # LLM email content processing status
-            (cls.LLM_EMAIL_PROCESSING.value, 'LLM Email Processing'),
-            (cls.LLM_EMAIL_SUCCESS.value, 'LLM Email Success'),
-            (cls.LLM_EMAIL_FAILED.value, 'LLM Email Failed'),
-
-            # LLM summary generation status
-            (cls.LLM_SUMMARY_PROCESSING.value, 'LLM Summary Processing'),
-            (cls.LLM_SUMMARY_SUCCESS.value, 'LLM Summary Success'),
-            (cls.LLM_SUMMARY_FAILED.value, 'LLM Summary Failed'),
-
-            # Issue creation status
-            (cls.ISSUE_PROCESSING.value, 'Issue Processing'),
-            (cls.ISSUE_SUCCESS.value, 'Issue Success'),
-            (cls.ISSUE_FAILED.value, 'Issue Failed'),
-
-            # Completion status
-            (cls.COMPLETED.value, 'Completed')
+            (cls.PROCESSING.value, 'Processing'),
+            (cls.SUCCESS.value, 'Success'),
+            (cls.FAILED.value, 'Failed'),
         ]
 
-
-# Unified email state machine for email and attachment processing
+# Email state machine - simplified for LangGraph workflow
 EMAIL_STATE_MACHINE = {
     EmailStatus.FETCHED: {
         'next': [
-            EmailStatus.OCR_PROCESSING,
-            EmailStatus.OCR_SUCCESS
+            EmailStatus.PROCESSING,
         ],
         'description': 'Email has been fetched and ready for processing'
     },
 
-    EmailStatus.OCR_PROCESSING: {
+    EmailStatus.PROCESSING: {
         'next': [
-            EmailStatus.OCR_SUCCESS,
-            EmailStatus.OCR_FAILED,
+            EmailStatus.SUCCESS,
+            EmailStatus.FAILED,
         ],
-        'description': 'OCR processing is in progress'
+        'description': 'Email is being processed by the workflow'
     },
 
-    EmailStatus.OCR_SUCCESS: {
+    EmailStatus.FAILED: {
         'next': [
-            EmailStatus.LLM_OCR_PROCESSING,
-            EmailStatus.LLM_OCR_SUCCESS
+            EmailStatus.PROCESSING,
         ],
-        'description': 'OCR processing completed successfully'
+        'description': 'Email processing failed, can be retried'
     },
 
-    EmailStatus.OCR_FAILED: {
-        'next': [
-            EmailStatus.OCR_PROCESSING,
-        ],
-        'description': 'OCR processing failed'
-    },
-
-    EmailStatus.LLM_OCR_PROCESSING: {
-        'next': [
-            EmailStatus.LLM_OCR_SUCCESS,
-            EmailStatus.LLM_OCR_FAILED,
-        ],
-        'description': 'LLM processing OCR results in progress'
-    },
-
-    EmailStatus.LLM_OCR_SUCCESS: {
-        'next': [
-            EmailStatus.LLM_EMAIL_PROCESSING,
-            EmailStatus.LLM_EMAIL_SUCCESS
-        ],
-        'description': 'LLM OCR processing completed successfully'
-    },
-
-    EmailStatus.LLM_OCR_FAILED: {
-        'next': [
-            EmailStatus.LLM_OCR_PROCESSING,
-        ],
-        'description': 'LLM OCR processing failed'
-    },
-
-    EmailStatus.LLM_EMAIL_PROCESSING: {
-        'next': [
-            EmailStatus.LLM_EMAIL_SUCCESS,
-            EmailStatus.LLM_EMAIL_FAILED,
-        ],
-        'description': 'LLM processing email content in progress'
-    },
-
-    EmailStatus.LLM_EMAIL_SUCCESS: {
-        'next': [
-            EmailStatus.LLM_SUMMARY_PROCESSING,
-            EmailStatus.LLM_SUMMARY_SUCCESS
-        ],
-        'description': 'LLM email processing completed successfully'
-    },
-
-    EmailStatus.LLM_EMAIL_FAILED: {
-        'next': [
-            EmailStatus.LLM_EMAIL_PROCESSING,
-        ],
-        'description': 'LLM email processing failed'
-    },
-
-    EmailStatus.LLM_SUMMARY_PROCESSING: {
-        'next': [
-            EmailStatus.LLM_SUMMARY_SUCCESS,
-            EmailStatus.LLM_SUMMARY_FAILED,
-        ],
-        'description': 'LLM summary generation in progress'
-    },
-
-    EmailStatus.LLM_SUMMARY_SUCCESS: {
-        'next': [
-            EmailStatus.ISSUE_PROCESSING,
-            EmailStatus.ISSUE_SUCCESS,
-            EmailStatus.COMPLETED
-        ],
-        'description': 'LLM summary generation completed successfully'
-    },
-
-    EmailStatus.LLM_SUMMARY_FAILED: {
-        'next': [
-            EmailStatus.LLM_SUMMARY_PROCESSING,
-        ],
-        'description': 'LLM summary generation failed'
-    },
-
-    EmailStatus.ISSUE_PROCESSING: {
-        'next': [
-            EmailStatus.ISSUE_SUCCESS,
-            EmailStatus.ISSUE_FAILED,
-            EmailStatus.COMPLETED,  # Allow direct completion when no issue needed
-        ],
-        'description': 'Issue creation is in progress or skipped'
-    },
-
-    EmailStatus.ISSUE_SUCCESS: {
-        'next': [
-            EmailStatus.COMPLETED,
-        ],
-        'description': 'Issue creation completed successfully'
-    },
-
-    EmailStatus.ISSUE_FAILED: {
-        'next': [
-            EmailStatus.ISSUE_PROCESSING,
-        ],
-        'description': 'Issue creation failed'
-    },
-
-    EmailStatus.COMPLETED: {
+    EmailStatus.SUCCESS: {
         'next': [],
-        'description': 'Email processing completed successfully'
-    }
+        'description': (
+            'Email processing completed successfully (terminal state)'
+        )
+    },
 }
-
 
 def can_transition_to(current_status: str, target_status: str,
                      state_machine: Dict) -> bool:
@@ -293,8 +151,10 @@ def can_transition_to(current_status: str, target_status: str,
     allowed_next = state_machine[current_enum]['next']
     return target_enum in allowed_next
 
-
-def get_next_states(current_status: str, state_machine: Dict) -> List[str]:
+def get_next_states(
+    current_status: str,
+    state_machine: Dict
+) -> List[str]:
     """
     Get all possible next states for current status.
 
@@ -316,7 +176,6 @@ def get_next_states(current_status: str, state_machine: Dict) -> List[str]:
         return []
 
     return [state.value for state in state_machine[current_enum]['next']]
-
 
 def get_status_description(status: str, state_machine: Dict) -> str:
     """
@@ -340,7 +199,6 @@ def get_status_description(status: str, state_machine: Dict) -> str:
         return "Unknown status"
 
     return state_machine[current_enum]['description']
-
 
 def get_initial_email_status() -> str:
     """

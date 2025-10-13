@@ -21,12 +21,14 @@ from threadline.utils.email import (
     EmailSaveService,
 )
 from threadline.utils.task_cleanup import cleanup_stale_tasks
+from threadline.utils.task_cleanup import cleanup_old_tasks as cleanup_func
 from threadline.utils.task_lock import (
     acquire_task_lock,
     prevent_duplicate_task,
     release_task_lock
 )
 from threadline.utils.task_tracer import TaskTracer
+from threadline.tasks.email_workflow import process_email_workflow
 
 logger = logging.getLogger(__name__)
 
@@ -59,10 +61,16 @@ def imap_email_fetch():
         tracer.set_task_id(task_id)
         tracer.append_task("INIT", "IMAP email fetch task started")
 
-        users_with_email_config = User.objects.filter(
+        # Query users with IMAP configuration
+        # Must satisfy BOTH conditions:
+        # 1. mode='custom_imap'
+        # 2. imap_config field exists
+        users_with_imap_config = User.objects.filter(
             is_active=True,
             settings__key="email_config",
-            settings__is_active=True
+            settings__is_active=True,
+            settings__value__mode='custom_imap',
+            settings__value__has_key='imap_config'
         ).prefetch_related(
             Prefetch('settings', queryset=Settings.objects.filter(
                 key="email_config",
@@ -73,42 +81,41 @@ def imap_email_fetch():
         processed_count = 0
         error_count = 0
         emails_processed = 0
+        email_ids = []
 
-        for user in users_with_email_config:
+        for user in users_with_imap_config:
+            user_display = f"{user.username} (ID: {user.id})"
             try:
                 tracer.append_task(
-                    "USER_PROCESS", f"Starting to process user {user.id}")
+                    "USER_PROCESS",
+                    f"Starting to process user {user_display}")
 
-                # Get email config from prefetched settings (guaranteed
-                # to exist)
+                # Get email config from prefetched settings
+                # (guaranteed to have imap_config due to SQL filter)
                 email_config_setting = user.settings.first()
                 email_config = email_config_setting.value
 
-                # Only check if IMAP config exists (since we already filtered
-                # for email_config)
-                if "imap_config" not in email_config:
-                    logger.debug(f"User {user.id} has no IMAP config, skipping")
-                    tracer.append_task(
-                        "USER_SKIP",
-                        f"User {user.id} has no IMAP config, skipping")
-                    continue
-
                 # Fetch emails for each user with pre-fetched config
-                result = fetch_user_imap_emails(user.id, email_config)
+                result = fetch_user_imap_emails(
+                    user.id, email_config, user_display=user_display
+                )
                 processed_count += 1
                 emails_processed += result.get("emails_processed", 0)
+                email_ids.extend(result.get("email_ids", []))
 
                 tracer.append_task(
                     "USER_SUCCESS",
-                    f"User {user.id} processing completed: {result}")
+                    f"User {user_display} processing completed: {result}")
 
             except Exception as exc:
                 error_count += 1
                 tracer.append_task(
                     "USER_ERROR",
-                    f"User {user.id} processing failed: {str(exc)}",
+                    f"User {user_display} processing failed: {str(exc)}",
                     {"level": "ERROR"})
-                logger.error(f"Failed to process user {user.id}: {exc}")
+                logger.error(
+                    f"Failed to process user {user_display}: {exc}"
+                )
 
         # Complete task
         message = (
@@ -123,9 +130,20 @@ def imap_email_fetch():
         tracer.complete_task(tracer.task.details)
         logger.info(message)
 
+        # Trigger email processing after fetch completes
+        if email_ids:
+            for email_id in email_ids:
+                process_email_workflow.delay(email_id)
+
+            logger.info(
+                f"Triggered processing for {len(email_ids)} emails "
+                f"after IMAP fetch: {email_ids}"
+            )
+
         return {
             "processed_users": processed_count,
             "emails_processed": emails_processed,
+            "email_ids": email_ids,
             "error_count": error_count,
             "status": "completed"
         }
@@ -176,6 +194,7 @@ def haraka_email_fetch():
 
         processed_count = 0
         error_count = 0
+        email_ids = []
 
         # Process all Haraka emails (global processing, auto-assign users)
         for email_data in processor.process_emails():
@@ -185,7 +204,7 @@ def haraka_email_fetch():
                 if not user:
                     logger.warning(
                         f"No user found for email recipient: "
-                        f"{email_data.get("recipients")}"
+                        f"{email_data.get('recipients')}"
                     )
                     # Add execution log for skipped email due to no user found
                     tracer.append_task(
@@ -205,6 +224,7 @@ def haraka_email_fetch():
                     task_id=tracer.task_id
                 )
                 processed_count += 1
+                email_ids.append(email_msg.id)
 
                 tracer.append_task(
                     "EMAIL_SUCCESS",
@@ -236,8 +256,19 @@ def haraka_email_fetch():
         tracer.complete_task(tracer.task.details)
         logger.info(message)
 
+        # Trigger email processing after fetch completes
+        if email_ids:
+            for email_id in email_ids:
+                process_email_workflow.delay(email_id)
+
+            logger.info(
+                f"Triggered processing for {len(email_ids)} emails "
+                f"after Haraka fetch: {email_ids}"
+            )
+
         return {
             "emails_processed": processed_count,
+            "email_ids": email_ids,
             "errors": error_count,
             "status": "completed"
         }
@@ -258,52 +289,69 @@ def haraka_email_fetch():
     user_id_param="user_id",
     timeout=300
 )
-def fetch_user_imap_emails(user_id: int, email_config: dict):
+def fetch_user_imap_emails(
+    user_id: int, email_config: dict, user_display: str = None
+):
     """
     Fetch IMAP emails for specific user
 
     Args:
         user_id: User ID
         email_config: Pre-fetched email configuration (required for optimization)
+        user_display: User display string for logging (optional, e.g.
+                      "admin (ID: 1)")
     """
+    if not user_display:
+        user_display = f"User ID: {user_id}"
+
     try:
         # Validate email config
         if not email_config or "imap_config" not in email_config:
-            logger.warning(f"User {user_id} has no IMAP config")
+            logger.warning(
+                f"User {user_display} has no IMAP config"
+            )
             return {"status": "skipped", "reason": "no_imap_config"}
 
         # Use existing EmailProcessor to process emails
         processor = EmailProcessor(
             source="imap",
             parser_type="flanker",
-            email_config=email_config["imap_config"]
+            email_config=email_config["imap_config"],
+            user_context=user_display
         )
 
         save_service = EmailSaveService()
         processed_count = 0
         error_count = 0
+        email_ids = []
 
         # Process emails
         for email_data in processor.process_emails():
             try:
                 # Save email to database
-                save_service.save_email(user_id, email_data)
+                email_msg = save_service.save_email(user_id, email_data)
                 processed_count += 1
+                email_ids.append(email_msg.id)
             except Exception as exc:
                 error_count += 1
                 logger.error(f"Failed to save email: {exc}")
 
         result = {
             "emails_processed": processed_count,
+            "email_ids": email_ids,
             "errors": error_count,
             "status": "completed"
         }
 
-        logger.info(f"IMAP email fetch completed for user {user_id}: {result}")
+        logger.info(
+            f"IMAP email fetch completed for user {user_display}: {result}"
+        )
         return result
 
     except Exception as exc:
-        logger.error(f"IMAP email fetch failed for user {user_id}: {exc}")
+        logger.error(
+            f"IMAP email fetch failed for user {user_display}: {exc}"
+        )
         raise
 
 
@@ -313,7 +361,6 @@ def cleanup_old_tasks():
     Periodic task cleanup
     """
     try:
-        from threadline.utils.task_cleanup import cleanup_old_tasks as cleanup_func
         result = cleanup_func(days_old=1)
         logger.info(f"Task cleanup completed: {result}")
         return result

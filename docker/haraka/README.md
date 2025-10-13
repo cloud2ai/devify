@@ -53,7 +53,7 @@ Environment-specific domain configurations:
 **Production (`host_list.prod`):**
 - `devify.com` - Main production domain
 - `mail.devify.com` - Mail subdomain
-- `aimychats.com` - Alternative production domain
+- `devify.local` - Alternative production domain
 
 ### `plugins/redis_queue.js`
 Custom plugin functionality:

@@ -136,8 +136,8 @@ def test_email_task(test_user):
     Create a test email task
     """
     return EmailTask.objects.create(
-        user=test_user,
-        status='pending'
+        task_type=EmailTask.TaskType.IMAP_FETCH,
+        status='running'
     )
 
 
@@ -162,18 +162,19 @@ def test_email_message(test_user, test_email_task):
 
 
 @pytest.fixture
-def test_email_attachment(test_email_message):
+def test_email_attachment(test_user, test_email_message):
     """
     Create a test email attachment
     """
     return EmailAttachment.objects.create(
+        user=test_user,
         email_message=test_email_message,
         filename='test_attachment.pdf',
+        safe_filename='test_attachment.pdf',
         content_type='application/pdf',
         file_size=1024,
         file_path='/uploads/test_attachment.pdf',
-        content='Attachment content',
-        status='fetched'
+        is_image=False
     )
 
 

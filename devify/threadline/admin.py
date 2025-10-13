@@ -338,6 +338,15 @@ class EmailMessageAdmin(admin.ModelAdmin):
 
         return mark_safe('<br>'.join(links))
 
+    def save_model(self, request, obj, form, change):
+        """
+        Override save_model to allow admin to bypass state validation.
+
+        Admin users can change status freely without state machine validation.
+        """
+        obj._from_admin = True
+        super().save_model(request, obj, form, change)
+
     def get_queryset(self, request):
         """Optimize queryset with select_related and prefetch_related."""
         return (super().get_queryset(request)

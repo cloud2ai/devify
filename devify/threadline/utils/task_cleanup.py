@@ -5,7 +5,7 @@ Provides utilities for cleaning up stale and completed tasks.
 """
 
 import logging
-from typing import Dict, List
+from typing import Dict, List, Union
 from django.utils import timezone
 from django.db import transaction
 from datetime import timedelta
@@ -20,10 +20,18 @@ logger = logging.getLogger(__name__)
 
 
 def cleanup_stale_tasks(
-    timeout_minutes: int = settings.TASK_TIMEOUT_MINUTES
+    timeout_minutes: int = settings.TASK_TIMEOUT_MINUTES,
+    task_types: Union[str, List[str], None] = None
 ) -> Dict:
     """
-    Clean up stale tasks (RUNNING or PENDING tasks that are too old)
+    Clean up stale tasks (RUNNING tasks that are too old)
+
+    Args:
+        timeout_minutes: Minutes threshold
+        task_types: Optional task type(s) to filter. Can be:
+            - None: Clean all types (default, for backward compatibility)
+            - str: Single task type (e.g., 'STUCK_EMAIL_RESET')
+            - List[str]: Multiple task types
 
     Returns:
         Cleanup statistics
@@ -32,14 +40,18 @@ def cleanup_stale_tasks(
         now = timezone.now()
         timeout_threshold = now - timedelta(minutes=timeout_minutes)
 
-        # Find stale tasks
-        stale_tasks = EmailTask.objects.filter(
-            status__in=[
-                EmailTask.TaskStatus.RUNNING,
-                EmailTask.TaskStatus.PENDING
-            ],
-            started_at__lt=timeout_threshold
-        )
+        query_filters = {
+            'status': EmailTask.TaskStatus.RUNNING,
+            'started_at__lt': timeout_threshold
+        }
+
+        if task_types is not None:
+            if isinstance(task_types, str):
+                query_filters['task_type'] = task_types
+            elif isinstance(task_types, list):
+                query_filters['task_type__in'] = task_types
+
+        stale_tasks = EmailTask.objects.filter(**query_filters)
 
         cancelled_count = 0
         for task in stale_tasks:
@@ -128,8 +140,7 @@ def cleanup_old_tasks(days_old: int = 1) -> Dict:
             status__in=[
                 EmailTask.TaskStatus.COMPLETED,
                 EmailTask.TaskStatus.FAILED,
-                EmailTask.TaskStatus.CANCELLED,
-                EmailTask.TaskStatus.SKIPPED
+                EmailTask.TaskStatus.CANCELLED
             ],
             completed_at__lt=cutoff_date
         )
@@ -181,9 +192,6 @@ def get_task_metrics() -> Dict:
         cancelled_tasks = EmailTask.objects.filter(
             status=EmailTask.TaskStatus.CANCELLED
         ).count()
-        skipped_tasks = EmailTask.objects.filter(
-            status=EmailTask.TaskStatus.SKIPPED
-        ).count()
 
         # Timeout tasks detection (running over TASK_TIMEOUT_MINUTES)
         timeout_threshold = now - timedelta(
@@ -205,7 +213,6 @@ def get_task_metrics() -> Dict:
             'completed_tasks': completed_tasks,
             'failed_tasks': failed_tasks,
             'cancelled_tasks': cancelled_tasks,
-            'skipped_tasks': skipped_tasks,
             'timeout_tasks': timeout_tasks,
             'recent_failed_tasks': recent_failed,
             'timestamp': now.isoformat()

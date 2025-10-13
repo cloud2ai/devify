@@ -90,7 +90,7 @@ graph TB
 
 ```bash
 # .env 文件中的环境变量
-AUTO_ASSIGN_EMAIL_DOMAIN=aimychats.com           # 自动分配邮箱的域名
+AUTO_ASSIGN_EMAIL_DOMAIN=devify.local           # 自动分配邮箱的域名
 DEFAULT_LANGUAGE=en-US                            # 系统默认语言
 DEFAULT_SCENE=chat                                # 系统默认场景
 THREADLINE_CONFIG_PATH=/opt/devify/conf/threadline  # 配置文件路径
@@ -99,7 +99,7 @@ THREADLINE_CONFIG_PATH=/opt/devify/conf/threadline  # 配置文件路径
 **Django settings.py 中的配置**：
 ```python
 # settings/globals.py 或 settings.py
-AUTO_ASSIGN_EMAIL_DOMAIN = os.getenv('AUTO_ASSIGN_EMAIL_DOMAIN', 'aimychats.com')
+AUTO_ASSIGN_EMAIL_DOMAIN = os.getenv('AUTO_ASSIGN_EMAIL_DOMAIN', 'devify.local')
 DEFAULT_LANGUAGE = os.getenv('DEFAULT_LANGUAGE', 'en-US')
 DEFAULT_SCENE = os.getenv('DEFAULT_SCENE', 'chat')
 THREADLINE_CONFIG_PATH = os.getenv('THREADLINE_CONFIG_PATH', '/opt/devify/conf/threadline')
@@ -302,7 +302,7 @@ class PromptConfigManager:
 class EmailAlias(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     alias = models.CharField(max_length=255, unique=True)
-    domain = models.CharField(max_length=255, default="aimychats.com")
+    domain = models.CharField(max_length=255, default="devify.local")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -323,7 +323,7 @@ class EmailAlias(models.Model):
         """验证别名唯一性"""
         if domain is None:
             from django.conf import settings
-            domain = getattr(settings, 'AUTO_ASSIGN_EMAIL_DOMAIN', 'aimychats.com')
+            domain = getattr(settings, 'AUTO_ASSIGN_EMAIL_DOMAIN', 'devify.local')
         return not cls.objects.filter(alias=alias, domain=domain).exists()
 
     @classmethod
@@ -472,7 +472,7 @@ class CustomRegisterView(RegisterView):
         from django.conf import settings
         email_config = {
             "email_mode": "auto_assign",
-            "auto_assign_domain": getattr(settings, 'AUTO_ASSIGN_EMAIL_DOMAIN', 'aimychats.com')
+            "auto_assign_domain": getattr(settings, 'AUTO_ASSIGN_EMAIL_DOMAIN', 'devify.local')
         }
         Settings.objects.create(
             user=user,
@@ -526,7 +526,7 @@ urlpatterns = [
 # 新的配置键值对
 email_config = {
     "email_mode": "auto_assign|custom_imap",
-    "auto_assign_domain": "aimychats.com",
+    "auto_assign_domain": "devify.local",
     "custom_imap_config": {...}
 }
 
@@ -561,7 +561,7 @@ class EmailAlias(models.Model):
         """保存时设置默认domain"""
         if not self.domain:
             from django.conf import settings
-            self.domain = getattr(settings, 'AUTO_ASSIGN_EMAIL_DOMAIN', 'aimychats.com')
+            self.domain = getattr(settings, 'AUTO_ASSIGN_EMAIL_DOMAIN', 'devify.local')
         super().save(*args, **kwargs)
 ```
 

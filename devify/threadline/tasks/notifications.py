@@ -10,36 +10,12 @@ from threadline.state_machine import EmailStatus
 
 logger = logging.getLogger(__name__)
 
-# Status color mapping for notifications
+# Status color mapping for notifications (simplified 4-state model)
 STATUS_COLORS = {
     'FETCHED': 'blue',
-    'OCR_PROCESSING': 'blue',
-    'OCR_SUCCESS': 'green',
-    'OCR_FAILED': 'red',
-
-    # LLM OCR processing status
-    'LLM_OCR_PROCESSING': 'blue',
-    'LLM_OCR_SUCCESS': 'green',
-    'LLM_OCR_FAILED': 'red',
-
-    # LLM Email processing (covers both body and attachments)
-    'LLM_EMAIL_PROCESSING': 'blue',
-    'LLM_EMAIL_SUCCESS': 'green',
-    'LLM_EMAIL_FAILED': 'red',
-
-    'LLM_SUMMARY_PROCESSING': 'blue',
-    'LLM_SUMMARY_SUCCESS': 'green',
-    'LLM_SUMMARY_FAILED': 'red',
-    'ISSUE_PROCESSING': 'blue',
-    'ISSUE_SUCCESS': 'green',
-    'ISSUE_FAILED': 'red',
-    'COMPLETED': 'green',
-    # Add fallback colors for any other statuses
-    'PENDING': 'grey',
-    'RUNNING': 'blue',
+    'PROCESSING': 'blue',
     'SUCCESS': 'green',
     'FAILED': 'red',
-    'SKIPPED': 'grey'
 }
 
 # Supported webhook providers
@@ -91,7 +67,7 @@ def build_notification_payload(
     status, email, old_status=None, new_status=None, language=None
 ):
     """
-    Build notification payload with generic message templates.
+    Build notification payload with simplified 4-state model.
     Only payload fields are internationalized.
     """
     payload = {
@@ -103,6 +79,7 @@ def build_notification_payload(
         "user": email.user.username if email.user else None,
         "language": language or 'zh-hans',
     }
+
     # Add status transition information if available
     if old_status and new_status:
         payload.update({
@@ -110,165 +87,76 @@ def build_notification_payload(
             "new_status": new_status,
             "status_transition": f"{old_status} -> {new_status}"
         })
-    # Internationalized message content for webhook
+
+    # Simplified message templates for 5-state model
     if status == EmailStatus.FETCHED.value:
         payload.update({
             "message": _(
                 "New email received: {subject}"
             ).format(subject=email.subject),
-            "stage": _("Email Fetching"),
+            "stage": _("Email Fetched"),
             "details": _("From: {sender}").format(sender=email.sender)
         })
-    elif status == EmailStatus.OCR_SUCCESS.value:
+
+    elif status == EmailStatus.PROCESSING.value:
         payload.update({
             "message": _(
-                "OCR processing completed: {subject}"
+                "Processing email: {subject}"
             ).format(subject=email.subject),
-            "stage": _("OCR Processing"),
-            "details": _("Image text extraction successful")
+            "stage": _("Processing"),
+            "details": _(
+                "Email is being processed through the workflow"
+            )
         })
-    elif status == EmailStatus.OCR_FAILED.value:
-        payload.update({
-            "message": _(
-                "OCR processing failed: {subject}"
-            ).format(subject=email.subject),
-            "stage": _("OCR Processing"),
-            "details": _("Image text extraction failed")
-        })
-    elif status == EmailStatus.LLM_OCR_PROCESSING.value:
-        payload.update({
-            "message": _(
-                "LLM processing OCR results: {subject}"
-            ).format(subject=email.subject),
-            "stage": _("LLM OCR Processing"),
-            "details": _("Processing OCR results with LLM")
-        })
-    elif status == EmailStatus.LLM_OCR_SUCCESS.value:
-        payload.update({
-            "message": _(
-                "LLM OCR processing completed: {subject}"
-            ).format(subject=email.subject),
-            "stage": _("LLM OCR Processing"),
-            "details": _("OCR results processed successfully")
-        })
-    elif status == EmailStatus.LLM_OCR_FAILED.value:
-        payload.update({
-            "message": _(
-                "LLM OCR processing failed: {subject}"
-            ).format(subject=email.subject),
-            "stage": _("LLM OCR Processing"),
-            "details": _("Failed to process OCR results with LLM")
-        })
-    elif status == EmailStatus.LLM_EMAIL_PROCESSING.value:
-        payload.update({
-            "message": _(
-                "LLM processing email content: {subject}"
-            ).format(subject=email.subject),
-            "stage": _("LLM Email Processing"),
-            "details": _("Processing email content with LLM")
-        })
-    elif status == EmailStatus.LLM_EMAIL_SUCCESS.value:
-        payload.update({
-            "message": _(
-                "Email content has been organized and is ready for "
-                "summary generation."
-            ),
-            "stage": _("Email Content Organization"),
-            "details": _("Email content organized successfully")
-        })
-    elif status == EmailStatus.LLM_SUMMARY_SUCCESS.value:
-        payload.update({
-            "message": _(
-                "Email summary has been generated successfully. "
-                "Ready for issue creation."
-            ),
-            "stage": _("Summary Generation"),
-            "details": _("Email summary generated successfully")
-        })
-    elif status == EmailStatus.LLM_EMAIL_FAILED.value:
-        payload.update({
-            "message": _(
-                "Failed to organize email content. "
-                "Please check the error details."
-            ),
-            "stage": _("Email Content Organization"),
-            "details": _("Email content organization failed")
-        })
-    elif status == EmailStatus.LLM_SUMMARY_PROCESSING.value:
-        payload.update({
-            "message": _(
-                "LLM generating summary: {subject}"
-            ).format(subject=email.subject),
-            "stage": _("LLM Summary Processing"),
-            "details": _("Generating email summary with LLM")
-        })
-    elif status == EmailStatus.LLM_SUMMARY_FAILED.value:
-        payload.update({
-            "message": _(
-                "Failed to generate email summary. "
-                "Please check the error details."
-            ),
-            "stage": _("Summary Generation"),
-            "details": _("Email summary generation failed")
-        })
-    elif status == EmailStatus.ISSUE_PROCESSING.value:
-        payload.update({
-            "message": _(
-                "Creating issue: {subject}"
-            ).format(subject=email.subject),
-            "stage": _("Issue Creation"),
-            "details": _("Creating JIRA issue")
-        })
-    elif status == EmailStatus.ISSUE_SUCCESS.value:
+
+    elif status == EmailStatus.SUCCESS.value:
+        # Try to get issue information for SUCCESS (terminal state)
         try:
-            jira_issue = email.jiraissue_set.first()
-            if jira_issue:
+            issues = email.issues.all()
+            if issues.exists():
+                issue = issues.first()
                 payload.update({
                     "message": _(
-                        "Issue created successfully: {subject}"
+                        "Email processed successfully: {subject}"
                     ).format(subject=email.subject),
-                    "stage": _("Issue Creation"),
-                    "jira_key": jira_issue.jira_issue_key,
-                    "jira_url": jira_issue.jira_url,
+                    "stage": _("Success"),
+                    "issue_url": issue.issue_url,
                     "details": _(
-                        "Issue: {key} | URL: {url}"
-                    ).format(
-                        key=jira_issue.jira_issue_key,
-                        url=jira_issue.jira_url
-                    )
+                        "All processing completed | Issue: {url}"
+                    ).format(url=issue.issue_url)
                 })
             else:
                 payload.update({
                     "message": _(
-                        "Issue created successfully: {subject}"
+                        "Email processed successfully: {subject}"
                     ).format(subject=email.subject),
-                    "stage": _("Issue Creation"),
-                    "details": _("Issue created but details not available")
+                    "stage": _("Success"),
+                    "details": _(
+                        "All processing stages completed successfully"
+                    )
                 })
         except Exception:
             payload.update({
                 "message": _(
-                    "Issue created successfully: {subject}"
+                    "Email processed successfully: {subject}"
                 ).format(subject=email.subject),
-                "stage": _("Issue Creation"),
-                "details": _("Issue created")
+                "stage": _("Success"),
+                "details": _(
+                    "All processing stages completed successfully"
+                )
             })
-    elif status == EmailStatus.ISSUE_FAILED.value:
+
+    elif status == EmailStatus.FAILED.value:
         payload.update({
             "message": _(
-                "Issue creation failed: {subject}"
+                "Email processing failed: {subject}"
             ).format(subject=email.subject),
-            "stage": _("Issue Creation"),
-            "details": _("Failed to create issue")
+            "stage": _("Failed"),
+            "details": _(
+                "Processing failed, can be retried"
+            )
         })
-    elif status == EmailStatus.COMPLETED.value:
-        payload.update({
-            "message": _(
-                "Email processing completed: {subject}"
-            ).format(subject=email.subject),
-            "stage": _("Completed"),
-            "details": _("All processing stages completed successfully")
-        })
+
     else:
         # Fallback for generic status change
         payload.update({
@@ -281,8 +169,9 @@ def build_notification_payload(
             ).format(
                 old_status=old_status,
                 new_status=new_status
-            )
+            ) if old_status and new_status else _("Status updated")
         })
+
     return payload
 
 
@@ -307,11 +196,7 @@ def build_markdown_payload(status, email, old_status=None,
         f"**{_('Stage')}:** {base_payload.get('stage', _('Unknown'))}\n"
         f"**{_('Details')}:** {details}"
     )
-    if 'jira_key' in base_payload:
-        markdown_content += (
-            f"\n**{_('JIRA Issue')}**: {base_payload['jira_key']}"
-            f" ({base_payload['jira_url']})"
-        )
+    # Issue URL is already included in details for SUCCESS status
     return {
         'title': title,
         'markdown_content': markdown_content,

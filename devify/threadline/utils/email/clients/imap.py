@@ -31,16 +31,24 @@ class IMAPClient:
     FILTER_PREFIX_SINCE = 'since:'
     IMAP_DATE_FORMAT = '%d-%b-%Y'
 
-    def __init__(self, imap_config: Dict, filter_config: Dict):
+    def __init__(
+        self,
+        imap_config: Dict,
+        filter_config: Dict,
+        user_context: str = None
+    ):
         """
         Initialize IMAP client with configuration.
 
         Args:
             imap_config: IMAP connection configuration
             filter_config: Email filtering configuration
+            user_context: User context for logging (e.g., "user@example.com"
+                         or "User ID: 123")
         """
         self.imap_config = imap_config
         self.filter_config = filter_config
+        self.user_context = user_context or "Unknown user"
         self._imap_client = None
         self._search_criteria = None
 
@@ -58,26 +66,91 @@ class IMAPClient:
         """
         Internal method to connect and login to IMAP server.
         """
+        # Validate required configuration before attempting connection
+        username = self.imap_config.get('username')
+        password = self.imap_config.get('password')
+
+        if not self.imap_host:
+            error_msg = (
+                f"[{self.user_context}] IMAP configuration error: "
+                f"'imap_host' is missing or empty. "
+                f"Please configure your IMAP server address in Settings."
+            )
+            logger.error(error_msg)
+            raise ValueError(error_msg)
+
+        if not username:
+            error_msg = (
+                f"[{self.user_context}] IMAP configuration error: "
+                f"'username' is missing or empty. "
+                f"Please configure your IMAP username in Settings."
+            )
+            logger.error(error_msg)
+            raise ValueError(error_msg)
+
+        if not password:
+            error_msg = (
+                f"[{self.user_context}] IMAP configuration error: "
+                f"'password' is missing or empty. "
+                f"Please configure your IMAP password in Settings."
+            )
+            logger.error(error_msg)
+            raise ValueError(error_msg)
+
         try:
             logger.info(
-                f"Connecting to IMAP server: "
-                f"{self.imap_host}:{self.imap_port}"
+                f"[{self.user_context}] Connecting to IMAP server: "
+                f"{self.imap_host}:{self.imap_port} "
+                f"(SSL: {self.use_ssl})"
             )
             client = (
                 imaplib.IMAP4_SSL(self.imap_host, self.imap_port)
                 if self.use_ssl
                 else imaplib.IMAP4(self.imap_host, self.imap_port)
             )
-            client.login(
-                self.imap_config.get('username'),
-                self.imap_config.get('password')
+
+            logger.info(f"Attempting login as: {username}")
+            client.login(username, password)
+
+            logger.info(
+                f"[{self.user_context}] Successfully connected to IMAP server: "
+                f"{self.imap_host}:{self.imap_port}"
             )
-            logger.info("Successfully connected to IMAP server")
             return client
-        except Exception as e:
-            logger.error(
-                f"Failed to connect to IMAP server due to: {e}"
+
+        except imaplib.IMAP4.error as e:
+            error_msg = (
+                f"[{self.user_context}] IMAP authentication failed for "
+                f"{username}@{self.imap_host}: {e}\n"
+                f"Possible causes:\n"
+                f"  - Wrong username or password\n"
+                f"  - Account locked or disabled\n"
+                f"  - Two-factor authentication required\n"
+                f"  - App-specific password needed"
             )
+            logger.error(error_msg)
+            raise ValueError(error_msg) from e
+
+        except (ConnectionRefusedError, OSError) as e:
+            error_msg = (
+                f"[{self.user_context}] Cannot connect to IMAP server "
+                f"{self.imap_host}:{self.imap_port}: {e}\n"
+                f"Possible causes:\n"
+                f"  - Wrong server address or port\n"
+                f"  - Server is down or unreachable\n"
+                f"  - Firewall blocking connection\n"
+                f"  - SSL/TLS configuration mismatch (current: SSL={self.use_ssl})"
+            )
+            logger.error(error_msg)
+            raise ConnectionError(error_msg) from e
+
+        except Exception as e:
+            error_msg = (
+                f"[{self.user_context}] Unexpected error connecting to IMAP "
+                f"server {self.imap_host}:{self.imap_port}: "
+                f"{type(e).__name__}: {e}"
+            )
+            logger.error(error_msg)
             raise
 
     def connect(self) -> bool:

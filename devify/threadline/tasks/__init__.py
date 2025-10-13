@@ -1,18 +1,11 @@
-# Core task imports
-from .ocr import ocr_images_for_email
-
-from .llm_attachment import llm_ocr_task
-from .llm_summary import summarize_email_task
-from .llm_email import llm_email_task
-
-from .issue import create_issue_task
-
-# New chain-based task
-from .chain_orchestrator import process_email_chain
+# LangGraph workflow-based tasks
+from .email_workflow import (
+    process_email_workflow,
+    retry_failed_email_workflow
+)
 
 # Scheduler tasks
 from .scheduler import schedule_email_fetch
-from .scheduler import schedule_email_processing_tasks
 
 # Utility tasks
 from .scheduler import schedule_reset_stuck_processing_emails

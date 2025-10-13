@@ -35,7 +35,7 @@ LLM_OUTPUT_LANGUAGE = os.getenv('LLM_OUTPUT_LANGUAGE', 'English')
 
 # Haraka email system configuration
 AUTO_ASSIGN_EMAIL_DOMAIN = os.getenv(
-    'AUTO_ASSIGN_EMAIL_DOMAIN', 'aimychats.com'
+    'AUTO_ASSIGN_EMAIL_DOMAIN', 'devify.local'
 )
 DEFAULT_LANGUAGE = os.getenv(
     'DEFAULT_LANGUAGE', 'en-US'

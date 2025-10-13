@@ -1,7 +1,8 @@
 """
 Task Lock Management
 
-Provides utilities for managing task locks to prevent duplicate execution.
+Provides utilities for managing task locks to prevent
+duplicate execution.
 """
 
 import logging
@@ -20,9 +21,10 @@ def acquire_task_lock(
     Acquire task lock
 
     Args:
-        lock_name: Lock name (e.g., 'email_fetch', 'imap_email_fetch')
-        timeout: Lock timeout in minutes (default: from TASK_TIMEOUT_MINUTES
-                 setting)
+        lock_name: Lock name
+            (e.g., 'email_fetch', 'imap_email_fetch')
+        timeout: Lock timeout in minutes
+            (default: from TASK_TIMEOUT_MINUTES setting)
 
     Returns:
         True if lock acquired successfully, False if already locked
@@ -98,7 +100,10 @@ def force_release_all_locks():
         all_lock_keys = [
             'email_fetch_lock:email_fetch',
             'email_fetch_lock:imap_email_fetch',
-            'email_fetch_lock:haraka_email_fetch'
+            'email_fetch_lock:haraka_email_fetch',
+            'email_fetch_lock:stuck_email_reset',
+            'email_fetch_lock:haraka_cleanup',
+            'email_fetch_lock:email_task_cleanup'
         ]
 
         # Batch delete all locks
@@ -120,7 +125,8 @@ def prevent_duplicate_task(
     Args:
         lock_name: Lock name for the task
         timeout: Lock timeout in seconds
-        user_id_param: Parameter name for user ID (for user-specific locks)
+        user_id_param: Parameter name for user ID
+            (for user-specific locks)
     """
     def decorator(func):
         def wrapper(*args, **kwargs):

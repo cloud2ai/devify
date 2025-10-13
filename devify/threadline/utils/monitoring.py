@@ -48,9 +48,6 @@ class EmailTaskMonitor:
             cancelled_tasks = EmailTask.objects.filter(
                 status=EmailTask.TaskStatus.CANCELLED
             ).count()
-            skipped_tasks = EmailTask.objects.filter(
-                status=EmailTask.TaskStatus.SKIPPED
-            ).count()
 
             # Timeout detection (running tasks over TASK_TIMEOUT_MINUTES)
             timeout_threshold = now - timedelta(
@@ -108,7 +105,6 @@ class EmailTaskMonitor:
                     'completed_tasks': completed_tasks,
                     'failed_tasks': failed_tasks,
                     'cancelled_tasks': cancelled_tasks,
-                    'skipped_tasks': skipped_tasks,
                 },
                 'health_indicators': {
                     'timeout_tasks': timeout_tasks,

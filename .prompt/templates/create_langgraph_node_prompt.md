@@ -1,846 +1,477 @@
-# LangGraph节点实现创建标准模板
+# LangGraph节点修改标准模板
 
-这是一个通用的LangGraph节点实现创建指导模板，适用于任何Django + LangGraph项目。基于最佳实践和成功实现经验，提供完整的节点开发指导。
+## 📂 前提条件
 
-## 🎯 通用配置说明
+用户应该已经：
+1. 完成基础组件修改（使用 `create_langgraph_base_prompt.md`）
+   - ✅ `[feature]_state.py` 已创建
+   - ✅ `nodes/base_node.py` 已修改
+   - ✅ `checkpoint_manager.py` 已确认
+2. agents/nodes目录下应该包含：
+   - `workflow_prepare.py`（从speechtotext复制）
+   - `workflow_finalize.py`（从speechtotext复制）
 
-### 占位符替换指南
-在使用此模板时，请将以下占位符替换为实际值：
+## 🎯 AI的任务
 
-- `[功能]` → 具体功能名称（如：speech_to_text, email_processing, data_analysis）
-- `[primary_id]` → 主要实体的ID参数名（如：audio_file_id, email_id, user_id）
-- `[primary_entity]` → 主要实体的变量名（如：audio_file, email, user）
-- `[PrimaryEntity]` → 主要实体的类名（如：AudioFile, Email, User）
-- `[YourModel]` → 实际的数据模型类名
-- `[your_app]` → 实际的Django应用名称
-- `[StateName]` → 状态类名（如：AudioFileState, EmailState）
-- `[node_name]` → 节点名称（如：speech_recognition_node, email_processing_node）
-- `[NodeClass]` → 节点类名（如：SpeechRecognitionNode, EmailProcessingNode）
+修改agents/nodes目录下的首尾节点，使其适配新业务。
 
-### 项目适配检查清单
-- [ ] 确认项目使用Django + LangGraph架构
-- [ ] 确认基础组件已实现（State、BaseNode、Checkpoint）
-- [ ] 确认工作流编排已实现
-- [ ] 确认节点基类已定义
-- [ ] 确认状态枚举已定义
+---
 
-## 📝 代码生成规范
+## 第一步：自动查找nodes目录
 
-**重要提示**：请严格遵循项目中的Python代码规范标准。详细规范请参考：`python_code_standards.md`
+**AI执行步骤**：
 
-### 关键要求摘要
-- 所有代码和注释必须使用英文
-- 禁止行内注释，注释必须在代码上方
-- 遵循PEP 8规范，每行不超过79字符
-- 使用正确的导入顺序和文档字符串格式
+1. **查找agents目录**（应该已经在第一个模板中找到）
+   - 如果未找到，搜索包含 `[feature]_state.py` 的agents目录
 
-## 🏗️ 核心架构设计原则
+2. **查找nodes目录和节点文件**
+   - 确认 `[your_app]/agents/nodes/` 目录存在
+   - 查找以下文件：
+     - `base_node.py` ✓（已在基础组件中修改）
+     - `workflow_prepare.py`
+     - `workflow_finalize.py`
 
-### 1. 首尾节点设计模式
+3. **确认找到的文件**：
+   ```
+   找到nodes目录：[your_app]/agents/nodes/
+   包含文件：
+   ├── base_node.py ✓（已修改）
+   ├── workflow_prepare.py（待修改）
+   └── workflow_finalize.py（待修改）
 
-#### WorkflowPrepareNode（第一个节点）
-```python
-"""
-Workflow Prepare Node for [功能] processing.
+   继续？
+   ```
 
-This node is responsible for database pre-read and status update to PROCESSING.
-It implements the first-and-last node database operations pattern.
-"""
+---
 
-import logging
-from typing import Dict, Any
+## 第二步：确认已有信息
 
-from [your_app].agents.base_node import BaseLangGraphNode
-from [your_app].agents.[功能]_state import [StateName]
-from [your_app].models import [YourModel]
+**AI需要的信息**（应该已经在基础组件模板中收集）：
 
-logger = logging.getLogger(__name__)
+| 信息项 | 来源 | 示例 |
+|--------|------|------|
+| agents目录路径 | 已知 | `emailprocessing/agents/` |
+| State文件路径 | 已知 | `emailprocessing/agents/email_state.py` |
+| State类名 | 已知 | `EmailState` |
+| Django模型类名 | 已知 | `Email` |
+| 模型字段列表 | 已知（从模型提取） | `subject, sender, body...` |
+| 结果字段列表 | 已知（用户提供） | `sentiment, classification...` |
 
-
-class WorkflowPrepareNode(BaseLangGraphNode):
-    """
-    Workflow Prepare Node for [功能] processing.
-
-    This node is responsible for:
-    1. Database pre-read of [PrimaryEntity] data
-    2. Status update to PROCESSING
-    3. Initial state preparation for workflow execution
-
-    This node implements the first-and-last node database operations pattern,
-    where only the first and last nodes interact with the database.
-    """
-
-    def __init__(self):
-        """
-        Initialize the WorkflowPrepareNode.
-        """
-        super().__init__("workflow_prepare_node")
-
-    def before_processing(self, state: [StateName]) -> [StateName]:
-        """
-        Pre-processing validation and setup.
-
-        This method validates the input state and checks for required
-        dependencies before processing begins.
-
-        Args:
-            state: Current workflow state
-
-        Returns:
-            Updated state after pre-processing
-        """
-        # Check if there are any previous errors
-        if self.has_node_errors(state):
-            self.logger.warning("Skipping workflow prepare due to previous errors")
-            return state
-
-        # Check if already completed (for idempotency)
-        if self.is_already_completed(state):
-            self.logger.info("Workflow prepare already completed, skipping")
-            return state
-
-        return state
-
-    def execute_processing(self, state: [StateName]) -> [StateName]:
-        """
-        Core processing logic for workflow preparation.
-
-        This method performs:
-        1. Database pre-read of [PrimaryEntity] data
-        2. Status update to PROCESSING
-        3. State preparation for workflow execution
-
-        Args:
-            state: Current workflow state
-
-        Returns:
-            Updated state after processing
-        """
-        try:
-            [primary_id] = state["id"]
-            force = state.get("force", False)
-
-            self.logger.info(f"Starting workflow prepare for {[primary_id]}, force: {force}")
-
-            # Database pre-read
-            [primary_entity] = [YourModel].objects.get(id=[primary_id])
-
-            # Update status to PROCESSING (unless force mode)
-            if not force:
-                [primary_entity].status = [YourModel].ProcessingStatus.PROCESSING
-                [primary_entity].save(update_fields=['status'])
-
-            # Prepare state for workflow execution
-            state.update({
-                "user_id": [primary_entity].user_id,
-                "display_name": [primary_entity].display_name,
-                "file_size": [primary_entity].file_size,
-                "file_md5": [primary_entity].file_md5,
-                "duration": [primary_entity].duration,
-                "format": [primary_entity].format,
-                "storage_path": [primary_entity].storage_path,
-                "storage_bucket": [primary_entity].storage_bucket,
-                "sample_rate": [primary_entity].sample_rate,
-                "channels": [primary_entity].channels,
-                "bit_rate": [primary_entity].bit_rate,
-                "asr_languages": [primary_entity].asr_languages,
-                "llm_language": [primary_entity].llm_language,
-                "scene": [primary_entity].scene,
-            })
-
-            self.logger.info(f"Successfully prepared workflow for {[primary_id]}")
-            return state
-
-        except [YourModel].DoesNotExist:
-            error_msg = f"[PrimaryEntity] {[primary_id]} not found"
-            self.logger.error(error_msg)
-            raise Exception(error_msg)
-        except Exception as e:
-            error_msg = f"Failed to prepare workflow for {[primary_id]}: {str(e)}"
-            self.logger.error(error_msg)
-            raise Exception(error_msg)
-
-    def after_processing(self, state: [StateName]) -> [StateName]:
-        """
-        Post-processing cleanup and finalization.
-
-        This method performs any necessary cleanup after processing.
-
-        Args:
-            state: Current workflow state
-
-        Returns:
-            Updated state after post-processing
-        """
-        return state
-
-    def is_already_completed(self, state: [StateName]) -> bool:
-        """
-        Check if the workflow prepare has already completed.
-
-        Args:
-            state: Current workflow state
-
-        Returns:
-            True if already completed, False otherwise
-        """
-        # Check if all required fields are already in state
-        required_fields = ["user_id", "display_name", "file_size"]
-        return all(field in state for field in required_fields)
+**如果信息不完整，AI应该询问**：
+```
+请提供以下信息：
+1. Django模型类名（如：Email）
+2. 模型字段列表
+3. 工作流结果字段列表
 ```
 
-#### WorkflowFinalizeNode（最后一个节点）
-```python
-"""
-Workflow Finalize Node for [功能] processing.
+---
 
-This node is responsible for data batch write and status update to SUCCESS/FAILED.
-It implements the first-and-last node database operations pattern.
-"""
+## 第三步：节点类型说明
 
-import logging
-from typing import Dict, Any
+### LangGraph工作流的数据库交互模式
 
-from [your_app].agents.base_node import BaseLangGraphNode
-from [your_app].agents.[功能]_state import [StateName]
-from [your_app].models import [YourModel]
+**核心设计原则**：只在首尾节点操作数据库，中间节点只操作State
 
-logger = logging.getLogger(__name__)
+```mermaid
+sequenceDiagram
+    participant DB as 数据库
+    participant Prepare as WorkflowPrepare<br/>(首节点)
+    participant State as LangGraph State
+    participant Node1 as 业务节点1
+    participant Node2 as 业务节点2
+    participant Finalize as WorkflowFinalize<br/>(尾节点)
 
+    Note over DB,Finalize: 工作流开始
 
-class WorkflowFinalizeNode(BaseLangGraphNode):
-    """
-    Workflow Finalize Node for [功能] processing.
+    DB->>Prepare: 1. 读取基础数据<br/>(Model.objects.get)
+    Prepare->>DB: 2. 更新状态 PROCESSING
+    Prepare->>State: 3. 映射字段到State<br/>(id, user_id, field1...)
 
-    This node is responsible for:
-    1. Data batch write to database
-    2. Status update to SUCCESS/FAILED
-    3. Final state cleanup and completion
+    State->>Node1: 4. 传递State
+    Note over Node1: 只读写State<br/>不操作数据库
+    Node1->>State: 5. 更新结果到State<br/>(result1, result2...)
 
-    This node implements the first-and-last node database operations pattern,
-    where only the first and last nodes interact with the database.
-    """
+    State->>Node2: 6. 传递State
+    Note over Node2: 只读写State<br/>不操作数据库
+    Node2->>State: 7. 更新结果到State<br/>(result3, result4...)
 
-    def __init__(self):
-        """
-        Initialize the WorkflowFinalizeNode.
-        """
-        super().__init__("workflow_finalize_node")
+    State->>Finalize: 8. 传递State
+    Finalize->>DB: 9. 批量写入结果<br/>(transaction.atomic)
+    Finalize->>DB: 10. 更新状态 SUCCESS/FAILED
 
-    def before_processing(self, state: [StateName]) -> [StateName]:
-        """
-        Pre-processing validation and setup.
-
-        This method validates the input state and checks for required
-        dependencies before processing begins.
-
-        Args:
-            state: Current workflow state
-
-        Returns:
-            Updated state after pre-processing
-        """
-        # Check if there are any previous errors
-        if self.has_node_errors(state):
-            self.logger.warning("Skipping workflow finalize due to previous errors")
-            return state
-
-        # Check if already completed (for idempotency)
-        if self.is_already_completed(state):
-            self.logger.info("Workflow finalize already completed, skipping")
-            return state
-
-        return state
-
-    def execute_processing(self, state: [StateName]) -> [StateName]:
-        """
-        Core processing logic for workflow finalization.
-
-        This method performs:
-        1. Data batch write to database
-        2. Status update to SUCCESS/FAILED
-        3. Final state cleanup and completion
-
-        Args:
-            state: Current workflow state
-
-        Returns:
-            Updated state after processing
-        """
-        try:
-            [primary_id] = state["id"]
-            force = state.get("force", False)
-
-            self.logger.info(f"Starting workflow finalize for {[primary_id]}, force: {force}")
-
-            # Get the [primary_entity] from database
-            [primary_entity] = [YourModel].objects.get(id=[primary_id])
-
-            # Check if there are any node errors
-            if self.has_node_errors(state):
-                # Update status to FAILED
-                [primary_entity].status = [YourModel].ProcessingStatus.FAILED
-                [primary_entity].save(update_fields=['status'])
-
-                self.logger.error(f"Workflow failed for {[primary_id]} due to node errors")
-                return state
-
-            # Batch write processing results to database
-            self._batch_write_results([primary_entity], state)
-
-            # Update status to SUCCESS
-            [primary_entity].status = [YourModel].ProcessingStatus.SUCCESS
-            [primary_entity].save(update_fields=['status'])
-
-            self.logger.info(f"Successfully finalized workflow for {[primary_id]}")
-            return state
-
-        except [YourModel].DoesNotExist:
-            error_msg = f"[PrimaryEntity] {[primary_id]} not found"
-            self.logger.error(error_msg)
-            raise Exception(error_msg)
-        except Exception as e:
-            error_msg = f"Failed to finalize workflow for {[primary_id]}: {str(e)}"
-            self.logger.error(error_msg)
-            raise Exception(error_msg)
-
-    def after_processing(self, state: [StateName]) -> [StateName]:
-        """
-        Post-processing cleanup and finalization.
-
-        This method performs any necessary cleanup after processing.
-
-        Args:
-            state: Current workflow state
-
-        Returns:
-            Updated state after post-processing
-        """
-        return state
-
-    def is_already_completed(self, state: [StateName]) -> bool:
-        """
-        Check if the workflow finalize has already completed.
-
-        Args:
-            state: Current workflow state
-
-        Returns:
-            True if already completed, False otherwise
-        """
-        # Check if the [primary_entity] status is already SUCCESS or FAILED
-        try:
-            [primary_id] = state["id"]
-            [primary_entity] = [YourModel].objects.get(id=[primary_id])
-            return [primary_entity].status in [
-                [YourModel].ProcessingStatus.SUCCESS,
-                [YourModel].ProcessingStatus.FAILED
-            ]
-        except [YourModel].DoesNotExist:
-            return False
-
-    def _batch_write_results(
-        self,
-        [primary_entity]: [YourModel],
-        state: [StateName]
-    ) -> None:
-        """
-        Batch write processing results to database.
-
-        Args:
-            [primary_entity]: The [PrimaryEntity] instance to update
-            state: Current workflow state
-        """
-        # Update [primary_entity] with processing results
-        update_fields = []
-
-        if "segments" in state and state["segments"] is not None:
-            [primary_entity].segments = state["segments"]
-            update_fields.append("segments")
-
-        if "segments_total_count" in state and state["segments_total_count"] is not None:
-            [primary_entity].segments_total_count = state["segments_total_count"]
-            update_fields.append("segments_total_count")
-
-        if "summary" in state and state["summary"] is not None:
-            [primary_entity].summary = state["summary"]
-            update_fields.append("summary")
-
-        if "translation" in state and state["translation"] is not None:
-            [primary_entity].translation = state["translation"]
-            update_fields.append("translation")
-
-        # Save the updated [primary_entity]
-        if update_fields:
-            [primary_entity].save(update_fields=update_fields)
-            self.logger.info(f"Updated [primary_entity] {[primary_entity].id} with fields: {update_fields}")
+    Note over DB,Finalize: 工作流结束
 ```
 
-### 2. 中间节点设计模式
+### 节点分类
 
-#### [NodeClass]（中间节点）
+| 节点类型 | 作用 | 数据库操作 | 修改方式 |
+|---------|------|-----------|---------|
+| **WorkflowPrepareNode** | **从数据库读取基础数据到State**<br>- 加载Django模型实例<br>- 映射模型字段到State<br>- 更新状态为PROCESSING | **读取** | 修改字段映射 |
+| **WorkflowFinalizeNode** | **统一将State结果写入数据库**<br>- 从State提取所有结果<br>- 批量写入数据库<br>- 更新状态为SUCCESS/FAILED | **写入** | 修改数据同步逻辑 |
+| **业务节点** | **纯State处理逻辑**<br>- 读取State数据<br>- 执行业务处理<br>- 更新State结果 | **无** | 新建（可选） |
+
+### 为什么这样设计？
+
+1. **性能优化**：减少数据库IO，只在首尾各访问一次
+2. **事务一致性**：所有结果在Finalize节点原子性写入
+3. **可恢复性**：中间节点失败可以从checkpoint恢复，无脏数据
+4. **清晰分离**：业务逻辑与数据持久化分离
+
+---
+
+## 第四步：修改节点文件
+
+### 任务1：修改 `workflow_prepare.py`
+
+**参考文件**：`speechtotext/agents/nodes/workflow_prepare.py`
+
+**节点作用**：**从数据库读取基础数据到State**
+- 根据 `state['id']` 从数据库加载Django模型实例
+- 将模型的所有字段映射到State
+- 更新数据库状态为PROCESSING（如果不是force模式）
+
+**修改目标**：将AudioFile字段映射替换为用户的Django模型字段映射
+
+#### 修改点清单
+
+| 位置 | 原内容 | 改为 | 说明 |
+|------|--------|------|------|
+| **导入语句** | `from speechtotext.agents.speechtotext_state import AudioFileState` | `from [your_app].agents.[feature]_state import [StateName]` | 导入新State |
+| **导入语句** | `from speechtotext.models import AudioFile` | `from [your_app].models import [ModelName]` | 导入Django模型 |
+| **类型注解** | 所有 `AudioFileState` | `[StateName]` | 统一类型注解 |
+| **变量名** | `self.audio_file` | `self.[entity]` | 如 `self.email` |
+| **变量名** | `audio_file_id` | `[entity]_id` | 如 `email_id` |
+| **模型引用** | `AudioFile` | `[ModelName]` | Django模型类名 |
+| **execute_processing字段映射** | AudioFile字段映射 | 用户模型字段映射 | **核心修改** |
+
+#### 核心修改：execute_processing中的字段映射
+
+**原字段映射**（删除这些）：
+```python
+updated_state = {
+    **state,
+    'id': str(self.audio_file.id),
+    'user_id': str(self.audio_file.user_id),
+    'display_name': self.audio_file.display_name,
+    'file_size': self.audio_file.file_size,
+    'duration': self.audio_file.duration,
+    'format': self.audio_file.format,
+    'storage_path': self.audio_file.storage_path,
+    'storage_bucket': self.audio_file.storage_bucket,
+    # ... 更多AudioFile特有字段
+}
+```
+
+**新字段映射**（基于用户的Django模型）：
+```python
+updated_state = {
+    **state,
+    'id': str(self.email.id),
+    'user_id': str(self.email.user_id),
+    'subject': self.email.subject,
+    'sender': self.email.sender,
+    'body': self.email.body,
+    'received_at': (
+        self.email.received_at.isoformat()
+        if self.email.received_at else None
+    ),
+    # ... 用户模型的其他字段
+}
+```
+
+#### 不修改的内容
+
+- `__init__` 方法的结构（只改变量名）
+- `can_enter_node` 方法的逻辑
+- `before_processing` 方法的逻辑（只改变量名）
+- `execute_processing` 的逻辑结构（只改字段映射）
+- `after_processing` 方法（根据实际需求调整验证字段）
+
+**验证**：
+- [ ] 导入语句已更新
+- [ ] 所有类型注解已替换
+- [ ] 变量名已统一
+- [ ] 字段映射匹配Django模型
+- [ ] 状态更新逻辑未改变
+
+---
+
+### 任务2：修改 `workflow_finalize.py`
+
+**参考文件**：`speechtotext/agents/nodes/workflow_finalize.py`
+
+**节点作用**：**统一将State结果写入数据库**
+- 判断工作流成功/失败（基于 `node_errors`）
+- 如果成功：从State提取所有结果字段，批量写入数据库
+- 如果失败：只更新状态为FAILED，不写入结果
+- 使用事务确保原子性（`transaction.atomic` + `select_for_update`）
+
+**修改目标**：将AudioFile结果同步逻辑替换为用户的结果字段同步逻辑
+
+#### 修改点清单
+
+| 位置 | 原内容 | 改为 | 说明 |
+|------|--------|------|------|
+| **导入语句** | `from speechtotext.agents.speechtotext_state import AudioFileState` | `from [your_app].agents.[feature]_state import [StateName]` | 导入新State |
+| **导入语句** | `from speechtotext.models import AudioFile` | `from [your_app].models import [ModelName]` | 导入Django模型 |
+| **类型注解** | 所有 `AudioFileState` | `[StateName]` | 统一类型注解 |
+| **变量名** | `self.audio_file` | `self.[entity]` | 如 `self.email` |
+| **变量名** | `audio_file_id` | `[entity]_id` | 如 `email_id` |
+| **模型引用** | `AudioFile` | `[ModelName]` | Django模型类名 |
+| **_sync_data_to_database方法** | 同步AudioFile结果字段 | 同步用户结果字段 | **核心修改** |
+
+#### 核心修改：_sync_data_to_database方法
+
+**原数据同步**（删除这些）：
+```python
+def _sync_data_to_database(self, state: AudioFileState) -> None:
+    with transaction.atomic():
+        audio_file = AudioFile.objects.select_for_update().get(
+            id=self.audio_file.id
+        )
+
+        # Sync segments
+        segments = state.get('segments', [])
+        if segments:
+            audio_file.segments.all().delete()
+            # ... 批量创建segments
+
+        # Sync summary
+        summary = state.get('summary', '')
+        if summary:
+            audio_file.summary = summary
+
+        # Sync translation
+        translation = state.get('translation', '')
+        if translation:
+            audio_file.translation = translation
+
+        audio_file.save()
+```
+
+**新数据同步**（基于用户的结果字段）：
+```python
+def _sync_data_to_database(self, state: EmailState) -> None:
+    with transaction.atomic():
+        email = Email.objects.select_for_update().get(
+            id=self.email.id
+        )
+
+        # Sync sentiment
+        sentiment = state.get('sentiment', '')
+        if sentiment:
+            email.sentiment = sentiment
+
+        # Sync classification
+        classification = state.get('classification', '')
+        if classification:
+            email.classification = classification
+
+        # Sync entities
+        entities = state.get('entities', [])
+        if entities:
+            email.entities = entities
+
+        email.save()
+```
+
+#### 如果有关联模型（如Segment）
+
+如果结果需要同步到关联模型（如AudioFile的Segment），需要添加：
+
+```python
+# Sync to related model
+items = state.get('items', [])
+if items:
+    # Delete existing
+    email.items.all().delete()
+
+    # Bulk create new
+    item_objects = [
+        EmailItem(
+            email=email,
+            field1=item.get('field1'),
+            field2=item.get('field2')
+        )
+        for item in items
+    ]
+    EmailItem.objects.bulk_create(item_objects)
+```
+
+#### 不修改的内容
+
+- `__init__` 方法的结构（只改变量名）
+- `can_enter_node` 方法（返回True）
+- `before_processing` 方法的逻辑（只改变量名）
+- `execute_processing` 的逻辑结构（判断错误、调用同步）
+- `_handle_error` 方法的逻辑（只改变量名）
+- `transaction.atomic()` 的使用
+- `select_for_update()` 的使用
+
+**验证**：
+- [ ] 导入语句已更新
+- [ ] 所有类型注解已替换
+- [ ] 变量名已统一
+- [ ] 数据同步逻辑匹配结果字段
+- [ ] 原子事务逻辑未改变
+
+---
+
+### 任务3：创建业务节点（可选）
+
+**参考文件**：参考speechtotext的业务节点模式
+
+**节点类型**：中间节点，纯State操作，无数据库交互
+
+#### 业务节点模板结构
+
 ```python
 """
-[NodeClass] for [功能] processing.
-
-This node is responsible for [节点功能描述].
-It implements the middle node pattern with pure State operations.
+[NodeClass] for [feature] processing.
 """
 
 import logging
 from typing import Dict, Any
 
-from [your_app].agents.base_node import BaseLangGraphNode
-from [your_app].agents.[功能]_state import [StateName]
+from [your_app].agents.nodes.base_node import BaseLangGraphNode
+from [your_app].agents.[feature]_state import [StateName]
 
 logger = logging.getLogger(__name__)
 
 
 class [NodeClass](BaseLangGraphNode):
     """
-    [NodeClass] for [功能] processing.
-
-    This node is responsible for:
-    1. [节点功能描述1]
-    2. [节点功能描述2]
-    3. [节点功能描述3]
-
-    This node implements the middle node pattern, where only pure State
-    operations are performed without database interactions.
+    [节点功能描述]
     """
 
     def __init__(self):
-        """
-        Initialize the [NodeClass].
-        """
         super().__init__("[node_name]")
-
-    def before_processing(self, state: [StateName]) -> [StateName]:
-        """
-        Pre-processing validation and setup.
-
-        This method validates the input state and checks for required
-        dependencies before processing begins.
-
-        Args:
-            state: Current workflow state
-
-        Returns:
-            Updated state after pre-processing
-        """
-        # Check if there are any previous errors
-        if self.has_node_errors(state):
-            self.logger.warning("Skipping [node_name] due to previous errors")
-            return state
-
-        # Check if already completed (for idempotency)
-        if self.is_already_completed(state):
-            self.logger.info("[node_name] already completed, skipping")
-            return state
-
-        # Check for required dependencies
-        if not self._check_dependencies(state):
-            error_msg = "Missing required dependencies for [node_name]"
-            self.logger.error(error_msg)
-            raise Exception(error_msg)
-
-        return state
 
     def execute_processing(self, state: [StateName]) -> [StateName]:
         """
-        Core processing logic for [节点功能描述].
-
-        This method performs:
-        1. [处理步骤1]
-        2. [处理步骤2]
-        3. [处理步骤3]
-
-        Args:
-            state: Current workflow state
-
-        Returns:
-            Updated state after processing
+        核心处理逻辑
         """
-        try:
-            [primary_id] = state["id"]
-            force = state.get("force", False)
+        entity_id = state.get("id")
+        self.logger.info(f"Starting [node_name] for {entity_id}")
 
-            self.logger.info(f"Starting [node_name] for {[primary_id]}, force: {force}")
-
-            # [处理步骤1]
-            result1 = self._process_step1(state)
-            state.update(result1)
-
-            # [处理步骤2]
-            result2 = self._process_step2(state)
-            state.update(result2)
-
-            # [处理步骤3]
-            result3 = self._process_step3(state)
-            state.update(result3)
-
-            self.logger.info(f"Successfully completed [node_name] for {[primary_id]}")
-            return state
-
-        except Exception as e:
-            error_msg = f"Failed to process [node_name] for {[primary_id]}: {str(e)}"
-            self.logger.error(error_msg)
-            raise Exception(error_msg)
-
-    def after_processing(self, state: [StateName]) -> [StateName]:
-        """
-        Post-processing cleanup and finalization.
-
-        This method performs any necessary cleanup after processing.
-
-        Args:
-            state: Current workflow state
-
-        Returns:
-            Updated state after post-processing
-        """
-        return state
-
-    def is_already_completed(self, state: [StateName]) -> bool:
-        """
-        Check if the [node_name] has already completed.
-
-        Args:
-            state: Current workflow state
-
-        Returns:
-            True if already completed, False otherwise
-        """
-        # Check if the expected result is already in state
-        return "[expected_result_field]" in state and state["[expected_result_field]"] is not None
-
-    def _check_dependencies(self, state: [StateName]) -> bool:
-        """
-        Check if all required dependencies are present in state.
-
-        Args:
-            state: Current workflow state
-
-        Returns:
-            True if all dependencies are present, False otherwise
-        """
-        required_fields = ["[dependency_field1]", "[dependency_field2]"]
-        return all(field in state for field in required_fields)
-
-    def _process_step1(self, state: [StateName]) -> Dict[str, Any]:
-        """
-        Process step 1: [处理步骤1描述].
-
-        Args:
-            state: Current workflow state
-
-        Returns:
-            Dictionary containing step 1 results
-        """
-        # [处理步骤1的具体实现]
-        return {
-            "[result_field1]": "[result_value1]",
-            "[result_field2]": "[result_value2]"
-        }
-
-    def _process_step2(self, state: [StateName]) -> Dict[str, Any]:
-        """
-        Process step 2: [处理步骤2描述].
-
-        Args:
-            state: Current workflow state
-
-        Returns:
-            Dictionary containing step 2 results
-        """
-        # [处理步骤2的具体实现]
-        return {
-            "[result_field3]": "[result_value3]",
-            "[result_field4]": "[result_value4]"
-        }
-
-    def _process_step3(self, state: [StateName]) -> Dict[str, Any]:
-        """
-        Process step 3: [处理步骤3描述].
-
-        Args:
-            state: Current workflow state
-
-        Returns:
-            Dictionary containing step 3 results
-        """
-        # [处理步骤3的具体实现]
-        return {
-            "[result_field5]": "[result_value5]",
-            "[result_field6]": "[result_value6]"
-        }
-```
-
-## 🔄 节点设计原则
-
-### 1. 首尾节点设计原则
-
-**核心职责**：
-- **WorkflowPrepareNode**：数据库预读取 + 状态更新到PROCESSING
-- **WorkflowFinalizeNode**：数据批量写入 + 状态更新到SUCCESS/FAILED
-
-**设计特点**：
-- 实现首尾数据库操作模式
-- 处理force参数的状态更新
-- 负责数据库状态机管理
-- 支持幂等性检查
-
-### 2. 中间节点设计原则
-
-**核心职责**：
-- 纯LangGraph State操作
-- 无数据库交互
-- 专注业务逻辑处理
-- 支持依赖检查
-
-**设计特点**：
-- 实现中间节点模式
-- 不关心force参数的状态更新
-- 只操作LangGraph State
-- 支持幂等性检查
-
-### 3. 节点基类设计原则
-
-**三阶段处理模式**：
-1. **before_processing()**: 预处理验证和设置
-2. **execute_processing()**: 核心业务逻辑（必须实现）
-3. **after_processing()**: 后处理清理和完成
-
-**关键特性**：
-- 统一的错误处理和日志记录
-- 基于node_errors的自动节点入口验证
-- 支持幂等性检查
-- 标准化的LangGraph节点接口
-
-## 📝 日志输出标准化
-
-### 1. 统一日志标签
-```python
-# 使用节点名称作为日志标签
-self.logger = logging.getLogger(f"[{node_name}]")
-
-# 日志输出示例
-self.logger.info(f"Starting [node_name] for {[primary_id]}, force: {force}")
-self.logger.info(f"Successfully completed [node_name] for {[primary_id]}")
-self.logger.error(f"Failed to process [node_name] for {[primary_id]}: {str(e)}")
-```
-
-### 2. 行长度控制（≤79字符）
-```python
-# 正确的分行方式
-self.logger.info(f"Starting [node_name] for {[primary_id]}, force: {force}")
-
-# 在逻辑断点处分行，保持语义完整
-self.logger.error(f"Failed to process [node_name] for {[primary_id]}: "
-                 f"{str(e)}")
-```
-
-### 3. 日志级别使用
-- **info**: 正常流程节点和重要状态变化
-- **warning**: 跳过处理的情况
-- **error**: 错误情况和异常处理
-
-## 🔧 节点实现最佳实践
-
-### 1. 首尾节点最佳实践
-```python
-# 数据库操作集中在首尾节点
-def execute_processing(self, state: [StateName]) -> [StateName]:
-    # 数据库预读取或批量写入
-    [primary_entity] = [YourModel].objects.get(id=[primary_id])
-
-    # 状态更新
-    if not force:
-        [primary_entity].status = [YourModel].ProcessingStatus.PROCESSING
-        [primary_entity].save(update_fields=['status'])
-```
-
-### 2. 中间节点最佳实践
-```python
-# 纯State操作，无数据库交互
-def execute_processing(self, state: [StateName]) -> [StateName]:
-    # 处理业务逻辑
-    result = self._process_business_logic(state)
-
-    # 更新State
-    state.update(result)
-    return state
-```
-
-### 3. 依赖检查最佳实践
-```python
-# 检查依赖字段
-def _check_dependencies(self, state: [StateName]) -> bool:
-    required_fields = ["[dependency_field1]", "[dependency_field2]"]
-    return all(field in state for field in required_fields)
-```
-
-## 🛡️ 错误处理模式
-
-### 1. 节点错误处理
-```python
-def execute_processing(self, state: [StateName]) -> [StateName]:
-    try:
         # 处理逻辑
-        pass
-    except Exception as e:
-        error_msg = f"Failed to process [node_name] for {[primary_id]}: {str(e)}"
-        self.logger.error(error_msg)
-        raise Exception(error_msg)
+        result = self._do_processing(state)
+
+        # 使用不可变更新
+        updated_state = {
+            **state,
+            'result_field1': result['field1'],
+            'result_field2': result['field2']
+        }
+
+        self.logger.info(f"Completed [node_name] for {entity_id}")
+        return updated_state
+
+    def _do_processing(self, state: [StateName]) -> Dict[str, Any]:
+        """
+        具体处理逻辑
+        """
+        # 实现业务逻辑
+        return {
+            'field1': 'value1',
+            'field2': 'value2'
+        }
 ```
 
-### 2. 依赖检查错误处理
-```python
-def before_processing(self, state: [StateName]) -> [StateName]:
-    if not self._check_dependencies(state):
-        error_msg = "Missing required dependencies for [node_name]"
-        self.logger.error(error_msg)
-        raise Exception(error_msg)
+**关键点**：
+- 继承 `BaseLangGraphNode`
+- 只操作State，不操作数据库
+- 使用 `{**state, ...}` 进行不可变更新
+- 清晰的日志输出
+
+---
+
+## 第五步：完成检查
+
+**文件检查**：
+- [ ] `workflow_prepare.py` 已修改
+- [ ] `workflow_finalize.py` 已修改
+- [ ] 业务节点已创建（如果需要）
+
+**代码质量检查**：
+- [ ] 所有导入语句正确
+- [ ] 所有类型注解统一
+- [ ] 变量名统一
+- [ ] 字段映射正确
+- [ ] 遵循PEP 8规范（每行≤73字符）
+- [ ] 注释使用英文且在代码上方
+
+**业务逻辑检查**：
+- [ ] WorkflowPrepare加载正确的模型字段
+- [ ] WorkflowFinalize同步正确的结果字段
+- [ ] 事务和锁逻辑未被修改
+- [ ] 错误处理逻辑完整
+
+---
+
+## 📋 AI工作流程
+
+```
+1. 自动查找nodes目录和节点文件
+   - 查找 workflow_prepare.py 和 workflow_finalize.py
+   - 找不到时询问用户
+2. 确认已有信息（State类名、模型、字段等）
+   - 如果信息不全，询问用户
+3. 展示修改计划（列出2个任务的修改点）
+4. 用户确认后，执行任务：
+   - 任务1：修改 workflow_prepare.py（字段映射）
+   - 任务2：修改 workflow_finalize.py（数据同步）
+   - 任务3：创建业务节点（可选）
+5. 执行完成检查
+6. 提示后续步骤
 ```
 
-### 3. 幂等性检查
-```python
-def is_already_completed(self, state: [StateName]) -> bool:
-    # 检查是否已完成
-    return "[expected_result_field]" in state and state["[expected_result_field]"] is not None
+---
+
+## 🔄 完成后提示
+
+```
+✅ 节点修改完成！
+
+已修改文件：
+- [your_app]/agents/nodes/workflow_prepare.py（首节点）
+- [your_app]/agents/nodes/workflow_finalize.py（尾节点）
+- [业务节点]（如果已创建）
+
+接下来使用：create_langgraph_workflow_prompt.md
+需要修改：
+1. workflow.py（工作流编排）
+   - 连接所有节点
+   - 配置checkpoint
+   - 实现执行函数
+
+需要继续修改工作流吗？
 ```
 
-## 📊 调试和监控支持
+---
 
-### 1. 节点执行监控
-```python
-# 记录节点执行信息
-self.logger.info(f"Starting [node_name] for {[primary_id]}, force: {force}")
+## 📌 关键原则
 
-# 记录完成信息
-self.logger.info(f"Successfully completed [node_name] for {[primary_id]}")
-```
+1. **基于实际模型**：字段映射必须基于Django模型，不要猜测
+2. **保持框架逻辑**：事务、锁、错误处理逻辑不要改
+3. **只改映射部分**：WorkflowPrepare和Finalize的核心是字段映射
+4. **业务节点独立**：业务节点只操作State，不操作数据库
+5. **验证严格**：每个任务后执行验证清单
 
-### 2. 错误监控
-```python
-# 记录错误信息
-self.logger.error(f"Failed to process [node_name] for {[primary_id]}: {str(e)}")
+---
 
-# 记录跳过原因
-self.logger.warning("Skipping [node_name] due to previous errors")
-```
+## 🔍 常见场景
 
-## 📋 具体实现检查清单
+### 场景1：简单模型（只有基础字段）
+- WorkflowPrepare：映射模型字段到State
+- WorkflowFinalize：同步结果字段到模型
 
-### ✅ 必须实现的结构
-- [ ] 正确的节点类定义
-- [ ] 正确的三阶段处理模式
-- [ ] 正确的依赖检查
-- [ ] 正确的幂等性检查
-- [ ] 完整的文档字符串
+### 场景2：有关联模型（如Segment）
+- WorkflowPrepare：只映射主模型字段
+- WorkflowFinalize：同步主模型字段 + 批量创建关联模型
 
-### ✅ 首尾节点检查
-- [ ] 数据库操作逻辑
-- [ ] 状态更新逻辑
-- [ ] Force参数处理
-- [ ] 批量写入逻辑
-- [ ] 错误处理机制
-
-### ✅ 中间节点检查
-- [ ] 纯State操作
-- [ ] 依赖检查逻辑
-- [ ] 业务逻辑处理
-- [ ] 结果更新逻辑
-- [ ] 错误处理机制
-
-### ✅ 日志标准化检查
-- [ ] 所有logger使用节点名称标签
-- [ ] 每行logger输出≤79字符
-- [ ] 在逻辑断点处合理分行
-- [ ] 保持语义完整性
-
-### ✅ 代码规范检查
-- [ ] 所有代码使用英文
-- [ ] 所有注释使用英文
-- [ ] 禁止行内注释
-- [ ] 遵循PEP 8规范
-- [ ] 每行不超过79字符
-
-## 🎯 关键实现细节
-
-### 1. 首尾节点模式
-```python
-# 数据库操作集中在首尾节点
-def execute_processing(self, state: [StateName]) -> [StateName]:
-    # 数据库预读取或批量写入
-    [primary_entity] = [YourModel].objects.get(id=[primary_id])
-
-    # 状态更新
-    if not force:
-        [primary_entity].status = [YourModel].ProcessingStatus.PROCESSING
-        [primary_entity].save(update_fields=['status'])
-```
-
-### 2. 中间节点模式
-```python
-# 纯State操作，无数据库交互
-def execute_processing(self, state: [StateName]) -> [StateName]:
-    # 处理业务逻辑
-    result = self._process_business_logic(state)
-t
-    # 更新State
-    state.update(result)
-    return state
-```
-
-### 3. 依赖检查模式
-```python
-# 检查依赖字段
-def _check_dependencies(self, state: [StateName]) -> bool:
-    required_fields = ["[dependency_field1]", "[dependency_field2]"]
-    return all(field in state for field in required_fields)
-```
-
-## 🚨 常见陷阱和避免方法
-
-### ❌ 避免的反模式
-1. **中间节点进行数据库操作** - 应该只在首尾节点进行
-2. **缺少依赖检查** - 应该检查所有必需的依赖
-3. **硬编码日志标签** - 应该使用节点名称
-4. **缺少幂等性检查** - 应该支持重复执行
-5. **使用行内注释** - 应该将注释放在代码上方
-6. **使用中文注释** - 所有注释必须使用英文
-
-### ✅ 推荐的最佳实践
-1. **首尾数据库操作模式** - 数据库操作集中在首尾节点
-2. **中间纯State操作** - 中间节点只操作State
-3. **完整的依赖检查** - 确保所有依赖都存在
-4. **统一的错误处理** - 确保异常正确传播
-5. **完整的文档字符串** - 便于理解和维护
-6. **英文代码和注释** - 保持代码国际化
-7. **遵循PEP 8规范** - 保持代码一致性
-
-## 📝 使用指南
-
-### 快速开始
-1. **复制此模板**作为节点实现的起始点
-2. **替换占位符**：根据占位符替换指南更新所有占位符
-3. **选择节点类型**：首尾节点或中间节点
-4. **实现业务逻辑**：根据具体需求实现处理逻辑
-5. **测试节点**：确保节点能正确执行和更新状态
-6. **验证日志格式**：确保所有日志使用节点名称且≤79字符
-
-### 常见使用场景
-- **语音识别节点**：语音转文字处理
-- **分段处理节点**：文本分段和整理
-- **总结生成节点**：内容总结和摘要
-- **邮件处理节点**：邮件内容分析
-- **数据分析节点**：数据清洗和转换
-
-### 高级配置选项
-- **自定义依赖检查**：实现特定的依赖验证逻辑
-- **自定义幂等性检查**：实现特定的完成状态检查
-- **自定义错误处理**：实现特定的错误处理逻辑
-- **性能优化**：使用缓存和批量操作优化性能
-
-这个模板基于LangGraph最佳实践和成功实现经验，包含了所有关键的节点实现设计模式和实现细节，适用于任何Django + LangGraph项目。
+### 场景3：需要复杂处理
+- WorkflowPrepare：基础映射
+- 业务节点：处理复杂逻辑
+- WorkflowFinalize：同步所有结果

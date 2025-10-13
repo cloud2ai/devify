@@ -4,14 +4,21 @@
 
 ### Purpose
 
-Devify is a comprehensive **toolkit for AI-driven development lifecycle management**. It is designed to accelerate R&D workflows and address pain points that typically require substantial manual effort. Devify brings together a suite of tools that leverage artificial intelligence to automate and optimize various stages of the software development lifecycle. The project was initiated to fulfill internal needs for smarter, more efficient, and streamlined development processes.
+Devify is an **AI Agent-powered personal productivity platform** that leverages intelligent automation to enhance daily work efficiency.
+
+**Project Evolution:**
+
+The project was originally conceived as a toolkit for AI-driven development lifecycle management, designed to accelerate R&D workflows and address pain points in software development processes. However, through practical application and iteration, we discovered that the core AI Agent architecture we built could be more effectively applied to solve broader personal productivity challenges in everyday work scenarios.
+
+This realization led to a strategic pivot: rather than focusing solely on development lifecycle automation, we evolved Devify into a personal productivity platform that uses AI Agents to streamline various aspects of daily work—from email processing and information organization to task creation and knowledge management. The underlying AI Agent framework remains robust and flexible, now serving a wider range of personal efficiency use cases.
 
 ### Vision
 
-By integrating advanced AI technologies, Devify aims to:
-- Automate repetitive and time-consuming tasks in the development lifecycle
-- Reduce manual workload for engineering teams
-- Enable faster and more reliable delivery of features and fixes
+By integrating advanced AI technologies and Agent-based automation, Devify aims to:
+- Automate repetitive and time-consuming tasks in daily work routines
+- Reduce manual effort in information processing and organization
+- Enable individuals to focus on high-value creative and strategic work
+- Continuously expand AI Agent capabilities to cover more productivity scenarios
 
 ### Key Features
 
@@ -29,9 +36,9 @@ In fact, this approach is not limited to WeChat chat records.  It can be extende
 
 ### Technical Overview
 
-This project is a robust AI workflow and agent system, architected with Django and powered by Celery for efficient orchestration of diverse tasks. It streamlines business processes by integrating advanced AI capabilities, including large language models (LLMs), OCR, and speech technologies. All system management and configuration are currently handled through Django’s built-in Admin Portal, enabling rapid development and easy maintenance. In future releases, dedicated user-facing interfaces will be introduced to further enhance accessibility and user experience, with the ultimate goal of evolving into a SaaS platform for broader adoption.
+This project is a robust AI workflow and agent system, architected with Django and powered by Celery for efficient orchestration of diverse tasks. It streamlines business processes by integrating advanced AI capabilities, including large language models (LLMs), OCR, and speech technologies. All system management and configuration are currently handled through Django's built-in Admin Portal, enabling rapid development and easy maintenance. In future releases, dedicated user-facing interfaces will be introduced to further enhance accessibility and user experience, with the ultimate goal of evolving into a SaaS platform for broader adoption.
 
-Notably, the AI workflow and process control in this project are implemented using a custom state machine tailored to business requirements, rather than relying on existing frameworks such as LangChain or Dify. This approach ensures that the workflow logic remains flexible, maintainable, and closely aligned with real-world use cases.
+The AI workflow in this project is powered by **LangGraph**, a framework for building stateful, multi-actor applications with LLMs. The workflow architecture uses a StateGraph pattern with atomic database operations in prepare/finalize nodes, ensuring data consistency and enabling built-in checkpointing for error recovery. This approach provides better observability, maintainability, and resilience compared to traditional orchestration methods.
 
 ## Development
 
@@ -108,9 +115,16 @@ Both modes include the following services:
 - **devify-worker**: Celery worker for background task processing
 - **devify-scheduler**: Celery beat scheduler for periodic tasks
 - **mysql**: MariaDB database server
-- **redis**: Redis cache and message broker
+- **redis**: Redis cache, message broker, and LangGraph checkpoint storage
 - **nginx**: Reverse proxy server (production mode only)
 - **flower**: Celery monitoring dashboard (development mode only)
+
+**Optional Services (based on email collection mode):**
+
+- **haraka**: Open-source SMTP server for auto_assign mode (receives incoming emails and saves to file system)
+  - Only required if using `auto_assign` mode in `email_config`
+  - Emails are automatically assigned to users based on recipient addresses (email aliases)
+  - Simplifies multi-user email collection without individual IMAP credentials
 
 ### Key Differences
 
@@ -223,6 +237,10 @@ AZURE_OPENAI_API_VERSION=your-azure-openai-api-version
 # OCR
 AZURE_DOCUMENT_INTELLIGENCE_KEY="your-azure-document-intelligence-key"
 AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT="https://your-azure-document-intelligence-endpoint.cognitiveservices.azure.com/"
+
+# Email Collection (Haraka auto_assign mode)
+AUTO_ASSIGN_EMAIL_DOMAIN=devify.local
+HARAKA_EMAIL_BASE_DIR=/opt/haraka/emails
 ```
 
 ### Run in Development Mode
@@ -289,14 +307,13 @@ docker exec -it devify-api python manage.py collectstatic
 
 ## Threadline Settings
 
-Before using Threadline features, you should initialize the required settings for all users. This can be done via a management command inside the API container. The command will automatically create default records for all necessary THREADLINE settings (`email_config`, `email_filter_config`, `issue_config`, `prompt_config`, `webhook_config`) for each user if they do not already exist.
+Before using Threadline features, you should initialize the required settings for all users. This can be done via a management command inside the API container. The command will automatically create default records for all necessary THREADLINE settings (`email_config`, `issue_config`, `prompt_config`, `webhook_config`) for each user if they do not already exist.
 
 To simplify configuration, all required settings should be added here. Below are the key-value pairs you need to set before using the system. The table describes the key design, and the values should be saved in JSON format.
 
 | Key                  | Description                                                      | Required | Example Key Fields/Notes                |
 |----------------------|------------------------------------------------------------------|----------|-----------------------------------------|
-| email_config         | Email server connection and authentication settings               | Yes      | See below                              |
-| email_filter_config  | Email filtering and processing rules                              | Yes      | See below                              |
+| email_config         | Email collection mode and configuration (auto_assign or custom_imap) | Yes      | See below - supports Haraka auto-assign and IMAP modes |
 | issue_config         | Issue creation engine configuration (JIRA, email, Slack, etc.)   | Yes      | See below                              |
 | prompt_config        | AI prompt templates for email/attachment/summary processing       | Yes      | See below                              |
 | webhook_config       | Webhook configuration for external notifications                  | No       | See below                              |
@@ -319,7 +336,7 @@ To simplify configuration, all required settings should be added here. Below are
 
 2. **Edit the settings in Django Admin:**
 
-   After initialization, log in to the Django Admin panel and navigate to the **Settings** section. You can then edit the values for each key (`email_config`, `email_filter_config`, `issue_config`, `prompt_config`, `webhook_config`) as needed for your environment.
+   After initialization, log in to the Django Admin panel and navigate to the **Settings** section. You can then edit the values for each key (`email_config`, `issue_config`, `prompt_config`, `webhook_config`) as needed for your environment.
 
    > **Tip:**
    > You can also update these settings directly in the database if required.
@@ -333,34 +350,145 @@ To simplify configuration, all required settings should be added here. Below are
 4. **Navigate to the Settings Model**
    - In the sidebar, find and click on **Settings** under THREADLINE
 
-### Email Configuration(email_config)
+### Email Configuration (email_config)
+
+The email configuration supports two distinct modes for email collection, providing flexibility for different deployment scenarios.
+
+#### Email Collection Modes
+
+Threadline supports two email collection modes:
+
+| Mode | Description | Use Case | Email Source |
+|------|-------------|----------|--------------|
+| **auto_assign** | Haraka-based automatic email assignment | Multi-user shared email server, no IMAP credentials needed | File system |
+| **custom_imap** | User-specific IMAP server configuration | Personal email accounts, custom IMAP servers | IMAP server |
+
+**Default Mode**: `auto_assign` (recommended for team collaboration scenarios)
+
+#### Mode Selection Guide
+
+Choose the appropriate mode based on your deployment scenario:
+
+| Scenario | Recommended Mode | Reason |
+|----------|------------------|--------|
+| Team collaboration with shared email domain | `auto_assign` | No need to manage individual IMAP credentials |
+| Multiple users need different email aliases | `auto_assign` | Flexible alias management, one user can have multiple aliases |
+| Enterprise deployment with many users | `auto_assign` | Simplified onboarding, just create an alias |
+| Personal use or single user | `custom_imap` | Direct access to personal email account |
+| Users have different email providers | `custom_imap` | Each user connects to their own email server |
+| Need real-time email processing | `auto_assign` | Haraka provides instant email availability |
+| Existing IMAP infrastructure | `custom_imap` | Leverage existing email servers |
+
+#### Mode 1: Auto-Assign (Haraka-based) - Recommended
+
+In this mode, emails are received by **Haraka** (an open-source SMTP server) and automatically assigned to users based on recipient email addresses. This eliminates the need for individual IMAP configurations and simplifies multi-user deployments.
+
+**Why Haraka?**
+
+Haraka was introduced to solve several key challenges in multi-user email processing:
+
+1. **Simplified User Management**: No need to collect and manage individual IMAP credentials for each user
+2. **Centralized Email Collection**: Single SMTP server handles emails for all users
+3. **Flexible Email Routing**: Users can have multiple email aliases for different purposes (e.g., projects, teams)
+4. **Security**: No storage of user email passwords in the system
+5. **Scalability**: Easily add new users without configuring email servers
+6. **Real-time Processing**: Haraka saves emails to file system immediately upon receipt
+
+**How it works:**
+1. Haraka receives incoming emails and saves them to the file system (`HARAKA_EMAIL_BASE_DIR/inbox/`)
+2. The `haraka_email_fetch` task periodically scans the inbox directory
+3. For each email, the system matches the recipient address to user email aliases
+4. The email is automatically assigned to the matching user
+5. If no user is found, the email is logged and moved to the failed directory
+6. Processed emails are moved to `processed/` directory for archival
+
+**Email Alias System:**
+
+Each user automatically gets a default email alias based on their username:
+- Default format: `{username}@{AUTO_ASSIGN_EMAIL_DOMAIN}`
+- Example: User `admin` → `admin@devify.local`
+
+Users can create additional custom aliases for different purposes:
+- Project-specific: `project-alpha@devify.local`
+- Team-specific: `devops-team@devify.local`
+- Role-specific: `support@devify.local`
+
+**Configuration:**
+```json
+{
+  "mode": "auto_assign"
+}
+```
+
+**Global Settings (Environment Variables):**
+- `AUTO_ASSIGN_EMAIL_DOMAIN`: The email domain for all users (default: `devify.local`)
+- `HARAKA_EMAIL_BASE_DIR`: Haraka email storage directory (default: `/opt/haraka/emails`)
+
+**Directory Structure:**
+```
+/opt/haraka/emails/
+├── inbox/           # Incoming emails waiting to be processed
+├── processed/       # Successfully processed emails (archived)
+└── failed/          # Emails that failed processing (for debugging)
+```
+
+**Advantages:**
+- ✅ No IMAP credentials needed per user
+- ✅ Instant email availability (no polling delay)
+- ✅ Multiple aliases per user
+- ✅ Centralized email management
+- ✅ Easy to add new users (just create an alias)
+- ✅ Better security (no password storage)
+
+**Managing Email Aliases:**
+
+In Django Admin, navigate to **THREADLINE** → **Email Aliases** to manage user aliases:
+
+1. **View all aliases**: See all configured email aliases and their associated users
+2. **Create new alias**: Click "Add Email Alias" and enter:
+   - User: Select the user who will receive emails sent to this alias
+   - Alias: Enter the alias name (without domain, e.g., `project-alpha`)
+   - Is Active: Check to enable the alias
+3. **Full email address**: The system automatically combines your alias with the configured domain (e.g., `project-alpha@devify.local`)
+4. **Uniqueness check**: The system ensures each alias is unique across all users
+
+**Haraka Setup (for auto_assign mode):**
+
+If you plan to use auto_assign mode, you need to deploy Haraka SMTP server:
+
+1. **Install Haraka**: Follow [Haraka documentation](https://haraka.github.io/)
+2. **Configure email storage**: Set Haraka to save emails to `HARAKA_EMAIL_BASE_DIR`
+3. **DNS/MX Records**: Point your domain's MX record to your Haraka server
+4. **Directory permissions**: Ensure the Django application can read from Haraka directories
+
+Haraka configuration is beyond the scope of this README. Please refer to Haraka's official documentation for deployment details.
+
+#### Mode 2: Custom IMAP
+
+In this mode, each user configures their own IMAP server credentials for fetching emails from personal or corporate email accounts.
+
+**Configuration Structure:**
+
+| Key | Type | Description | Required |
+|-----|------|-------------|----------|
+| mode | string | Must be "custom_imap" | Yes |
+| imap_config | object | IMAP server configuration | Yes |
+| filter_config | object | Email filtering rules (optional) | No |
+
+**IMAP Config Fields:**
 
 | Key               | Type     | Description                                 | Example                        |
 |-------------------|----------|---------------------------------------------|--------------------------------|
-| host              | string   | SMTP server hostname                        | "smtp.feishu.cn"               |
 | imap_host         | string   | IMAP server hostname                        | "imap.feishu.cn"               |
 | smtp_ssl_port     | integer  | SMTP SSL port (default: 465)                | 465                            |
 | smtp_starttls_port| integer  | SMTP StartTLS port (default: 587)           | 587                            |
 | imap_ssl_port     | integer  | IMAP SSL port (default: 993)                | 993                            |
-| username          | string   | Email username                              | "your-email@domain.com"        |
-| password          | string   | Email password                              | "your-email-password"          |
-| use_ssl           | boolean  | Enable SSL                                  | true                           |
+| username          | string   | Email username                              | "user@example.com"             |
+| password          | string   | Email password or app-specific password     | "your-password"                |
+| use_ssl           | boolean  | Enable SSL connection                       | true                           |
 | use_starttls      | boolean  | Enable StartTLS                             | false                          |
 
-```
-{
-  "imap_host": "your-imap-server-hostname",
-  "smtp_ssl_port": 465,
-  "smtp_starttls_port": 587,
-  "imap_ssl_port": 993,
-  "username": "your-email-username",
-  "password": "your-email-password",
-  "use_ssl": true,
-  "use_starttls": false
-}
-```
-
-### Email Filter Config(email_filter_config)
+**Filter Config Fields (Optional):**
 
 | Key              | Type     | Description                                                        | Example                |
 |------------------|----------|--------------------------------------------------------------------|------------------------|
@@ -368,7 +496,40 @@ To simplify configuration, all required settings should be added here. Below are
 | exclude_patterns | array    | Patterns to exclude emails, e.g., subjects containing keywords     | ["spam", "newsletter"] |
 | max_age_days     | integer  | Maximum age of emails to process, in days                          | 7                      |
 
-**Available IMAP Search Criteria for `filters` array:**
+**Complete Example (Custom IMAP Mode):**
+```json
+{
+  "mode": "custom_imap",
+  "imap_config": {
+    "imap_host": "imap.gmail.com",
+    "smtp_ssl_port": 465,
+    "smtp_starttls_port": 587,
+    "imap_ssl_port": 993,
+    "username": "your-email@gmail.com",
+    "password": "your-app-specific-password",
+    "use_ssl": true,
+    "use_starttls": false
+  },
+  "filter_config": {
+    "filters": ["UNSEEN"],
+    "exclude_patterns": ["spam", "newsletter"],
+    "max_age_days": 7
+  }
+}
+```
+
+**Simple Example (Auto-Assign Mode):**
+```json
+{
+  "mode": "auto_assign"
+}
+```
+
+#### IMAP Filter Configuration (custom_imap mode only)
+
+When using `custom_imap` mode, you can optionally configure filters in the `filter_config` section of `email_config` to control which emails are fetched.
+
+**Available IMAP Search Criteria:**
 
 | Category         | Criteria                    | Description                                    | Example                                    |
 |------------------|-----------------------------|------------------------------------------------|--------------------------------------------|
@@ -386,27 +547,11 @@ To simplify configuration, all required settings should be added here. Below are
 |                  | `BODY`                      | Emails with body containing keyword           | `"BODY \"urgent\""`                        |
 |                  | `TEXT`                      | Emails with subject or body containing keyword | `"TEXT \"meeting\""`                       |
 
-**Example configuration:**
-
-```json
-{
-  "filters": [
-    "UNSEEN",
-    "SINCE \"24-Jul-2025\"",
-    "FROM \"admin@example.com\""
-  ],
-  "exclude_patterns": [
-    "spam",
-    "newsletter"
-  ],
-  "max_age_days": 7
-}
-```
-
 **Note:**
 - The `filters` array can contain multiple IMAP search criteria (combined with AND logic)
 - Date format should be "DD-MMM-YYYY" (e.g., "24-Jul-2025")
 - The system automatically adds time-based filtering using `last_email_fetch_time` for incremental fetching
+- Filter configuration is **not applicable** to auto_assign mode (Haraka processes all incoming emails)
 
 ### Issue Config(issue_config)
 
@@ -514,46 +659,23 @@ Currently, the following webhook providers are supported:
 
 #### Supported Events
 
-All email processing status events from the state machine can be configured for notifications:
+Email processing status events from the simplified state machine can be configured for notifications:
 
-**Email Fetch Status:**
+**Simplified State Machine Events (4 States):**
 - **`fetched`**: Email has been fetched and is ready for processing
+- **`processing`**: Email is being processed through the LangGraph workflow (OCR → LLM → Issue creation)
+- **`success`**: All processing completed successfully (terminal state)
+- **`failed`**: Processing failed, can be retried
 
-**OCR Processing Status:**
-- **`ocr_processing`**: OCR processing is in progress
-- **`ocr_success`**: OCR processing completed successfully
-- **`ocr_failed`**: OCR processing failed
-
-**LLM OCR Processing Status:**
-- **`llm_ocr_processing`**: LLM processing OCR results in progress
-- **`llm_ocr_success`**: LLM OCR processing completed successfully
-- **`llm_ocr_failed`**: LLM OCR processing failed
-
-**LLM Email Content Processing Status:**
-- **`llm_email_processing`**: LLM processing email content in progress
-- **`llm_email_success`**: LLM email processing completed successfully
-- **`llm_email_failed`**: LLM email processing failed
-
-**LLM Summary Generation Status:**
-- **`llm_summary_processing`**: LLM summary generation in progress
-- **`llm_summary_success`**: LLM summary generation completed successfully
-- **`llm_summary_failed`**: LLM summary generation failed
-
-**Issue Creation Status:**
-- **`issue_processing`**: Issue creation is in progress
-- **`issue_success`**: Issue creation completed successfully
-- **`issue_failed`**: Issue creation failed
-
-**Completion Status:**
-- **`completed`**: Email processing completed successfully
+**Note:** The workflow now uses a simplified 4-state model. Detailed step-by-step progress (OCR, LLM, Issue creation) is managed internally by the LangGraph workflow and is not reflected as separate database states. For detailed progress tracking, check the workflow logs or LangGraph checkpoints.
 
 #### Example Webhook Configuration
 
-**Basic Configuration (only key events):**
+**Basic Configuration (simplified state model):**
 ```json
 {
   "url": "https://open.feishu.cn/open-apis/bot/v2/hook/xxx",
-  "events": ["issue_success", "ocr_failed", "llm_summary_failed"],
+  "events": ["success", "failed"],
   "timeout": 10,
   "retries": 3,
   "headers": {},
@@ -562,19 +684,11 @@ All email processing status events from the state machine can be configured for 
 }
 ```
 
-**Complete Configuration (all events):**
+**Complete Configuration (all state transitions):**
 ```json
 {
   "url": "https://open.feishu.cn/open-apis/bot/v2/hook/xxx",
-  "events": [
-    "fetched",
-    "ocr_processing", "ocr_success", "ocr_failed",
-    "llm_ocr_processing", "llm_ocr_success", "llm_ocr_failed",
-    "llm_email_processing", "llm_email_success", "llm_email_failed",
-    "llm_summary_processing", "llm_summary_success", "llm_summary_failed",
-    "issue_processing", "issue_success", "issue_failed",
-    "completed"
-  ],
+  "events": ["fetched", "processing", "success", "failed"],
   "timeout": 10,
   "retries": 3,
   "headers": {},
@@ -583,11 +697,11 @@ All email processing status events from the state machine can be configured for 
 }
 ```
 
-**Minimal Configuration (only failures):**
+**Minimal Configuration (only completion events):**
 ```json
 {
   "url": "https://open.feishu.cn/open-apis/bot/v2/hook/xxx",
-  "events": ["ocr_failed", "llm_email_failed", "llm_summary_failed", "issue_failed"],
+  "events": ["success"],
   "timeout": 10,
   "retries": 3,
   "headers": {},
@@ -644,8 +758,8 @@ To enable automated email processing and JIRA issue creation, you need to config
 > **Important:**
 > You must configure the following two periodic tasks in Django Admin (Periodic Tasks section):
 >
-> 1. **schedule_email_processing_tasks**
->    - This is the main scheduler task. It periodically polls the email/message status and triggers the appropriate processing tasks (such as OCR, LLM summarization, and JIRA submission) based on the current state machine.
+> 1. **schedule_email_fetch**
+>    - This is the main scheduler task. It periodically fetches emails from IMAP and Haraka sources and triggers the appropriate processing tasks (such as OCR, LLM summarization, and JIRA submission) based on the current state machine.
 >
 > 2. **reset_stuck_processing_emails**
 >    - This task is responsible for detecting and resetting any email/message tasks that have been stuck in a pending or processing state for too long (timeout recovery). It helps ensure the system can recover from unexpected failures or timeouts.
@@ -656,21 +770,27 @@ To enable automated email processing and JIRA issue creation, you need to config
 
 You **must** configure the following periodic tasks in Django Admin (**Periodic Tasks** section, provided by `django-celery-beat`):
 
-1. **schedule_email_processing_tasks**
-   - Main scheduler task. Periodically checks for emails in `FETCHED` status and triggers the complete processing chain (OCR → LLM → JIRA).
-   - Uses the new chain-based approach for better workflow management and error handling.
+1. **schedule_email_fetch**
+   - Main scheduler task. Periodically fetches emails from IMAP and Haraka sources and triggers the LangGraph workflow for each email.
+   - Automatically processes emails through the complete workflow (OCR → LLM → Issue creation).
    - **Recommended interval:** every 5 minutes.
 
-2. **reset_stuck_processing_emails**
-   - Detects and resets emails stuck in processing states for longer than the specified timeout.
-   - Automatically resets stuck emails to appropriate previous states for retry:
-     - `OCR_PROCESSING` → `FETCHED`
-     - `SUMMARY_PROCESSING` → `OCR_SUCCESS`
-     - `JIRA_PROCESSING` → `SUMMARY_SUCCESS`
+2. **schedule_reset_stuck_processing_emails**
+   - Detects and resets emails stuck in `PROCESSING` state for longer than the specified timeout.
+   - Automatically marks stuck emails as `FAILED` with error message indicating manual intervention is required.
+   - This prevents infinite retry loops and ensures system stability.
    - **Recommended interval:** every 10–30 minutes.
    - **Default timeout:** 30 minutes (configurable via `timeout_minutes` parameter)
 
-> **Note:** The email scanning is now handled automatically by the processing chain, so you no longer need a separate email scanning task.
+3. **schedule_haraka_cleanup** (Optional)
+   - Cleans up old Haraka email files from the file system to free up disk space.
+   - **Recommended interval:** daily or weekly, depending on email volume.
+
+4. **schedule_email_task_cleanup** (Optional)
+   - Cleans up old EmailTask records from the database to prevent database bloat.
+   - **Recommended interval:** daily or weekly.
+
+> **Note:** Email fetching automatically triggers the LangGraph workflow for each new email, eliminating the need for separate processing tasks.
 
 > **Tip:**
 > You can edit, disable, or delete these tasks at any time in the **Periodic Tasks** section.
@@ -679,80 +799,51 @@ You **must** configure the following periodic tasks in Django Admin (**Periodic 
 
 The `EmailMessage` model uses a comprehensive state machine to track the processing stage with proper error handling and retry mechanisms.
 
-### State Machine Flow
+### State Machine Flow (Simplified 4-State Model)
 
 ```mermaid
 stateDiagram-v2
     [*] --> FETCHED
-    FETCHED --> OCR_PROCESSING
-    OCR_PROCESSING --> OCR_SUCCESS
-    OCR_PROCESSING --> OCR_FAILED
-    OCR_FAILED --> OCR_PROCESSING : Retry
-
-    OCR_SUCCESS --> LLM_OCR_PROCESSING
-    LLM_OCR_PROCESSING --> LLM_OCR_SUCCESS
-    LLM_OCR_PROCESSING --> LLM_OCR_FAILED
-    LLM_OCR_FAILED --> LLM_OCR_PROCESSING : Retry
-
-    LLM_OCR_SUCCESS --> LLM_EMAIL_PROCESSING
-    LLM_EMAIL_PROCESSING --> LLM_EMAIL_SUCCESS
-    LLM_EMAIL_PROCESSING --> LLM_EMAIL_FAILED
-    LLM_EMAIL_FAILED --> LLM_EMAIL_PROCESSING : Retry
-
-    LLM_EMAIL_SUCCESS --> LLM_SUMMARY_PROCESSING
-    LLM_SUMMARY_PROCESSING --> LLM_SUMMARY_SUCCESS
-    LLM_SUMMARY_PROCESSING --> LLM_SUMMARY_FAILED
-    LLM_SUMMARY_FAILED --> LLM_SUMMARY_PROCESSING : Retry
-
-    LLM_SUMMARY_SUCCESS --> ISSUE_PROCESSING
-    LLM_SUMMARY_SUCCESS --> COMPLETED : No issue needed
-
-    ISSUE_PROCESSING --> ISSUE_SUCCESS
-    ISSUE_PROCESSING --> ISSUE_FAILED
-    ISSUE_PROCESSING --> COMPLETED : No issue needed
-    ISSUE_FAILED --> ISSUE_PROCESSING : Retry
-
-    ISSUE_SUCCESS --> COMPLETED
-    COMPLETED --> [*]
+    FETCHED --> PROCESSING
+    PROCESSING --> SUCCESS
+    PROCESSING --> FAILED
+    FAILED --> PROCESSING : Retry
+    SUCCESS --> [*]
 ```
 
 ### State Descriptions
 
 | Status | Description | Next Possible States |
 |--------|-------------|---------------------|
-| `FETCHED` | Email has been fetched and is ready for OCR | `OCR_PROCESSING` |
-| `OCR_PROCESSING` | OCR processing is in progress | `OCR_SUCCESS`, `OCR_FAILED` |
-| `OCR_SUCCESS` | OCR processing completed successfully | `LLM_OCR_PROCESSING` |
-| `OCR_FAILED` | OCR processing failed | `OCR_PROCESSING` (retry) |
-| `LLM_OCR_PROCESSING` | LLM processing OCR results in progress | `LLM_OCR_SUCCESS`, `LLM_OCR_FAILED` |
-| `LLM_OCR_SUCCESS` | LLM OCR processing completed successfully | `LLM_EMAIL_PROCESSING` |
-| `LLM_OCR_FAILED` | LLM OCR processing failed | `LLM_OCR_PROCESSING` (retry) |
-| `LLM_EMAIL_PROCESSING` | LLM Email content organization is in progress | `LLM_EMAIL_SUCCESS`, `LLM_EMAIL_FAILED` |
-| `LLM_EMAIL_SUCCESS` | LLM Email content organization completed successfully | `LLM_SUMMARY_PROCESSING` |
-| `LLM_EMAIL_FAILED` | LLM Email content organization failed | `LLM_EMAIL_PROCESSING` (retry) |
-| `LLM_SUMMARY_PROCESSING` | LLM summary processing is in progress | `LLM_SUMMARY_SUCCESS`, `LLM_SUMMARY_FAILED` |
-| `LLM_SUMMARY_SUCCESS` | LLM summary processing completed successfully | `ISSUE_PROCESSING`, `COMPLETED` |
-| `LLM_SUMMARY_FAILED` | LLM summary processing failed | `LLM_SUMMARY_PROCESSING` (retry) |
-| `ISSUE_PROCESSING` | Issue creation is in progress | `ISSUE_SUCCESS`, `ISSUE_FAILED`, `COMPLETtED` |
-| `ISSUE_SUCCESS` | Issue creation completed successfully | `COMPLETED` |
-| `ISSUE_FAILED` | Issue creation failed | `ISSUE_PROCESSING` (retry) |
-| `COMPLETED` | Task completed successfully | Terminal state |
+| `FETCHED` | Email has been fetched and ready for processing | `PROCESSING` |
+| `PROCESSING` | Email is being processed through the workflow (OCR → LLM → Issue creation) | `SUCCESS`, `FAILED` |
+| `FAILED` | Processing failed, can be retried | `PROCESSING` |
+| `SUCCESS` | All processing completed successfully (terminal state) | None (terminal) |
+
+**Note**: Detailed step-by-step progress (OCR, LLM, Issue creation) is managed internally by the LangGraph workflow and is not reflected in the database status. The database status shows only the overall processing stage.
 
 ### Key Features
 
-- **Chain-based Processing**: The main scheduler (`schedule_email_processing_tasks`) automatically triggers the complete processing chain for emails in `FETCHED` status
-- **Automatic Transitions**: Each processing stage automatically transitions to the next stage upon successful completion
-- **Retry Mechanism**: Failed states can retry by transitioning back to their respective processing states
-- **Stuck Task Recovery**: The `reset_stuck_processing_emails` task automatically detects and resets stuck emails
+- **Simplified State Model**: Uses a 4-state model (FETCHED → PROCESSING → SUCCESS/FAILED) for easier monitoring and debugging
+- **LangGraph Workflow**: Powered by LangGraph StateGraph for robust, stateful workflow execution with built-in checkpointing
+- **Atomic Operations**: Prepare and Finalize nodes ensure atomic database operations for data consistency
+- **Automatic Transitions**: Processing automatically transitions to SUCCESS or FAILED upon workflow completion
+- **Error Message Cleanup**: When transitioning to SUCCESS, error messages are automatically cleared to ensure clean state
+- **Retry Mechanism**: Failed emails can be retried using `retry_failed_email_workflow` task with force mode
+- **Stuck Task Recovery**: The `schedule_reset_stuck_processing_emails` task automatically detects and marks stuck emails as FAILED
 - **Force Mode**: Available for reprocessing emails regardless of current status (useful for debugging and manual reprocessing)
-- **Parallel Processing**: OCR and email content processing can run in parallel after OCR completion for better performance
+- **Internal Workflow State**: Detailed step-by-step progress is managed by LangGraph internal state with Redis checkpointing, not stored in the database
+- **Error Tracking**: Node-level error tracking allows granular debugging and recovery strategies
 
 ### Error Handling
 
-- **Automatic Retries**: Failed tasks are automatically retried by transitioning back to processing states
-- **Timeout Recovery**: Stuck tasks are reset to appropriate previous states after configurable timeout
-- **Status Validation**: Each state transition is validated against the state machine rules
-- **Force Processing**: Bypass status checks for manual reprocessing and debugging
+- **Node-level Error Tracking**: Each node in the workflow tracks its own errors in the state's `node_errors` field
+- **Graceful Degradation**: Workflow continues even if non-critical nodes fail, with errors logged for later review
+- **Automatic Recovery**: Redis checkpointing allows workflow resumption from the last successful checkpoint
+- **Timeout Protection**: Stuck emails are automatically marked as FAILED after configurable timeout (default: 30 minutes)
+- **Status Validation**: Each state transition is validated against the state machine rules to prevent invalid states
+- **Force Processing**: Bypass status checks and reprocess emails using `retry_failed_email_workflow` task
+- **Detailed Logging**: Comprehensive logging at each workflow node for debugging and monitoring
 
 > **Best Practice:**
 > Always keep your prompt templates, periodic task names, and state machine logic in sync with the codebase. If you add new settings or change the structure of any config, update the README accordingly.
@@ -771,6 +862,72 @@ Core features of this project leverage components from the
 
 For more details on the architecture and advanced usage, please refer to the
 above repositories.
+
+## LangGraph Workflow Architecture
+
+The email processing workflow is built on **LangGraph**, using a StateGraph pattern with 7 specialized nodes:
+
+### Workflow Nodes
+
+```
+START → WorkflowPrepare → OCR → LLMAttachment → LLMEmail → Summary → Issue → WorkflowFinalize → END
+```
+
+| Node | Responsibility | Database Access |
+|------|----------------|-----------------|
+| **WorkflowPrepareNode** | Load email data, attachments, and user configurations into State | Read-only |
+| **OCRNode** | Process image attachments and extract text using Azure Document Intelligence | No database access |
+| **LLMAttachmentNode** | Process OCR content with LLM to organize and structure text | No database access |
+| **LLMEmailNode** | Process email content with LLM, merge with attachment OCR content | No database access |
+| **SummaryNode** | Generate comprehensive summary and title for issue creation | No database access |
+| **IssueNode** | Create issue in external systems (JIRA) via API | No database access |
+| **WorkflowFinalizeNode** | Atomically sync all results to database and update status | Write-only |
+
+### Key Architecture Principles
+
+1. **Prepare/Finalize Pattern**: Only the first and last nodes access the database
+   - **Prepare**: Loads all necessary data into State (single read transaction)
+   - **Finalize**: Saves all results to database (single write transaction)
+   - **Middle nodes**: Pure business logic, operate only on State
+
+2. **State-Driven Design**: All data flows through the `EmailState` TypedDict
+   - Type-safe state structure
+   - Immutable state updates (functional programming style)
+   - Node-level error tracking in `node_errors` field
+
+3. **Error Resilience**:
+   - Each node tracks its own errors without stopping the workflow
+   - Graceful degradation: non-critical failures don't block the entire process
+   - Redis checkpointing enables workflow resumption from any point
+
+4. **Atomic Database Operations**:
+   - All database writes happen in a single transaction in WorkflowFinalizeNode
+   - Either all changes are saved or none (ACID compliance)
+   - Prevents partial updates and data inconsistency
+
+### File Structure
+
+```
+threadline/
+├── agents/
+│   ├── workflow.py                 # LangGraph workflow definition
+│   ├── email_state.py              # State structure and helper functions
+│   ├── checkpoint_manager.py       # Redis checkpoint management
+│   └── nodes/
+│       ├── base_node.py            # Base class for all nodes
+│       ├── workflow_prepare.py     # Data loading node
+│       ├── workflow_finalize.py    # Data persistence node
+│       ├── ocr_node.py             # OCR processing
+│       ├── llm_attachment_node.py  # LLM for attachments
+│       ├── llm_email_node.py       # LLM for email content
+│       ├── summary_node.py         # Summary generation
+│       └── issue_node.py           # Issue creation
+└── tasks/
+    ├── email_workflow.py           # Celery task wrapper for workflow
+    ├── email_fetch.py              # Email fetching tasks
+    ├── cleanup.py                  # Cleanup tasks
+    └── scheduler.py                # Periodic task schedulers
+```
 
 ## Threadline Processing Flow
 
@@ -811,21 +968,28 @@ flowchart TD
 ### Process Description
 
 1. **Input Sources**: Various communication tools (WeChat, Slack, Teams, etc.) or direct emails
-2. **Email Collection**: System fetches emails from configured mailboxes
-3. **Email Processing**: Parses email content and extracts attachments
-4. **OCR Processing**: Extracts text content from image attachments using Azure Document Intelligence
-5. **LLM Email Processing**: LLM organizes chat logs and OCR content into structured format
-6. **LLM Summary Processing**: LLM generates comprehensive summary and issue title
-7. **Issue Creation**: Creates JIRA issue with organized content and uploaded attachments (if enabled)
-8. **Completion**: Marks email as completed regardless of issue creation status
+2. **Email Collection**: System fetches emails from configured mailboxes (IMAP/Haraka)
+3. **Workflow Trigger**: Each email triggers a LangGraph workflow execution
+4. **Data Preparation**: WorkflowPrepareNode loads email data, attachments, and user configs into State
+5. **OCR Processing**: OCRNode extracts text from image attachments using Azure Document Intelligence
+6. **LLM Attachment Processing**: LLMAttachmentNode processes OCR content with LLM for structure and clarity
+7. **LLM Email Processing**: LLMEmailNode processes email text, merges with attachment OCR content
+8. **Summary Generation**: SummaryNode generates comprehensive summary and title for issue creation
+9. **Issue Creation**: IssueNode creates JIRA issue with organized content (if enabled)
+10. **Data Persistence**: WorkflowFinalizeNode atomically saves all results to database
+11. **Status Update**: Email status automatically set to SUCCESS or FAILED based on workflow result
 
 ### Key Features
 
 - **Multi-source Input**: Supports various communication platforms via email forwarding
 - **Image Processing**: Automatic OCR extraction from screenshots and documents
-- **AI-powered Analysis**: Two-stage LLM processing (email organization + summary generation)
-- **Automated JIRA Creation**: Direct integration with JIRA for issue tracking
+- **Three-stage LLM Processing**:
+  - Stage 1: Organize attachment OCR content
+  - Stage 2: Process and structure email content
+  - Stage 3: Generate comprehensive summary and title
+- **Automated Issue Creation**: Direct integration with JIRA and other issue tracking systems
 - **Attachment Handling**: Preserves and uploads original files to JIRA issues
-- **Parallel Processing**: OCR and email content processing can run in parallel for better performance
-- **Flexible Completion**: Can complete processing with or without JIRA issue creation
-- **State Machine Management**: Comprehensive status tracking with automatic retry and recovery mechanisms
+- **Stateful Workflow**: LangGraph manages internal state with Redis checkpointing for recovery
+- **Atomic Database Operations**: All database writes happen in a single transaction for data consistency
+- **Error Resilience**: Node-level error tracking allows the workflow to continue despite non-critical failures
+- **Force Mode**: Reprocess emails regardless of current status for debugging and manual intervention
