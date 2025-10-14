@@ -131,14 +131,17 @@ Both modes include the following services:
 **Development Mode:**
 - Uses `development` command to start Django's built-in server
 - Includes Flower dashboard for Celery monitoring
-- Source code is mounted for live reloading
+- **Source code is mounted** for live reloading (`./devify:/opt/devify`)
 - Exposes Django admin on port 8000
+- Code changes take effect immediately (just restart worker)
 
 **Production Mode:**
 - Uses `gunicorn` command for production-grade WSGI server
 - Includes Nginx reverse proxy with SSL support
+- **Source code is packaged in Docker image** (no volume mount)
 - Optimized for performance and stability
 - Health checks and restart policies enabled
+- Code updates require image rebuild and container restart
 
 ### Environment Preparation
 
@@ -189,17 +192,34 @@ When `USE_MIRROR=true`, the Dockerfile will:
 
 #### Docker Compose Differences
 
-**Development Mode (`docker-compose.dev.yml`):**
-- Uses local image name: `devify:latest`
-- Default `USE_MIRROR=true` for faster development builds
-- Includes Flower monitoring dashboard
-- Source code mounted for live reloading
+| Feature | Development Mode | Production Mode |
+|---------|------------------|-----------------|
+| **Docker Compose File** | `docker-compose.dev.yml` | `docker-compose.yml` |
+| **Image Name** | `devify:latest` (local) | `registry.cn-beijing.aliyuncs.com/cloud2ai/devify:latest` |
+| **Source Code** | Volume mounted (live reload) | Packaged in image (immutable) |
+| **Code Updates** | Just restart worker | Rebuild image + restart |
+| **Server** | Django dev server | Gunicorn (production WSGI) |
+| **Monitoring** | Flower dashboard (port 5555) | Nginx reverse proxy |
+| **USE_MIRROR** | Default `true` | Default `false` |
+| **Security** | Development settings | Production hardened |
 
-**Production Mode (`docker-compose.yml`):**
-- Uses remote image: `registry.cn-beijing.aliyuncs.com/cloud2ai/devify:latest`
-- Default `USE_MIRROR=false` for production builds
-- Includes Nginx reverse proxy
-- Optimized for production deployment
+**Volume Mount Comparison:**
+
+Development Mode:
+```yaml
+volumes:
+  - ./devify:/opt/devify  # ✅ Source code mounted for hot reload
+  - ./cache:/opt/cache
+  - ./data/logs:/var/log
+```
+
+Production Mode:
+```yaml
+volumes:
+  # ❌ No source code mount (code in image)
+  - ./cache:/opt/cache
+  - ./data/logs:/var/log
+```
 
 This environment values should be provided:
 
@@ -262,12 +282,26 @@ docker logs -f devify-api
 
 ### Run in Production Mode
 
-```
-docker-compose -f docker-compose.yml build
-docker-compose -f docker-compose.yml up -d
+**Initial Deployment:**
+```bash
+docker-compose build
+docker-compose up -d
 ```
 
-**Note:** Production mode uses `USE_MIRROR=false` by default. For faster builds in China, you can set `USE_MIRROR=true` in your `.env` file.
+**Code Updates (after git push):**
+```bash
+# On production server
+git pull origin main
+docker-compose build
+docker-compose down
+docker-compose up -d
+```
+
+**Important Notes:**
+- Production mode does **not** mount source code into containers
+- Code is packaged inside Docker images for security and consistency
+- To update code, you must rebuild the image and restart containers
+- Use `USE_MIRROR=true` in `.env` for faster builds in China (default: false)
 
 ### Service Access
 

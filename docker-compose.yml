@@ -14,7 +14,6 @@ services:
       - ./data/django/staticfiles:/opt/devify/core/staticfiles
       - ./cache:/opt/cache
       - ./data/logs/api:/var/log/gunicorn
-      - ./devify:/opt/devify
       - ./data/haraka/email_attachments:/opt/haraka/email_attachments
     networks:
       - devify_network
@@ -37,7 +36,6 @@ services:
     volumes:
       - ./cache:/opt/cache
       - ./data/logs/worker:/var/log/celery
-      - ./devify:/opt/devify
       - ./data/haraka/email_attachments:/opt/haraka/email_attachments
     networks:
       - devify_network
@@ -58,7 +56,6 @@ services:
       - ./.env
     volumes:
       - ./data/logs/scheduler:/var/log/celery
-      - ./devify:/opt/devify
     networks:
       - devify_network
     depends_on:
