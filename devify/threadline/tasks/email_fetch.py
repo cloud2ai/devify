@@ -62,15 +62,14 @@ def imap_email_fetch():
         tracer.append_task("INIT", "IMAP email fetch task started")
 
         # Query users with IMAP configuration
-        # Must satisfy BOTH conditions:
-        # 1. mode='custom_imap'
-        # 2. imap_config field exists
+        # Use __contains for MySQL JSONField compatibility
+        # This queries for Settings where value contains {"mode": "custom_imap"}
+        # and value contains an "imap_config" key
         users_with_imap_config = User.objects.filter(
             is_active=True,
             settings__key="email_config",
             settings__is_active=True,
-            settings__value__mode='custom_imap',
-            settings__value__has_key='imap_config'
+            settings__value__contains={"mode": "custom_imap"}
         ).prefetch_related(
             Prefetch('settings', queryset=Settings.objects.filter(
                 key="email_config",
@@ -91,9 +90,22 @@ def imap_email_fetch():
                     f"Starting to process user {user_display}")
 
                 # Get email config from prefetched settings
-                # (guaranteed to have imap_config due to SQL filter)
                 email_config_setting = user.settings.first()
+                if not email_config_setting:
+                    logger.warning(
+                        f"User {user_display} has no email_config, skipping"
+                    )
+                    continue
+
                 email_config = email_config_setting.value
+
+                # Verify imap_config exists (additional safety check)
+                if 'imap_config' not in email_config:
+                    logger.warning(
+                        f"User {user_display} email_config missing "
+                        f"imap_config, skipping"
+                    )
+                    continue
 
                 # Fetch emails for each user with pre-fetched config
                 result = fetch_user_imap_emails(
