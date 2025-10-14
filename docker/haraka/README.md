@@ -19,22 +19,41 @@ docker/haraka/
 
 ## ⚙️ Configuration Files
 
+### `config/tls.ini`
+TLS/SSL encryption configuration:
+
+**Production Environment:**
+- `enableTLS=true` - Enable TLS and STARTTLS support
+- Certificate path: `/etc/haraka/certs/cert.pem`
+- Private key path: `/etc/haraka/certs/key.pem`
+- STARTTLS available on port 25 (optional encryption)
+
+**Development Environment:**
+- `enableTLS=false` - TLS disabled for simplified testing
+- No certificates required
+
+### `config/smtp.ini`
+SMTP server configuration:
+- Port 25 (standard SMTP) - Used for both receiving and sending emails
+- No port 587 (submission) - Not needed for this use case
+- Connection limits and timeouts configured
+
 ### `config/plugins.dev` / `config/plugins.prod`
 Environment-specific plugin configurations:
 
 **Development (`plugins.dev`):**
 - `rcpt_to.in_host_list` - Basic recipient validation
-- `redis` - Official Redis plugin
-- `redis_queue` - Custom Redis queue plugin
+- `raw_email_saver` - Raw email storage for testing
 
 **Production (`plugins.prod`):**
+- `tls` - TLS/SSL encryption support
 - `fcrdns` - Reverse DNS lookup validation
 - `helo.checks` - HELO/EHLO command validation
 - `mail_from.is_resolvable` - Sender domain validation
 - `spf` - SPF record validation
 - `rcpt_to.in_host_list` - Recipient domain validation
-- `redis` - Official Redis plugin
-- `redis_queue` - Custom Redis queue plugin
+- `auth/flat_file` - SMTP authentication
+- `simple_file_queue` - File-based email queue
 
 ### `config/redis.ini`
 Redis connection configuration:
@@ -131,4 +150,125 @@ docker-compose -f docker-compose.dev.yml exec redis redis-cli ping
 ### Test Email Processing
 ```bash
 swaks --server <haraka-ip> --from test@localhost --to user@localhost --data "Subject: Test\n\nTest message"
+```
+
+## 🔐 TLS/SSL Certificate Management
+
+### Environment Differences
+
+| Feature | Production | Development |
+|---------|-----------|------------|
+| Port 25 | ✅ STARTTLS Enabled | ✅ No Encryption |
+| Port 587 | ❌ Not Used | ❌ Not Used |
+| TLS | ✅ Required | ❌ Disabled |
+| Certificates | Let's Encrypt | Not Required |
+
+### Certificate Setup (Production)
+
+The project includes a certificate management script at `scripts/manage-haraka-certs.sh`.
+
+**First-time certificate application:**
+```bash
+# Set your domain and email
+export HARAKA_DOMAIN=mail.your-domain.com
+export HARAKA_CERT_EMAIL=admin@your-domain.com
+
+# Apply for certificate
+sudo ./scripts/manage-haraka-certs.sh apply
+```
+
+**Manual certificate renewal:**
+```bash
+sudo ./scripts/manage-haraka-certs.sh renew
+```
+
+**Install automatic renewal (cron job):**
+```bash
+sudo ./scripts/manage-haraka-certs.sh install-cron
+```
+
+**Check certificate status:**
+```bash
+sudo ./scripts/manage-haraka-certs.sh status
+```
+
+### Certificate Paths
+
+- **Host machine**: `./data/certs/haraka/cert.pem` and `./data/certs/haraka/key.pem`
+- **Haraka container**: `/etc/haraka/certs/cert.pem` and `/etc/haraka/certs/key.pem`
+
+The host directory is mounted as read-only in the container.
+
+### Verify TLS Configuration
+
+```bash
+# Test STARTTLS connection
+openssl s_client -connect mail.your-domain.com:25 -starttls smtp
+
+# Expected output should show certificate details and "Verify return code: 0 (ok)"
+```
+
+## 📧 Mail Client Configuration
+
+### Production Environment
+- **Purpose**: Receive emails from other mail servers
+- **Port**: 25
+- **Encryption**: STARTTLS (optional)
+- **Authentication**: Not required for incoming mail
+
+### Development/Testing Environment
+
+**Apple Mail Client Configuration Example:**
+```
+Outgoing Mail Server (SMTP):
+  Server: localhost (or 127.0.0.1)
+  Port: 25
+  Authentication: None
+  Encryption: None
+  Username: (leave empty)
+  Password: (leave empty)
+```
+
+**Test sending from command line:**
+```bash
+# Using swaks
+swaks --server localhost:25 \
+  --from test@devify.local \
+  --to user@devify.local \
+  --header "Subject: Test Email" \
+  --body "This is a test message"
+
+# Using telnet
+telnet localhost 25
+EHLO localhost
+MAIL FROM: <test@devify.local>
+RCPT TO: <user@devify.local>
+DATA
+Subject: Test Email
+
+This is a test message.
+.
+QUIT
+```
+
+## 🔄 Deployment & Restart
+
+### After Certificate Updates
+```bash
+# Restart Haraka container to load new certificates
+docker-compose restart haraka
+
+# Or if using development environment
+docker-compose -f docker-compose.dev.yml restart haraka
+```
+
+### Complete Restart
+```bash
+# Production
+docker-compose down
+docker-compose up -d haraka
+
+# Development
+docker-compose -f docker-compose.dev.yml down
+docker-compose -f docker-compose.dev.yml up -d haraka
 ```

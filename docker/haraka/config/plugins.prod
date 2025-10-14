@@ -1,6 +1,11 @@
 # Haraka Plugin Configuration for Production Environment
 # Strict validation and domain-based connections only
 
+# TLS/SSL SUPPORT
+# ----------
+# Enable TLS and STARTTLS for secure email transmission
+tls
+
 # CONNECT VALIDATION
 # ----------
 # Reverse DNS lookup for connecting clients
