@@ -338,11 +338,22 @@ def fetch_user_imap_emails(
         error_count = 0
         email_ids = []
 
+        # Get task_id for email records
+        task_id = getattr(
+            fetch_user_imap_emails.request,
+            "id",
+            ""
+        ) or ""
+
         # Process emails
         for email_data in processor.process_emails():
             try:
-                # Save email to database
-                email_msg = save_service.save_email(user_id, email_data)
+                # Save email to database with task_id
+                email_msg = save_service.save_email(
+                    user_id,
+                    email_data,
+                    task_id=task_id
+                )
                 processed_count += 1
                 email_ids.append(email_msg.id)
             except Exception as exc:
