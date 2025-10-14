@@ -325,10 +325,11 @@ def fetch_user_imap_emails(
             return {"status": "skipped", "reason": "no_imap_config"}
 
         # Use existing EmailProcessor to process emails
+        # Pass complete email_config (contains imap_config and filter_config)
         processor = EmailProcessor(
             source="imap",
             parser_type="flanker",
-            email_config=email_config["imap_config"],
+            email_config=email_config,
             user_context=user_display
         )
 
