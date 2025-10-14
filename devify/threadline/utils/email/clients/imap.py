@@ -273,6 +273,32 @@ class IMAPClient:
         ).strftime(self.IMAP_DATE_FORMAT)
         return since_date
 
+    def _delete_email(self, message_number):
+        """
+        Delete email from IMAP server after fetching
+
+        Args:
+            message_number: IMAP message number to delete
+        """
+        try:
+            self.imap_client.store(
+                message_number,
+                '+FLAGS',
+                '\\Deleted'
+            )
+
+            self.imap_client.expunge()
+
+            logger.info(
+                f"[{self.user_context}] Deleted email {message_number} "
+                f"from server"
+            )
+        except Exception as e:
+            logger.error(
+                f"[{self.user_context}] Failed to delete email "
+                f"{message_number}: {e}"
+            )
+
     def scan_emails(self) -> Generator[bytes, None, None]:
         """
         Scan emails from IMAP server and yield raw email data.
@@ -294,6 +320,11 @@ class IMAPClient:
             logger.info(
                 f"Found {len(message_number_list)} emails to process"
             )
+
+            delete_after_fetch = self.imap_config.get(
+                'delete_after_fetch', False
+            )
+
             for message_number in message_number_list:
                 try:
                     status, email_data = self.imap_client.fetch(
@@ -305,7 +336,12 @@ class IMAPClient:
                         )
                         continue
                     raw_email = email_data[0][1]
+
                     yield raw_email
+
+                    if delete_after_fetch:
+                        self._delete_email(message_number)
+
                 except Exception as e:
                     logger.error(
                         f"Error processing email {message_number}: {e}"

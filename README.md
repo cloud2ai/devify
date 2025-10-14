@@ -487,6 +487,7 @@ In this mode, each user configures their own IMAP server credentials for fetchin
 | password          | string   | Email password or app-specific password     | "your-password"                |
 | use_ssl           | boolean  | Enable SSL connection                       | true                           |
 | use_starttls      | boolean  | Enable StartTLS                             | false                          |
+| delete_after_fetch| boolean  | Delete emails from server after fetching (default: false) | false              |
 
 **Filter Config Fields (Optional):**
 
@@ -508,7 +509,8 @@ In this mode, each user configures their own IMAP server credentials for fetchin
     "username": "your-email@gmail.com",
     "password": "your-app-specific-password",
     "use_ssl": true,
-    "use_starttls": false
+    "use_starttls": false,
+    "delete_after_fetch": false
   },
   "filter_config": {
     "filters": ["UNSEEN"],
@@ -517,6 +519,10 @@ In this mode, each user configures their own IMAP server credentials for fetchin
   }
 }
 ```
+
+**Note on `delete_after_fetch`:**
+- `false` (default, recommended): Emails remain on the IMAP server after fetching. Duplicate emails are automatically prevented by the system's `unique_together` constraint on `(user, message_id)`.
+- `true`: Emails are permanently deleted from the IMAP server after successful fetch. Use this to save server storage space, but be aware that emails cannot be re-fetched.
 
 **Simple Example (Auto-Assign Mode):**
 ```json

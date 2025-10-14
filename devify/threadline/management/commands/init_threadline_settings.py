@@ -107,7 +107,8 @@ class Command(BaseCommand):
                     'username': 'your-email-username',
                     'password': 'your-email-password',
                     'use_ssl': True,
-                    'use_starttls': False
+                    'use_starttls': False,
+                    'delete_after_fetch': False
                 },
                 'filter_config': {
                     'filters': [],
