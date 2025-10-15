@@ -228,7 +228,8 @@ class EmailMessageAdmin(admin.ModelAdmin):
 
     list_display = [
         'subject_preview', 'user', 'sender', 'status',
-        'attachment_count', 'issue_count', 'received_at'
+        'fetch_retry_count', 'attachment_count', 'issue_count',
+        'received_at'
     ]
     list_filter = ['status', 'received_at', 'created_at']
     search_fields = [
@@ -262,7 +263,7 @@ class EmailMessageAdmin(admin.ModelAdmin):
             'classes': ('collapse',)
         }),
         (_('Status'), {
-            'fields': ('status', 'error_message')
+            'fields': ('status', 'fetch_retry_count', 'error_message')
         }),
         (_('Related Objects'), {
             'fields': ('attachment_links', 'issue_links'),

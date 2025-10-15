@@ -19,6 +19,7 @@ States:
 State Transitions:
 -----------------
 FETCHED → PROCESSING (chain orchestrator starts processing)
+FETCHED → FAILED (stuck or unable to start processing)
 PROCESSING → SUCCESS (all tasks succeed)
 PROCESSING → FAILED (any task fails)
 FAILED → PROCESSING (retry)
@@ -96,6 +97,7 @@ EMAIL_STATE_MACHINE = {
     EmailStatus.FETCHED: {
         'next': [
             EmailStatus.PROCESSING,
+            EmailStatus.FAILED,
         ],
         'description': 'Email has been fetched and ready for processing'
     },

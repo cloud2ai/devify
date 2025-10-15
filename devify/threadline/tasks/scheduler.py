@@ -147,6 +147,8 @@ def schedule_reset_stuck_emails(timeout_minutes=30):
                         f"worker issue)"
                     )
 
+                    # State transition from FETCHED to FAILED is now valid
+                    # in state machine
                     email.status = EmailStatus.FAILED.value
                     email.error_message = (
                         f"Email stuck in FETCHED status after retry. "
@@ -162,6 +164,8 @@ def schedule_reset_stuck_emails(timeout_minutes=30):
                     f"for {timeout_minutes}+ minutes, marking as FAILED"
                 )
 
+                # State transition from PROCESSING to FAILED is valid,
+                # no bypass needed
                 email.status = EmailStatus.FAILED.value
                 email.error_message = (
                     f"Processing stuck for over {timeout_minutes} minutes. "
