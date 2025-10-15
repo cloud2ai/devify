@@ -11,9 +11,10 @@ docker/haraka/
 │   ├── plugins.prod      # Production plugin configuration
 │   ├── redis.ini         # Redis connection configuration
 │   ├── host_list.dev     # Development domains
-│   └── host_list.prod    # Production domains
+│   ├── host_list.prod    # Production domains
+│   └── tls.ini           # TLS/SSL configuration
 ├── plugins/
-│   └── redis_queue.js    # Custom Redis queue plugin
+│   └── raw_email_saver.js    # Custom email storage plugin
 └── README.md             # This documentation
 ```
 
@@ -53,7 +54,7 @@ Environment-specific plugin configurations:
 - `spf` - SPF record validation
 - `rcpt_to.in_host_list` - Recipient domain validation
 - `auth/flat_file` - SMTP authentication
-- `simple_file_queue` - File-based email queue
+- `raw_email_saver` - Raw email storage for processing
 
 ### `config/redis.ini`
 Redis connection configuration:
@@ -74,11 +75,12 @@ Environment-specific domain configurations:
 - `mail.devify.com` - Mail subdomain
 - `devify.local` - Alternative production domain
 
-### `plugins/redis_queue.js`
+### `plugins/raw_email_saver.js`
 Custom plugin functionality:
-- Listens to `hook_data_post` event to capture email data
-- Formats email data as JSON and pushes to `haraka:email_queue`
-- Listens to `hook_queue` event to return success status
+- Listens to `hook_data` event to capture raw email data chunks
+- Saves complete email files to inbox directory for processing
+- Returns success status after successful email storage
+- Supports configurable inbox directory via EMAIL_INBOX_DIR environment variable
 
 ## 🔧 Environment Variables
 

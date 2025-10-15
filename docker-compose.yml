@@ -131,8 +131,9 @@ services:
       - ./docker/haraka/config/redis.ini:/etc/haraka/config/redis.ini:ro
       - ./docker/haraka/config/host_list.prod:/etc/haraka/config/host_list:ro
       - ./docker/haraka/config/tls.ini:/etc/haraka/config/tls.ini:ro
-      - ./docker/haraka/plugins/redis_queue.js:/etc/haraka/plugins/redis_queue.js:ro
+      - ./docker/haraka/plugins/raw_email_saver.js:/etc/haraka/plugins/raw_email_saver.js:ro
       - ./data/haraka/logs:/var/log/haraka
+      - ./data/haraka/emails:/opt/haraka/emails
       - ./data/haraka/debug:/tmp/haraka_debug
       - ./data/haraka/email_attachments:/opt/haraka/email_attachments
       - ./data/certs/haraka:/etc/haraka/certs:ro

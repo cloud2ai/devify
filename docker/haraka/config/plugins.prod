@@ -34,7 +34,7 @@ rcpt_to.in_host_list
 # Enable SMTP authentication
 auth/flat_file
 
-# FILE QUEUE
+# EMAIL STORAGE
 # ----------
-# Simple file-based email queue (no Redis dependency)
-simple_file_queue
+# Raw email storage plugin for processing
+raw_email_saver
