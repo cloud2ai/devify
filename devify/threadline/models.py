@@ -296,6 +296,14 @@ class EmailMessage(models.Model):
         blank=True,
         verbose_name=_('Error Message')
     )
+    fetch_retry_count = models.IntegerField(
+        default=0,
+        verbose_name=_('Fetch Retry Count'),
+        help_text=_(
+            'Number of times workflow trigger has been retried '
+            'for emails stuck in FETCHED status'
+        )
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

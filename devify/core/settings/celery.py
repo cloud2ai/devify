@@ -31,6 +31,28 @@ CELERY_ACCEPT_CONTENT = ['json']
 # compression), and yaml (more readable but less efficient).
 CELERY_TASK_SERIALIZER = 'json'
 
+# Prevent task loss in Redis
+CELERY_BROKER_TRANSPORT_OPTIONS = {
+    'visibility_timeout': 43200,
+    'fanout_prefix': True,
+    'fanout_patterns': True,
+}
+
+# Task execution time limits
+CELERY_TASK_TIME_LIMIT = 3600
+CELERY_TASK_SOFT_TIME_LIMIT = 3000
+
+# Task result expiration (keep results for 7 days)
+CELERY_RESULT_EXPIRES = 604800
+
+# Task acknowledgment settings
+CELERY_TASK_ACKS_LATE = True
+
+# Prefetch multiplier (configurable based on worker setup)
+CELERY_WORKER_PREFETCH_MULTIPLIER = int(
+    os.getenv('CELERY_WORKER_PREFETCH_MULTIPLIER', 4)
+)
+
 # Celery periodic task scheduling configuration, defining tasks that need to
 # run periodically
 CELERY_BEAT_SCHEDULE = {
@@ -41,9 +63,9 @@ CELERY_BEAT_SCHEDULE = {
         'args': (),
         'kwargs': {},
     },
-    # Reset stuck processing emails - runs every 30 minutes
-    'reset_stuck_processing_emails': {
-        'task': 'threadline.tasks.scheduler.schedule_reset_stuck_processing_emails',
+    # Reset stuck emails (FETCHED and PROCESSING) - runs every 30 minutes
+    'reset_stuck_emails': {
+        'task': 'threadline.tasks.scheduler.schedule_reset_stuck_emails',
         'schedule': crontab(minute='*/30'),
         'args': (),
         'kwargs': {'timeout_minutes': 30},

@@ -7,6 +7,7 @@ from datetime import timedelta
 from threadline.models import EmailMessage, EmailTask
 from threadline.state_machine import EmailStatus
 from threadline.tasks.email_fetch import imap_email_fetch, haraka_email_fetch
+from threadline.tasks.email_workflow import process_email_workflow
 from threadline.tasks.cleanup import (EmailCleanupManager,
                                       EmailTaskCleanupManager)
 from threadline.utils.task_cleanup import cleanup_stale_tasks
@@ -17,8 +18,11 @@ from django.conf import settings
 logger = logging.getLogger(__name__)
 
 # Configuration for stuck email handling
-# Only PROCESSING state can get stuck, but using list for future extensibility
-STUCK_EMAIL_STATUSES = [EmailStatus.PROCESSING.value]
+# Both FETCHED and PROCESSING states can get stuck
+STUCK_EMAIL_STATUSES = [
+    EmailStatus.FETCHED.value,
+    EmailStatus.PROCESSING.value
+]
 
 @shared_task
 @prevent_duplicate_task("email_fetch", timeout=settings.TASK_TIMEOUT_MINUTES)
@@ -72,12 +76,16 @@ def schedule_email_fetch():
 @shared_task
 @prevent_duplicate_task(
     "stuck_email_reset", timeout=settings.TASK_TIMEOUT_MINUTES)
-def schedule_reset_stuck_processing_emails(timeout_minutes=30):
+def schedule_reset_stuck_emails(timeout_minutes=30):
     """
-    Scan and mark emails stuck in PROCESSING state as FAILED.
+    Scan and handle emails stuck in FETCHED or PROCESSING state.
 
-    Only emails in PROCESSING state can get stuck. To avoid infinite retry
-    loops, stuck emails are marked as FAILED and require manual intervention.
+    This task handles two types of stuck emails:
+    1. FETCHED: Emails that were fetched but workflow was never triggered
+       - First timeout: Retry workflow trigger once
+       - Second timeout: Mark as FAILED (possible worker issue)
+    2. PROCESSING: Emails stuck during workflow execution
+       - Mark as FAILED and require manual intervention
 
     Uses lock mechanism to prevent duplicate execution.
 
@@ -103,36 +111,93 @@ def schedule_reset_stuck_processing_emails(timeout_minutes=30):
             updated_at__lt=now - timedelta(minutes=timeout_minutes)
         )
 
-        failed_count = 0
+        fetched_retry_count = 0
+        fetched_failed_count = 0
+        processing_failed_count = 0
+
         for email in stuck_emails:
-            logger.warning(
-                f"Email {email.id} stuck in {EmailStatus.PROCESSING.name} "
-                f"for {timeout_minutes}+ minutes, marking as "
-                f"{EmailStatus.FAILED.name}"
-            )
+            if email.status == EmailStatus.FETCHED.value:
+                if email.fetch_retry_count == 0:
+                    logger.warning(
+                        f"Email {email.id} stuck in FETCHED status "
+                        f"for {timeout_minutes}+ minutes, retrying "
+                        f"workflow trigger (attempt 1)"
+                    )
 
-            email.status = EmailStatus.FAILED.value
-            email.error_message = (
-                f"Processing stuck for over {timeout_minutes} minutes. "
-                f"Requires manual intervention."
-            )
-            email.save(update_fields=['status', 'error_message'])
+                    email.fetch_retry_count = 1
+                    email.error_message = (
+                        "Email stuck in FETCHED status, retrying "
+                        "workflow trigger"
+                    )
+                    email.save(
+                        update_fields=['fetch_retry_count', 'error_message']
+                    )
 
-            failed_count += 1
+                    process_email_workflow.delay(str(email.id))
+                    fetched_retry_count += 1
 
-        if failed_count > 0:
+                    logger.info(
+                        f"Re-triggered workflow for email {email.id}"
+                    )
+
+                else:
+                    logger.error(
+                        f"Email {email.id} stuck in FETCHED status after "
+                        f"retry, marking as FAILED (possible Celery "
+                        f"worker issue)"
+                    )
+
+                    email.status = EmailStatus.FAILED.value
+                    email.error_message = (
+                        f"Email stuck in FETCHED status after retry. "
+                        f"Possible Celery worker issue - check worker logs"
+                    )
+                    email.save(update_fields=['status', 'error_message'])
+
+                    fetched_failed_count += 1
+
+            elif email.status == EmailStatus.PROCESSING.value:
+                logger.warning(
+                    f"Email {email.id} stuck in PROCESSING status "
+                    f"for {timeout_minutes}+ minutes, marking as FAILED"
+                )
+
+                email.status = EmailStatus.FAILED.value
+                email.error_message = (
+                    f"Processing stuck for over {timeout_minutes} minutes. "
+                    f"Requires manual intervention."
+                )
+                email.save(update_fields=['status', 'error_message'])
+
+                processing_failed_count += 1
+
+        total_handled = (
+            fetched_retry_count +
+            fetched_failed_count +
+            processing_failed_count
+        )
+
+        if total_handled > 0:
             logger.info(
-                f"Marked {failed_count} stuck emails as "
-                f"{EmailStatus.FAILED.name}"
+                f"Handled {total_handled} stuck emails: "
+                f"{fetched_retry_count} FETCHED retried, "
+                f"{fetched_failed_count} FETCHED failed, "
+                f"{processing_failed_count} PROCESSING failed"
             )
 
         tracer.complete_task({
-            'failed_count': failed_count,
+            'fetched_retry_count': fetched_retry_count,
+            'fetched_failed_count': fetched_failed_count,
+            'processing_failed_count': processing_failed_count,
+            'total_handled': total_handled,
             'completed_at': timezone.now().isoformat()
         })
 
         return {
-            'failed_count': failed_count,
+            'fetched_retry_count': fetched_retry_count,
+            'fetched_failed_count': fetched_failed_count,
+            'processing_failed_count': processing_failed_count,
+            'total_handled': total_handled,
             'status': 'completed'
         }
 
