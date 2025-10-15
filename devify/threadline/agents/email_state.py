@@ -44,7 +44,6 @@ class EmailState(TypedDict, total=False):
     # Core EmailMessage fields
     id: str
     user_id: str
-    task_id: str
     message_id: str
     subject: str
     sender: str
@@ -106,7 +105,6 @@ def create_email_state(
     return {
         "id": email_id,
         "user_id": user_id,
-        "task_id": "",
         "message_id": "",
         "subject": "",
         "sender": "",

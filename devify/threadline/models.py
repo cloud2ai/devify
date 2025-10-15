@@ -225,12 +225,6 @@ class EmailMessage(models.Model):
         verbose_name=_('User'),
         related_name='email_messages'
     )
-    task = models.ForeignKey(
-        EmailTask,
-        on_delete=models.CASCADE,
-        verbose_name=_('Email Task'),
-        related_name='email_messages'
-    )
     message_id = models.CharField(
         max_length=255,
         verbose_name=_('Message ID'),

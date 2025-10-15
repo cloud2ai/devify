@@ -39,7 +39,6 @@ class ErrorMessageCleanupTest(TestCase):
 
         self.email = EmailMessage.objects.create(
             user=self.user,
-            task=self.email_task,
             message_id='test-message-id',
             subject='Test Subject',
             sender='sender@example.com',

@@ -76,7 +76,7 @@ class WorkflowPrepareNode(BaseLangGraphNode):
 
         try:
             self.email = EmailMessage.objects.select_related(
-                'user', 'task'
+                'user'
             ).prefetch_related('attachments').get(id=email_id)
         except EmailMessage.DoesNotExist:
             raise ValueError(f'EmailMessage {email_id} not found')
@@ -180,7 +180,6 @@ class WorkflowPrepareNode(BaseLangGraphNode):
             **state,
             'id': str(self.email.id),
             'user_id': str(self.email.user_id),
-            'task_id': str(self.email.task_id),
             'message_id': self.email.message_id,
             'subject': self.email.subject,
             'sender': self.email.sender,

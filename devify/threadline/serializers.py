@@ -262,15 +262,13 @@ class EmailMessageSerializer(serializers.ModelSerializer):
 
     user = UserSerializer(read_only=True)
     user_id = serializers.IntegerField(write_only=True)
-    task = EmailTaskSerializer(read_only=True)
-    task_id = serializers.IntegerField(write_only=True)
     status_display = serializers.CharField(source='get_status_display', read_only=True)
     attachments = serializers.SerializerMethodField()
 
     class Meta:
         model = EmailMessage
         fields = [
-            'id', 'user', 'user_id', 'task', 'task_id', 'message_id',
+            'id', 'user', 'user_id', 'message_id',
             'subject', 'sender', 'recipients', 'received_at',
             'raw_content', 'html_content', 'text_content',
             'summary_title', 'summary_content', 'summary_priority',
@@ -309,26 +307,6 @@ class EmailMessageSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError(
                     _("You can only create messages for yourself")
                 )
-
-        return value
-
-    def validate_task_id(self, value):
-        """
-        Validate task exists and belongs to the user
-        """
-        try:
-            task = EmailTask.objects.get(id=value)
-        except EmailTask.DoesNotExist:
-            raise serializers.ValidationError(
-                _("Email task with this ID does not exist")
-            )
-
-        # Check if task belongs to the user
-        user_id = self.initial_data.get('user_id')
-        if user_id and task.user_id != user_id:
-            raise serializers.ValidationError(
-                _("Email task does not belong to the specified user")
-            )
 
         return value
 
@@ -380,7 +358,7 @@ class EmailMessageCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = EmailMessage
         fields = [
-            'user_id', 'task_id', 'message_id', 'subject', 'sender',
+            'user_id', 'message_id', 'subject', 'sender',
             'recipients', 'received_at', 'raw_content', 'html_content',
             'text_content'
         ]
@@ -407,38 +385,6 @@ class EmailMessageCreateSerializer(serializers.ModelSerializer):
                 _("User with this ID does not exist")
             )
 
-    def validate_task_id(self, value):
-        """
-        Validate task exists and belongs to the user
-        """
-        if value is None:
-            raise serializers.ValidationError(
-                _("Task ID is required")
-            )
-
-        try:
-            task = EmailTask.objects.get(id=value)
-        except EmailTask.DoesNotExist:
-            raise serializers.ValidationError(
-                _("Email task with this ID does not exist")
-            )
-
-        # Check if task belongs to the user
-        # Get user_id from validated data or initial data
-        user_id = self.initial_data.get('user_id')
-        if not user_id:
-            # Try to get from request context
-            request = self.context.get('request')
-            if request and hasattr(request, 'user'):
-                user_id = request.user.id
-
-        if user_id and task.user_id != user_id:
-            raise serializers.ValidationError(
-                _("Email task does not belong to the specified user")
-            )
-
-        return value
-
     def create(self, validated_data):
         """
         Create a new email message instance
@@ -447,12 +393,6 @@ class EmailMessageCreateSerializer(serializers.ModelSerializer):
         request = self.context.get('request')
         if request and hasattr(request, 'user') and 'user_id' not in validated_data:
             validated_data['user_id'] = request.user.id
-
-        # Ensure task_id is properly set
-        if 'task_id' not in validated_data or validated_data['task_id'] is None:
-            raise serializers.ValidationError(
-                _("Task ID is required")
-            )
 
         return super().create(validated_data)
 

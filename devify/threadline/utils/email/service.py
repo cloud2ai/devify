@@ -46,8 +46,7 @@ class EmailSaveService:
     def save_email(
         self,
         user_id: int,
-        email_data: Dict,
-        task_id: Optional[int] = None
+        email_data: Dict
     ) -> EmailMessage:
         """
         Save email to database
@@ -55,14 +54,17 @@ class EmailSaveService:
         Args:
             user_id: User ID
             email_data: Parsed email data
-            task_id: Optional task ID to associate with email
 
         Returns:
-            EmailMessage instance
+            EmailMessage instance or None if duplicate
+
+        Note:
+            Uses get_or_create to handle duplicate emails gracefully.
+            If email already exists (same user_id + message_id),
+            returns None to skip processing.
         """
         try:
             create_data = {
-                'user_id': user_id,
                 'subject': email_data['subject'],
                 'sender': email_data['sender'],
                 'recipients': email_data['recipients'],
@@ -70,14 +72,27 @@ class EmailSaveService:
                 'raw_content': email_data['raw_content'],
                 'html_content': email_data.get('html_content', ''),
                 'text_content': email_data.get('text_content', ''),
-                'message_id': email_data['message_id'],
                 'status': EmailStatus.FETCHED.value,
             }
 
-            if task_id:
-                create_data['task_id'] = task_id
+            # Use get_or_create to handle duplicate emails
+            email_msg, created = EmailMessage.objects.get_or_create(
+                user_id=user_id,
+                message_id=email_data['message_id'],
+                defaults=create_data
+            )
 
-            email_msg = EmailMessage.objects.create(**create_data)
+            if not created:
+                logger.info(
+                    f"Email already exists: {email_data['message_id']}, "
+                    f"skipping"
+                )
+                return None
+
+            logger.info(
+                f"Saved new email: {email_msg.id} "
+                f"(message_id: {email_data['message_id']})"
+            )
 
             attachments = email_data.get('attachments', [])
             if attachments:

@@ -31,7 +31,7 @@ class EmailMessageAPIView(BaseAPIView):
         """
         Get EmailMessage queryset with related objects
         """
-        return EmailMessage.objects.select_related('task', 'user').all()
+        return EmailMessage.objects.select_related('user').all()
 
     @extend_schema(
         operation_id='threadlines_list',
@@ -49,12 +49,6 @@ class EmailMessageAPIView(BaseAPIView):
                 type=OpenApiTypes.STR,
                 location=OpenApiParameter.QUERY,
                 description='Filter by processing status'
-            ),
-            OpenApiParameter(
-                name='task_id',
-                type=OpenApiTypes.INT,
-                location=OpenApiParameter.QUERY,
-                description='Filter by email task ID'
             ),
             OpenApiParameter(
                 name='ordering',
@@ -90,11 +84,6 @@ class EmailMessageAPIView(BaseAPIView):
             message_status = request.query_params.get('status', None)
             if message_status:
                 queryset = queryset.filter(status=message_status)
-
-            # Filter by task
-            task_id = request.query_params.get('task_id', None)
-            if task_id:
-                queryset = queryset.filter(task_id=task_id)
 
             # Ordering
             ordering = request.query_params.get('ordering', '-received_at')
@@ -189,7 +178,7 @@ class EmailMessageDetailAPIView(BaseAPIView):
         """
         Get EmailMessage queryset with related objects
         """
-        return EmailMessage.objects.select_related('task', 'user').all()
+        return EmailMessage.objects.select_related('user').all()
 
     @extend_schema(
         operation_id='threadlines_retrieve',

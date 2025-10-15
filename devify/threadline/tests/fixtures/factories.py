@@ -103,7 +103,6 @@ class EmailMessageFactory(DjangoModelFactory):
         model = EmailMessage
 
     user = factory.SubFactory(UserFactory)
-    task = factory.SubFactory(EmailTaskFactory)
     message_id = factory.Sequence(lambda n: f'message-{n}@example.com')
     subject = factory.Faker('sentence', nb_words=6)
     sender = factory.Faker('email')

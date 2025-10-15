@@ -142,13 +142,12 @@ def test_email_task(test_user):
 
 
 @pytest.fixture
-def test_email_message(test_user, test_email_task):
+def test_email_message(test_user):
     """
     Create a test email message
     """
     return EmailMessage.objects.create(
         user=test_user,
-        task=test_email_task,
         message_id='test-message-123',
         subject='Test Email Subject',
         sender='sender@example.com',

@@ -146,19 +146,18 @@ class TestThreadlinesAPI:
         assert len(response.data['data']['list']) == 1
         assert response.data['data']['list'][0]['status'] == 'fetched'
 
-    def test_list_threadlines_filter_task(self, authenticated_api_client, test_user):
+    def test_list_threadlines_basic_list(self, authenticated_api_client, test_user):
         """
-        Test filtering threadlines by task ID
+        Test basic threadlines listing (task_id filter removed)
         """
         message1 = EmailMessageFactory(user=test_user)
         message2 = EmailMessageFactory(user=test_user)
 
         url = reverse('threadlines-list')
-        response = authenticated_api_client.get(url, {'task_id': message1.task.id})
+        response = authenticated_api_client.get(url)
 
         assert response.status_code == status.HTTP_200_OK
-        assert len(response.data['data']['list']) == 1
-        assert response.data['data']['list'][0]['id'] == message1.id
+        assert len(response.data['data']['list']) >= 2
 
     def test_list_threadlines_ordering(self, authenticated_api_client, test_user):
         """
@@ -221,13 +220,12 @@ class TestThreadlinesAPI:
 
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
-    def test_create_threadline_authenticated(self, authenticated_api_client, test_user, test_email_task):
+    def test_create_threadline_authenticated(self, authenticated_api_client, test_user):
         """
         Test creating a new threadline
         """
         url = reverse('threadlines-list')
         data = {
-            'task_id': test_email_task.id,
             'message_id': 'new-message-123',
             'subject': 'New Test Subject',
             'sender': 'sender@example.com',
@@ -257,7 +255,6 @@ class TestThreadlinesAPI:
         """
         url = reverse('threadlines-list')
         data = {
-            'task_id': test_email_message.task.id,
             'message_id': test_email_message.message_id,  # Duplicate message ID
             'subject': 'Duplicate Message',
             'sender': 'sender@example.com',
@@ -270,14 +267,15 @@ class TestThreadlinesAPI:
         assert response.status_code == status.HTTP_400_BAD_REQUEST
         assert 'already exists' in str(response.data)
 
-    def test_create_threadline_invalid_task(self, authenticated_api_client, test_user):
+    def test_create_threadline_missing_required_field(
+        self, authenticated_api_client, test_user
+    ):
         """
-        Test creating threadline with invalid task ID
+        Test creating threadline with missing required field
         """
         url = reverse('threadlines-list')
         data = {
-            'task_id': 99999,  # Non-existent task
-            'message_id': 'test-123',
+            # Missing message_id
             'subject': 'Test Subject',
             'sender': 'sender@example.com',
             'recipients': 'recipient@example.com',
@@ -287,19 +285,20 @@ class TestThreadlinesAPI:
         response = authenticated_api_client.post(url, data, format='json')
 
         assert response.status_code == status.HTTP_400_BAD_REQUEST
-        assert 'does not exist' in str(response.data)
+        assert 'message_id' in str(response.data).lower()
 
-    def test_create_threadline_other_user_task(self, authenticated_api_client, test_user):
+    def test_create_threadline_for_another_user(
+        self, authenticated_api_client, test_user
+    ):
         """
-        Test creating threadline with task belonging to another user
+        Test creating threadline for another user (should fail)
         """
-        # Create task for another user
+        # Create another user
         other_user = UserFactory()
-        other_task = EmailMessageFactory(user=other_user).task
 
         url = reverse('threadlines-list')
         data = {
-            'task_id': other_task.id,
+            'user_id': other_user.id,  # Try to create for another user
             'message_id': 'test-123',
             'subject': 'Test Subject',
             'sender': 'sender@example.com',
@@ -310,7 +309,7 @@ class TestThreadlinesAPI:
         response = authenticated_api_client.post(url, data, format='json')
 
         assert response.status_code == status.HTTP_400_BAD_REQUEST
-        assert 'does not belong' in str(response.data)
+        assert 'yourself' in str(response.data).lower()
 
     def test_retrieve_threadline_unauthenticated(self, api_client, test_email_message):
         """

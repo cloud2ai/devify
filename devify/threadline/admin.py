@@ -243,7 +243,7 @@ class EmailMessageAdmin(admin.ModelAdmin):
     fieldsets = (
         (_('Email Information'), {
             'fields': (
-                'user', 'task', 'message_id', 'subject', 'sender',
+                'user', 'message_id', 'subject', 'sender',
                 'recipients', 'received_at'
             )
         }),
@@ -350,7 +350,7 @@ class EmailMessageAdmin(admin.ModelAdmin):
     def get_queryset(self, request):
         """Optimize queryset with select_related and prefetch_related."""
         return (super().get_queryset(request)
-                .select_related('user', 'task')
+                .select_related('user')
                 .prefetch_related('attachments', 'issues'))
 
 
