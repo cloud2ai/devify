@@ -151,7 +151,7 @@ class LLMAttachmentNode(BaseLangGraphNode):
                     ocr_content,
                     output_language
                 )
-                llm_content = llm_result.strip() if llm_result else ''
+                llm_content = llm_result.strip()
 
                 if llm_content:
                     attachment['llm_content'] = llm_content

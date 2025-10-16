@@ -66,9 +66,12 @@ class EmailState(TypedDict, total=False):
     issue_url: str | None             # External issue URL (all engines)
     issue_metadata: Dict[str, Any] | None  # Engine-specific data
 
-    # Issue preparation (for finalize node)
+    # Issue workflow data (engine agnostic)
     should_create_issue: bool | None
-    issue_prepare_data: Dict[str, Any] | None  # Engine config and data
+    # Engine config and data
+    issue_prepare_data: Dict[str, Any] | None
+    # Issue creation result from any engine
+    issue_result_data: Dict[str, Any] | None
 
     # User configuration (loaded from Settings)
     prompt_config: Dict[str, Any] | None  # User's prompt configuration
@@ -122,6 +125,7 @@ def create_email_state(
         "issue_metadata": None,
         "should_create_issue": False,
         "issue_prepare_data": None,
+        "issue_result_data": None,
         "error_message": None,
         "node_errors": {},
         "force": force,

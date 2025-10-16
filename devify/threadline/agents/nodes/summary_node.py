@@ -114,10 +114,11 @@ class SummaryNode(BaseLangGraphNode):
         attachments = state.get('attachments', [])
 
         for att in attachments:
-            if att.get('is_image') and att.get('llm_content', '').strip():
+            llm_content = att.get('llm_content', '').strip()
+            if att.get('is_image') and llm_content:
                 safe_filename = att.get('safe_filename', att.get('filename'))
                 ocr_contents.append(
-                    f"[Attachment: {safe_filename}]\n{att['llm_content']}"
+                    f"[Attachment: {safe_filename}]\n{llm_content}"
                 )
 
         combined_content = content
@@ -141,11 +142,10 @@ class SummaryNode(BaseLangGraphNode):
                     combined_content,
                     output_language
                 )
+                summary_content = summary_content.strip()
                 if summary_content:
-                    summary_content = summary_content.strip()
                     self.logger.info("Summary content generated successfully")
                 else:
-                    summary_content = ''
                     self.logger.warning("No summary content generated")
 
             if not summary_title or force:
@@ -155,11 +155,10 @@ class SummaryNode(BaseLangGraphNode):
                     combined_content,
                     output_language
                 )
+                summary_title = summary_title.strip()
                 if summary_title:
-                    summary_title = summary_title.strip()
                     self.logger.info("Summary title generated successfully")
                 else:
-                    summary_title = ''
                     self.logger.warning("No summary title generated")
 
             return {

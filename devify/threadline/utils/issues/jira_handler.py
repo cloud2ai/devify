@@ -610,10 +610,11 @@ class JiraIssueHandler:
                 f"{len(description_content)} characters of content"
             )
             llm_result = call_llm(self.description_prompt, description_content)
+            llm_result = llm_result.strip()
 
-            if llm_result and llm_result.strip():
+            if llm_result:
                 logger.info("LLM processing successful for description")
-                return llm_result.strip()
+                return llm_result
             else:
                 logger.warning("LLM returned empty result for description")
                 return description_content
@@ -653,9 +654,9 @@ class JiraIssueHandler:
                 f"{len(content)} characters of content"
             )
             llm_result = call_llm(self.project_prompt, content)
+            llm_result = llm_result.strip()
 
-            if llm_result and llm_result.strip():
-                llm_result = llm_result.strip()
+            if llm_result:
                 if llm_result in self.allow_project_keys:
                     logger.info(f"LLM selected valid project key: {llm_result}")
                     return llm_result
@@ -704,9 +705,9 @@ class JiraIssueHandler:
                 f"{len(content)} characters of content"
             )
             llm_result = call_llm(self.assignee_prompt, content)
+            llm_result = llm_result.strip()
 
-            if llm_result and llm_result.strip():
-                llm_result = llm_result.strip()
+            if llm_result:
                 if llm_result in self.allow_assignees:
                     logger.info(f"LLM selected valid assignee: {llm_result}")
                     return llm_result

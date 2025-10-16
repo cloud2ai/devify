@@ -39,11 +39,14 @@ class IssueNode(BaseLangGraphNode):
     - attachments: List of attachment data
 
     State Output:
-    - jira_issue_data: Dict containing JIRA response data
-      - issue_key: JIRA issue key (e.g., "PROJ-123")
-      - issue_url: Full URL to JIRA issue
-      - project: JIRA project key
-      - upload_result: Attachment upload result
+    - issue_result_data: Dict containing engine-agnostic issue data
+      - external_id: Issue ID in external system
+      - issue_url: Full URL to issue in external system
+      - title: Issue title
+      - description: Issue description
+      - priority: Issue priority
+      - engine: Engine type ('jira', 'github', etc.)
+      - metadata: Engine-specific data (varies by engine)
     """
 
     def __init__(self):
@@ -53,8 +56,8 @@ class IssueNode(BaseLangGraphNode):
         """
         Check if Issue node can enter.
 
-        Issue node can enter if:
-        - No errors in previous nodes (or force mode)
+        Issue node can enter ONLY if ALL of the following are true:
+        - No errors in previous nodes (force mode does NOT bypass this)
         - Has summary content for issue creation
         - Issue creation is enabled in configuration (from State)
 
@@ -64,7 +67,13 @@ class IssueNode(BaseLangGraphNode):
         Returns:
             bool: True if node can enter, False otherwise
         """
+        # Critical: If any previous node failed, do NOT create issue
+        # This applies even in force mode - we never create issues
+        # when there are errors in the workflow
         if not super().can_enter_node(state):
+            self.logger.info(
+                "Skipping issue creation due to errors in previous nodes"
+            )
             return False
 
         force = state.get('force', False)
@@ -82,29 +91,41 @@ class IssueNode(BaseLangGraphNode):
             self.logger.info("Issue creation disabled, skipping")
             return False
 
-        existing_jira_data = state.get('jira_issue_data')
-        if not force and existing_jira_data:
+        # Check if issue was already created in current workflow run
+        # This prevents creating duplicate issues within the same execution
+        existing_issue_data = state.get('issue_result_data')
+        if not force and existing_issue_data:
             self.logger.info(
-                f"JIRA issue already exists "
-                f"({existing_jira_data.get('issue_key')}), skipping"
+                f"Issue already created in current workflow run "
+                f"(external_id: {existing_issue_data.get('external_id')}), "
+                f"skipping"
             )
             return False
+
+        # Note: We do NOT check database for existing Issue records
+        # The Issue model supports one-to-many relationship
+        # (one email can have multiple issues)
+        # This allows users to:
+        # - Create multiple issues for the same email if needed
+        # - Use force=true to recreate issues with different configs
+        # - Have full control over issue lifecycle
+        # Users should manage duplicate issues themselves if needed
 
         return True
 
     def execute_processing(self, state: EmailState) -> EmailState:
         """
-        Execute JIRA issue creation.
+        Execute issue creation in external system.
 
-        Calls JIRA API to create issue and upload attachments.
-        Does NOT create database records (handled by WorkflowFinalizeNode).
-        All data comes from State.
+        Calls configured issue engine API to create issue and
+        upload attachments. Does NOT create database records
+        (handled by WorkflowFinalizeNode). All data comes from State.
 
         Args:
             state (EmailState): Current email state
 
         Returns:
-            EmailState: Updated state with jira_issue_data
+            EmailState: Updated state with issue_result_data
         """
         issue_config = state.get('issue_config', {})
         issue_engine = issue_config.get('issue_engine', 'jira')
@@ -126,10 +147,34 @@ class IssueNode(BaseLangGraphNode):
             f"JIRA issue created successfully: {issue_key}"
         )
 
-        return {
-            **state,
-            'jira_issue_data': jira_result
+        # Prepare engine-agnostic issue result data
+        issue_result = {
+            'external_id': jira_result.get('issue_key'),
+            'issue_url': jira_result.get('issue_url'),
+            'title': jira_result.get('title'),
+            'description': jira_result.get('description'),
+            'priority': jira_result.get('priority'),
+            'engine': 'jira',
+            'metadata': {
+                'project': jira_result.get('project'),
+                'upload_result': jira_result.get('upload_result')
+            }
         }
+
+        # Add to state
+        updated_state = {
+            **state,
+            'issue_result_data': issue_result
+        }
+
+        # Log for debugging
+        self.logger.info(
+            f"Returning state with issue_result_data: "
+            f"engine=jira, external_id={issue_result.get('external_id')}, "
+            f"issue_url={issue_result.get('issue_url')}"
+        )
+
+        return updated_state
 
     def _create_jira_issue(
         self,

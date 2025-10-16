@@ -164,13 +164,26 @@ def schedule_reset_stuck_emails(timeout_minutes=30):
                     f"for {timeout_minutes}+ minutes, marking as FAILED"
                 )
 
+                # Preserve original error message and add timeout info
+                original_error = email.error_message or ""
+                timeout_info = (
+                    f"[TIMEOUT] Processing stuck for over "
+                    f"{timeout_minutes} minutes. "
+                )
+                if original_error:
+                    combined_error = (
+                        f"{timeout_info}Original error: {original_error}"
+                    )
+                else:
+                    combined_error = (
+                        f"{timeout_info}No specific error recorded. "
+                        f"Requires manual intervention."
+                    )
+
                 # State transition from PROCESSING to FAILED is valid,
                 # no bypass needed
                 email.status = EmailStatus.FAILED.value
-                email.error_message = (
-                    f"Processing stuck for over {timeout_minutes} minutes. "
-                    f"Requires manual intervention."
-                )
+                email.error_message = combined_error
                 email.save(update_fields=['status', 'error_message'])
 
                 processing_failed_count += 1

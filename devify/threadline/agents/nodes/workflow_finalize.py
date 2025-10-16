@@ -114,8 +114,22 @@ class WorkflowFinalizeNode(BaseLangGraphNode):
             self.logger.error(
                 f"Workflow failed with errors in nodes: {error_nodes}"
             )
+
+            # Do not sync any data when workflow fails
+            # This ensures data consistency: FAILED = no data saved
+            # User should use force=true to retry after fixing issues
+            issue_result = state.get('issue_result_data')
+            if issue_result:
+                self.logger.warning(
+                    f"Workflow failed but issue was created in "
+                    f"external system ({issue_result.get('engine')}): "
+                    f"{issue_result.get('external_id')}. "
+                    "Issue will NOT be synced to database due to workflow "
+                    "errors. Use force=true to retry after fixing issues."
+                )
+
             self.logger.info(
-                "Skipping data sync due to workflow errors"
+                "Skipping all data sync due to workflow errors"
             )
 
             if not force:
@@ -223,21 +237,20 @@ class WorkflowFinalizeNode(BaseLangGraphNode):
                             f"{att_update_fields}"
                         )
 
-            jira_issue_data = state.get('jira_issue_data')
-            if jira_issue_data:
+            issue_result = state.get('issue_result_data')
+            if issue_result:
                 self.logger.info(
-                    f"JIRA issue data found in state, creating Issue record"
+                    f"Issue data found in state (engine: "
+                    f"{issue_result.get('engine')}), creating Issue record"
                 )
-                issue = self._create_issue_record(email, jira_issue_data)
-                if issue:
-                    self.logger.info(
-                        f"Created Issue record: ID={issue.id}, "
-                        f"external_id={issue.external_id}"
-                    )
-                else:
-                    self.logger.warning(
-                        "Failed to create Issue database record"
-                    )
+                # _create_issue_record will raise exception if it fails
+                # No need to check for None - exception will propagate up
+                issue = self._create_issue_record(email, issue_result)
+                self.logger.info(
+                    f"Created Issue record: ID={issue.id}, "
+                    f"external_id={issue.external_id}, "
+                    f"engine={issue.engine}"
+                )
 
         self.logger.info(
             f"All data synced to database for EmailMessage "
@@ -247,54 +260,83 @@ class WorkflowFinalizeNode(BaseLangGraphNode):
     def _create_issue_record(
         self,
         email: EmailMessage,
-        jira_issue_data: Dict[str, Any]
-    ) -> Issue | None:
+        issue_result_data: Dict[str, Any]
+    ) -> Issue:
         """
-        Create Issue database record from JIRA issue data.
+        Create Issue database record from issue engine result data.
 
-        This method creates the Issue database record based on
-        JIRA API results stored in State by IssueNode.
+        This method is engine-agnostic and handles issue data from
+        any supported engine (JIRA, GitHub, Linear, etc.).
 
         Args:
             email: EmailMessage object
-            jira_issue_data: JIRA issue data from State containing:
-                - issue_key: JIRA issue key
-                - issue_url: Full URL to JIRA issue
+            issue_result_data: Issue result data from State containing:
+                - external_id: Issue ID in external system
+                - issue_url: Full URL to issue in external system
                 - title: Issue title
                 - description: Issue description
                 - priority: Issue priority
-                - upload_result: Attachment upload result
+                - engine: Engine type ('jira', 'github', etc.)
+                - metadata: Engine-specific metadata
 
         Returns:
-            Created Issue object, or None if creation failed
-        """
-        try:
-            issue = Issue.objects.create(
-                user=email.user,
-                email_message=email,
-                title=jira_issue_data.get('title', 'Email Issue'),
-                description=jira_issue_data.get(
-                    'description', 'No content'
-                ),
-                priority=jira_issue_data.get('priority', 'Medium'),
-                engine=jira_issue_data.get('engine', 'jira'),
-                external_id=jira_issue_data.get('issue_key'),
-                issue_url=jira_issue_data.get('issue_url'),
-                metadata={
-                    'email_id': str(email.id),
-                    'created_from': 'langgraph_workflow',
-                    'jira_project': jira_issue_data.get('project'),
-                    'upload_result': jira_issue_data.get('upload_result')
-                }
-            )
-            self.logger.info(
-                f"Created Issue database record (ID: {issue.id})"
-            )
-            return issue
+            Created or existing Issue object
 
-        except Exception as e:
-            self.logger.error(f"Failed to create Issue record: {e}")
-            return None
+        Raises:
+            Exception: If Issue creation fails
+        """
+        engine = issue_result_data.get('engine', 'unknown')
+        external_id = issue_result_data.get('external_id')
+
+        self.logger.info(
+            f"Creating Issue record with data: "
+            f"engine={engine}, "
+            f"external_id={external_id}, "
+            f"issue_url={issue_result_data.get('issue_url')}, "
+            f"title={issue_result_data.get('title', 'Email Issue')[:50]}"
+        )
+
+        # Prevent duplicate records for the same external issue
+        # Note: An email can have multiple issues, but the same
+        # external issue (external_id) should only have one DB record
+        if external_id:
+            existing_issue = Issue.objects.filter(
+                email_message=email,
+                external_id=external_id
+            ).first()
+
+            if existing_issue:
+                self.logger.warning(
+                    f"Issue record for {engine} issue {external_id} "
+                    f"already exists in database (ID: {existing_issue.id}). "
+                    f"Skipping duplicate creation and returning existing record."
+                )
+                return existing_issue
+
+        # Create new Issue record
+        # If this fails, let the exception propagate up
+        # It will be caught by BaseLangGraphNode and properly handled
+        issue = Issue.objects.create(
+            user=email.user,
+            email_message=email,
+            title=issue_result_data.get('title', 'Email Issue'),
+            description=issue_result_data.get(
+                'description', 'No content'
+            ),
+            priority=issue_result_data.get('priority', 'Medium'),
+            engine=engine,
+            external_id=external_id,
+            issue_url=issue_result_data.get('issue_url'),
+            metadata={
+                'email_id': str(email.id),
+                'created_from': 'langgraph_workflow',
+                **issue_result_data.get('metadata', {})
+            }
+        )
+        self.logger.info(
+            f"Created Issue database record (ID: {issue.id})"
+        )
+        return issue
 
     def _handle_error(
         self, error: Exception, state: EmailState

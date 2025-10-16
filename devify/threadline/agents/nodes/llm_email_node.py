@@ -122,7 +122,7 @@ class LLMEmailNode(BaseLangGraphNode):
                 content_with_ocr,
                 output_language
             )
-            llm_content = llm_result.strip() if llm_result else ''
+            llm_content = llm_result.strip()
 
             if llm_content:
                 self.logger.info("LLM email processing successful")
@@ -181,13 +181,14 @@ class LLMEmailNode(BaseLangGraphNode):
 
         ocr_content_map = {}
         for att in attachments:
-            if att.get('is_image') and att.get('llm_content', '').strip():
+            llm_content = att.get('llm_content', '').strip()
+            if att.get('is_image') and llm_content:
                 safe_filename = att.get('safe_filename') or att.get('filename')
                 if safe_filename:
-                    ocr_content_map[safe_filename] = att['llm_content'].strip()
+                    ocr_content_map[safe_filename] = llm_content
                     self.logger.debug(
                         f"Mapped {safe_filename} to OCR content "
-                        f"({len(att['llm_content'])} chars)"
+                        f"({len(llm_content)} chars)"
                     )
 
         self.logger.info(
