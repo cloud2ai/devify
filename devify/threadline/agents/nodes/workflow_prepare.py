@@ -55,7 +55,11 @@ class WorkflowPrepareNode(BaseLangGraphNode):
         """
         force = state.get('force', False)
         if force:
-            self.logger.info("Force mode: allowing workflow preparation")
+            email_id = state.get('id')
+            user_id = state.get('user_id')
+            logger.info(
+                f"Force mode enabled for email {email_id}, user {user_id}"
+            )
             return True
 
         return super().can_enter_node(state)
@@ -81,8 +85,9 @@ class WorkflowPrepareNode(BaseLangGraphNode):
         except EmailMessage.DoesNotExist:
             raise ValueError(f'EmailMessage {email_id} not found')
 
-        self.logger.info(
-            f"EmailMessage {email_id} loaded for processing"
+        logger.info(
+            f"[{self.node_name}] EmailMessage loaded: email {email_id}, "
+            f"user {self.email.user_id}"
         )
         return state
 
@@ -104,24 +109,25 @@ class WorkflowPrepareNode(BaseLangGraphNode):
 
         if not force:
             self.email.set_status(EmailStatus.PROCESSING.value)
-            self.logger.info(
-                f"EmailMessage {self.email.id} status set to PROCESSING"
+            logger.info(
+                f"[{self.node_name}] Status set to PROCESSING for "
+                f"email {self.email.id}, user {self.email.user_id}"
             )
         else:
-            self.logger.info(
-                f"Force mode: skipping status update, "
-                f"current status remains {self.email.status}"
+            logger.info(
+                f"Force mode: skipping status update for "
+                f"email {self.email.id}, status remains {self.email.status}"
             )
 
         prompt_config = None
         issue_config = None
         try:
             prompt_config = Settings.get_user_prompt_config(self.email.user)
-            self.logger.info(
+            logger.info(
                 f"Loaded prompt_config for user {self.email.user_id}"
             )
         except ValueError as e:
-            self.logger.warning(
+            logger.warning(
                 f"Failed to load prompt_config for user "
                 f"{self.email.user_id}: {e}"
             )
@@ -130,11 +136,11 @@ class WorkflowPrepareNode(BaseLangGraphNode):
             issue_config = Settings.get_user_config(
                 self.email.user, 'issue_config'
             )
-            self.logger.info(
+            logger.info(
                 f"Loaded issue_config for user {self.email.user_id}"
             )
         except ValueError as e:
-            self.logger.warning(
+            logger.warning(
                 f"Failed to load issue_config for user "
                 f"{self.email.user_id}: {e}"
             )
@@ -210,9 +216,9 @@ class WorkflowPrepareNode(BaseLangGraphNode):
             )
         }
 
-        self.logger.info(
-            f"EmailState populated for {self.email.id} - "
-            f"all data loaded from database, "
+        logger.info(
+            f"[{self.node_name}] EmailState populated for "
+            f"email {self.email.id}, user {self.email.user_id}: "
             f"{len(attachments_data)} attachments, "
             f"prompt_config={'loaded' if prompt_config else 'missing'}, "
             f"issue_config={'loaded' if issue_config else 'missing'}"
@@ -257,15 +263,17 @@ class WorkflowPrepareNode(BaseLangGraphNode):
 
         text_content = state.get('text_content', '')
         html_content = state.get('html_content', '')
+        email_id = state.get('id')
+        user_id = state.get('user_id')
+
         if not text_content and not html_content:
-            self.logger.warning(
-                f"EmailMessage {state.get('id')} has no text_content "
+            logger.warning(
+                f"Email {email_id}, user {user_id} has no text_content "
                 f"or html_content - processing may have limited results"
             )
 
-        self.logger.info(
-            f"EmailMessage {state.get('id')} passed all critical "
-            f"field validations"
+        logger.info(
+            f"Email {email_id}, user {user_id} passed critical validations"
         )
 
         return state

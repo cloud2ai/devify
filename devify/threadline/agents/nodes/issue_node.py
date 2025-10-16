@@ -71,7 +71,7 @@ class IssueNode(BaseLangGraphNode):
         # This applies even in force mode - we never create issues
         # when there are errors in the workflow
         if not super().can_enter_node(state):
-            self.logger.info(
+            logger.info(
                 "Skipping issue creation due to errors in previous nodes"
             )
             return False
@@ -81,21 +81,26 @@ class IssueNode(BaseLangGraphNode):
         summary_title = state.get('summary_title', '').strip()
 
         if not force and (not summary_content or not summary_title):
-            self.logger.error(
+            logger.error(
                 "Missing summary content or title for issue creation"
             )
             return False
 
         issue_config = state.get('issue_config')
         if not issue_config or not issue_config.get('enable', False):
-            self.logger.info("Issue creation disabled, skipping")
+            email_id = state.get('id')
+            user_id = state.get('user_id')
+            logger.info(
+                f"Issue creation disabled for email {email_id}, "
+                f"user {user_id}, skipping"
+            )
             return False
 
         # Check if issue was already created in current workflow run
         # This prevents creating duplicate issues within the same execution
         existing_issue_data = state.get('issue_result_data')
         if not force and existing_issue_data:
-            self.logger.info(
+            logger.info(
                 f"Issue already created in current workflow run "
                 f"(external_id: {existing_issue_data.get('external_id')}), "
                 f"skipping"
@@ -132,18 +137,18 @@ class IssueNode(BaseLangGraphNode):
 
         if issue_engine != 'jira':
             error_message = f'Unsupported issue engine: {issue_engine}'
-            self.logger.error(error_message)
+            logger.error(error_message)
             return add_node_error(state, self.node_name, error_message)
 
         jira_result = self._create_jira_issue(state, issue_config)
 
         if not jira_result:
             error_message = 'JIRA issue creation failed'
-            self.logger.error(error_message)
+            logger.error(error_message)
             return add_node_error(state, self.node_name, error_message)
 
         issue_key = jira_result.get('issue_key')
-        self.logger.info(
+        logger.info(
             f"JIRA issue created successfully: {issue_key}"
         )
 
@@ -168,7 +173,7 @@ class IssueNode(BaseLangGraphNode):
         }
 
         # Log for debugging
-        self.logger.info(
+        logger.info(
             f"Returning state with issue_result_data: "
             f"engine=jira, external_id={issue_result.get('external_id')}, "
             f"issue_url={issue_result.get('issue_url')}"
@@ -215,7 +220,7 @@ class IssueNode(BaseLangGraphNode):
             jira_config = issue_config.get('jira')
 
             if not jira_config:
-                self.logger.warning(
+                logger.warning(
                     "JIRA config not found, skipping JIRA creation"
                 )
                 return None
@@ -230,7 +235,7 @@ class IssueNode(BaseLangGraphNode):
             jira_handler = JiraIssueHandler(jira_config)
             force = state.get('force', False)
 
-            self.logger.info(
+            logger.info(
                 f"Creating JIRA issue with title: {title[:50]}..."
             )
 
@@ -254,15 +259,20 @@ class IssueNode(BaseLangGraphNode):
                 attachments=attachments,
                 force=force
             )
-            self.logger.info(f"Created JIRA issue: {issue_key}")
+            email_id = state.get('id')
+            user_id = state.get('user_id')
+            logger.info(
+                f"[{self.node_name}] Created JIRA issue {issue_key} for "
+                f"email {email_id}, user {user_id}"
+            )
 
             upload_result = jira_handler.upload_attachments(
                 issue_key=issue_key,
                 attachments=attachments
             )
-            self.logger.info(
-                f"Uploaded {upload_result['uploaded_count']} "
-                f"attachments to JIRA issue {issue_key}"
+            logger.info(
+                f"Uploaded {upload_result['uploaded_count']} attachments "
+                f"to JIRA {issue_key} for email {email_id}"
             )
 
             issue_url = f"{jira_config['url']}/browse/{issue_key}"
@@ -283,11 +293,11 @@ class IssueNode(BaseLangGraphNode):
             }
 
         except AttributeError as e:
-            self.logger.error(
+            logger.error(
                 f"JiraIssueHandler interface issue: {e}. "
                 f"Handler needs to be refactored to accept pure data."
             )
             return None
         except Exception as e:
-            self.logger.error(f"JIRA issue creation failed: {e}")
+            logger.error(f"JIRA issue creation failed: {e}")
             return None

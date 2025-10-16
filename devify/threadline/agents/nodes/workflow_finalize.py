@@ -5,9 +5,12 @@ This node handles the final atomic synchronization of all workflow
 results to the database and sets the final processing status.
 """
 
+import logging
 from typing import Dict, Any
 
 from django.db import transaction
+
+logger = logging.getLogger(__name__)
 
 from threadline.agents.nodes.base_node import BaseLangGraphNode
 from threadline.agents.email_state import (
@@ -89,8 +92,10 @@ class WorkflowFinalizeNode(BaseLangGraphNode):
         except EmailMessage.DoesNotExist:
             raise ValueError(f'EmailMessage {email_id} not found')
 
-        self.logger.info(
-            f"Starting finalization for EmailMessage {email_id}"
+        user_id = state.get('user_id')
+        logger.info(
+            f"[{self.node_name}] Starting finalization for "
+            f"email {email_id}, user {user_id}"
         )
         return state
 
@@ -111,7 +116,7 @@ class WorkflowFinalizeNode(BaseLangGraphNode):
             node_errors = state.get('node_errors', {})
             error_summary = _format_node_errors(node_errors)
 
-            self.logger.error(
+            logger.error(
                 f"Workflow failed with errors in nodes: {error_nodes}"
             )
 
@@ -120,7 +125,7 @@ class WorkflowFinalizeNode(BaseLangGraphNode):
             # User should use force=true to retry after fixing issues
             issue_result = state.get('issue_result_data')
             if issue_result:
-                self.logger.warning(
+                logger.warning(
                     f"Workflow failed but issue was created in "
                     f"external system ({issue_result.get('engine')}): "
                     f"{issue_result.get('external_id')}. "
@@ -128,7 +133,7 @@ class WorkflowFinalizeNode(BaseLangGraphNode):
                     "errors. Use force=true to retry after fixing issues."
                 )
 
-            self.logger.info(
+            logger.info(
                 "Skipping all data sync due to workflow errors"
             )
 
@@ -137,32 +142,42 @@ class WorkflowFinalizeNode(BaseLangGraphNode):
                     EmailStatus.FAILED.value,
                     error_message=error_summary
                 )
-                self.logger.info(
+                logger.info(
                     f"EmailMessage {self.email.id} status set to FAILED"
                 )
             else:
-                self.logger.info(
+                logger.info(
                     f"Force mode: skipping status update to FAILED, "
                     f"current status remains {self.email.status}"
                 )
         else:
-            self.logger.info("Workflow completed successfully")
+            email_id = state.get('id')
+            user_id = state.get('user_id')
+            logger.info(
+                f"[{self.node_name}] Workflow completed successfully for "
+                f"email {email_id}, user {user_id}"
+            )
 
             self._sync_data_to_database(state)
 
             if not force:
                 self.email.set_status(EmailStatus.SUCCESS.value)
-                self.logger.info(
-                    f"EmailMessage {self.email.id} status set to SUCCESS"
+                logger.info(
+                    f"[{self.node_name}] Status set to SUCCESS for "
+                    f"email {self.email.id}, user {user_id}"
                 )
             else:
-                self.logger.info(
-                    f"Force mode: skipping status update to SUCCESS, "
-                    f"current status remains {self.email.status}"
+                logger.info(
+                    f"Force mode: skipping status update for "
+                    f"email {self.email.id}, status remains "
+                    f"{self.email.status}"
                 )
 
-        self.logger.info(
-            f"Workflow finalized for EmailMessage {self.email.id}"
+        email_id = state.get('id')
+        user_id = state.get('user_id')
+        logger.info(
+            f"[{self.node_name}] Workflow finalized for "
+            f"email {email_id}, user {user_id}"
         )
         return state
 
@@ -187,23 +202,23 @@ class WorkflowFinalizeNode(BaseLangGraphNode):
             if summary_title:
                 email.summary_title = summary_title
                 update_fields.append('summary_title')
-                self.logger.info("Synced summary_title to database")
+                logger.info("Synced summary_title to database")
 
             summary_content = state.get('summary_content', '')
             if summary_content:
                 email.summary_content = summary_content
                 update_fields.append('summary_content')
-                self.logger.info("Synced summary_content to database")
+                logger.info("Synced summary_content to database")
 
             llm_content = state.get('llm_content', '')
             if llm_content:
                 email.llm_content = llm_content
                 update_fields.append('llm_content')
-                self.logger.info("Synced llm_content to database")
+                logger.info("Synced llm_content to database")
 
             if update_fields:
                 email.save(update_fields=update_fields)
-                self.logger.info(
+                logger.info(
                     f"EmailMessage {self.email.id} saved to database "
                     f"with fields: {update_fields}"
                 )
@@ -232,27 +247,27 @@ class WorkflowFinalizeNode(BaseLangGraphNode):
                         EmailAttachment.objects.filter(
                             id=att_id
                         ).update(**att_updates)
-                        self.logger.info(
+                        logger.info(
                             f"Synced attachment {att_id} fields: "
                             f"{att_update_fields}"
                         )
 
             issue_result = state.get('issue_result_data')
             if issue_result:
-                self.logger.info(
+                logger.info(
                     f"Issue data found in state (engine: "
                     f"{issue_result.get('engine')}), creating Issue record"
                 )
                 # _create_issue_record will raise exception if it fails
                 # No need to check for None - exception will propagate up
                 issue = self._create_issue_record(email, issue_result)
-                self.logger.info(
+                logger.info(
                     f"Created Issue record: ID={issue.id}, "
                     f"external_id={issue.external_id}, "
                     f"engine={issue.engine}"
                 )
 
-        self.logger.info(
+        logger.info(
             f"All data synced to database for EmailMessage "
             f"{self.email.id}"
         )
@@ -288,7 +303,7 @@ class WorkflowFinalizeNode(BaseLangGraphNode):
         engine = issue_result_data.get('engine', 'unknown')
         external_id = issue_result_data.get('external_id')
 
-        self.logger.info(
+        logger.info(
             f"Creating Issue record with data: "
             f"engine={engine}, "
             f"external_id={external_id}, "
@@ -306,7 +321,7 @@ class WorkflowFinalizeNode(BaseLangGraphNode):
             ).first()
 
             if existing_issue:
-                self.logger.warning(
+                logger.warning(
                     f"Issue record for {engine} issue {external_id} "
                     f"already exists in database (ID: {existing_issue.id}). "
                     f"Skipping duplicate creation and returning existing record."
@@ -333,7 +348,7 @@ class WorkflowFinalizeNode(BaseLangGraphNode):
                 **issue_result_data.get('metadata', {})
             }
         )
-        self.logger.info(
+        logger.info(
             f"Created Issue database record (ID: {issue.id})"
         )
         return issue
@@ -358,7 +373,7 @@ class WorkflowFinalizeNode(BaseLangGraphNode):
 
         force = state.get('force', False)
         if force:
-            self.logger.info(
+            logger.info(
                 "Force mode: skipping status update after "
                 "finalization error"
             )
@@ -373,12 +388,12 @@ class WorkflowFinalizeNode(BaseLangGraphNode):
                 EmailStatus.FAILED.value,
                 error_message=error_message
             )
-            self.logger.info(
+            logger.info(
                 f"EmailMessage {self.email.id} status set to FAILED "
                 f"due to finalization error"
             )
         except Exception as status_error:
-            self.logger.error(
+            logger.error(
                 f"Failed to update status after finalization error: "
                 f"{status_error}"
             )

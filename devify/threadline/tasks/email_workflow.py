@@ -76,9 +76,10 @@ def process_email_workflow(
         if not email:
             raise ValueError(f"Email with id {email_id} not found")
 
+        user_info = f"{email.user.username}({email.user_id})"
         logger.info(
-            f"[Workflow] Starting LangGraph workflow for email: {email_id}, "
-            f"force: {force}, current_status: {email.status}"
+            f"[Workflow] Starting for email {email_id}, user {user_info}, "
+            f"status: {email.status}, force: {force}"
         )
 
         result = execute_email_processing_workflow(
@@ -88,23 +89,25 @@ def process_email_workflow(
 
         if result['success']:
             logger.info(
-                f"[Workflow] Email processing completed successfully: "
-                f"{email_id}"
+                f"[Workflow] Completed successfully for email {email_id}, "
+                f"user {user_info}"
             )
         else:
             logger.error(
-                f"[Workflow] Email processing failed: {email_id}, "
-                f"error: {result.get('error')}"
+                f"[Workflow] Failed for email {email_id}, user {user_info}: "
+                f"{result.get('error')}"
             )
 
         return email_id
 
     except EmailMessage.DoesNotExist:
-        logger.error(f"[Workflow] EmailMessage {email_id} not found")
+        logger.error(
+            f"[Workflow] EmailMessage {email_id} not found"
+        )
         raise ValueError(f"Email with id {email_id} not found")
     except Exception as exc:
         logger.error(
-            f"[Workflow] Failed to execute workflow for {email_id}: {exc}"
+            f"[Workflow] Failed to execute for email {email_id}: {exc}"
         )
         raise
 
@@ -125,5 +128,7 @@ def retry_failed_email_workflow(
     Returns:
         str: The email_id
     """
-    logger.info(f"[Workflow] Retrying failed workflow for email: {email_id}")
+    logger.info(
+        f"[Workflow] Retrying failed workflow for email {email_id}"
+    )
     return process_email_workflow(email_id, force=True)

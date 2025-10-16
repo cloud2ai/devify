@@ -44,7 +44,6 @@ class BaseLangGraphNode(ABC):
             node_name (str): Name of the node for logging and identification
         """
         self.node_name = node_name
-        self.logger = logging.getLogger(f"[{node_name}]")
 
     def __call__(self, state: EmailState) -> EmailState:
         """
@@ -60,29 +59,25 @@ class BaseLangGraphNode(ABC):
             EmailState: Updated email state
         """
         try:
-            self.logger.info(f"Starting {self.node_name} processing")
+            logger.info(f"[{self.node_name}] Starting processing")
 
-            # Check if node can enter based on error state
             if not self.can_enter_node(state):
-                self.logger.warning(
-                    f"{self.node_name} cannot enter due to existing errors"
+                logger.warning(
+                    f"[{self.node_name}] Cannot enter due to existing errors"
                 )
                 return state
 
-            # Phase 1: Before processing
             state = self.before_processing(state)
 
-            # Phase 2: Execute main processing logic
             state = self.execute_processing(state)
 
-            # Phase 3: After processing
             state = self.after_processing(state)
 
-            self.logger.info(f"{self.node_name} processing completed")
+            logger.info(f"[{self.node_name}] Processing completed")
             return state
 
         except Exception as e:
-            self.logger.error(f"Error in {self.node_name}: {e}")
+            logger.error(f"[{self.node_name}] Error occurred: {e}")
             return self._handle_error(e, state)
 
     def can_enter_node(self, state: EmailState) -> bool:
@@ -164,5 +159,5 @@ class BaseLangGraphNode(ABC):
         error_message = str(error)
         state = add_node_error(state, self.node_name, error_message)
 
-        self.logger.error(f"Node {self.node_name} failed: {error}")
+        logger.error(f"[{self.node_name}] Node failed: {error}")
         return state

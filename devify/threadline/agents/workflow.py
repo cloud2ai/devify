@@ -135,10 +135,11 @@ def execute_email_processing_workflow(
         Dict with success status and result/error
     """
     email_id = email.id
+    user_id = email.user_id
 
     logger.info(
-        f"Starting email workflow for email: {email_id}, "
-        f"force: {force}, status: {email.status}"
+        f"Starting workflow for email {email_id}, user {user_id}, "
+        f"status: {email.status}, force: {force}"
     )
 
     try:
@@ -158,19 +159,18 @@ def execute_email_processing_workflow(
         }
         result = graph.invoke(initial_state, config=config)
 
-        logger.info(f"Email workflow result: {result}")
-
         success = not has_node_errors(result)
 
         if success:
             logger.info(
-                f"Email workflow completed successfully: {email_id}"
+                f"Workflow completed successfully for email {email_id}, "
+                f"user {user_id}"
             )
         else:
             node_errors = result.get('node_errors', {})
             logger.error(
-                f"Email workflow completed with errors: {email_id}, "
-                f"errors: {node_errors}"
+                f"Workflow completed with errors for email {email_id}, "
+                f"user {user_id}: {node_errors}"
             )
 
         return {
@@ -186,7 +186,8 @@ def execute_email_processing_workflow(
     except Exception as e:
         error_traceback = traceback.format_exc()
         logger.error(
-            f"Fatal workflow error for email {email_id}: {e}"
+            f"Fatal workflow error for email {email_id}, "
+            f"user {user_id}: {e}"
         )
         logger.error(f"Full traceback:\n{error_traceback}")
 

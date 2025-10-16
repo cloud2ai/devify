@@ -61,7 +61,7 @@ class LLMEmailNode(BaseLangGraphNode):
 
         text_content = state.get('text_content', '').strip()
         if not text_content:
-            self.logger.error(
+            logger.error(
                 "No email text content available for LLM processing"
             )
             return False
@@ -87,7 +87,7 @@ class LLMEmailNode(BaseLangGraphNode):
         llm_content = state.get('llm_content', '')
 
         if not force and llm_content:
-            self.logger.info(
+            logger.info(
                 f"Email already has LLM content, skipping in normal mode"
             )
             return state
@@ -100,13 +100,13 @@ class LLMEmailNode(BaseLangGraphNode):
         prompt_config = state.get('prompt_config')
         if not prompt_config:
             error_message = 'No prompt_config found in State'
-            self.logger.error(error_message)
+            logger.error(error_message)
             return add_node_error(state, self.node_name, error_message)
 
         email_content_prompt = prompt_config.get('email_content_prompt')
         if not email_content_prompt:
             error_message = 'Missing email_content_prompt in prompt_config'
-            self.logger.error(error_message)
+            logger.error(error_message)
             return add_node_error(state, self.node_name, error_message)
 
         output_language = prompt_config.get(
@@ -115,7 +115,7 @@ class LLMEmailNode(BaseLangGraphNode):
         )
 
         try:
-            self.logger.info("Processing email content with LLM")
+            logger.info("Processing email content with LLM")
 
             llm_result = call_llm(
                 email_content_prompt,
@@ -125,13 +125,13 @@ class LLMEmailNode(BaseLangGraphNode):
             llm_content = llm_result.strip()
 
             if llm_content:
-                self.logger.info("LLM email processing successful")
+                logger.info("LLM email processing successful")
                 return {
                     **state,
                     'llm_content': llm_content
                 }
             else:
-                self.logger.warning(
+                logger.warning(
                     "LLM email processing completed - no content generated"
                 )
                 return {
@@ -140,7 +140,7 @@ class LLMEmailNode(BaseLangGraphNode):
                 }
 
         except Exception as e:
-            self.logger.error(f"LLM email processing failed: {e}")
+            logger.error(f"LLM email processing failed: {e}")
             error_message = f'LLM email processing failed: {str(e)}'
             updated_state = add_node_error(
                 state,
@@ -172,10 +172,10 @@ class LLMEmailNode(BaseLangGraphNode):
         placeholders = re.findall(image_placeholder_pattern, content)
 
         if not placeholders:
-            self.logger.debug("No image placeholders found in email content")
+            logger.debug("No image placeholders found in email content")
             return content
 
-        self.logger.info(
+        logger.info(
             f"Found {len(placeholders)} image placeholders: {placeholders}"
         )
 
@@ -186,12 +186,12 @@ class LLMEmailNode(BaseLangGraphNode):
                 safe_filename = att.get('safe_filename') or att.get('filename')
                 if safe_filename:
                     ocr_content_map[safe_filename] = llm_content
-                    self.logger.debug(
+                    logger.debug(
                         f"Mapped {safe_filename} to OCR content "
                         f"({len(llm_content)} chars)"
                     )
 
-        self.logger.info(
+        logger.info(
             f"Created OCR content map with {len(ocr_content_map)} entries"
         )
 
@@ -207,16 +207,16 @@ class LLMEmailNode(BaseLangGraphNode):
                     f"{ocr_content}\n"
                 )
                 replaced_count += 1
-                self.logger.debug(
+                logger.debug(
                     f"Replaced placeholder for {filename_stripped}"
                 )
             else:
-                self.logger.warning(
+                logger.warning(
                     f"No OCR content found for image placeholder: "
                     f"{filename_stripped}"
                 )
 
-        self.logger.info(
+        logger.info(
             f"Replaced {replaced_count}/{len(placeholders)} image placeholders"
         )
 

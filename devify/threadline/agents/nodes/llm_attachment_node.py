@@ -63,7 +63,7 @@ class LLMAttachmentNode(BaseLangGraphNode):
         )
 
         if not has_ocr_content:
-            self.logger.info(
+            logger.info(
                 "No image attachments with OCR content, "
                 "skipping LLM processing"
             )
@@ -96,13 +96,13 @@ class LLMAttachmentNode(BaseLangGraphNode):
         prompt_config = state.get('prompt_config')
         if not prompt_config:
             error_message = 'No prompt_config found in State'
-            self.logger.error(error_message)
+            logger.error(error_message)
             return add_node_error(state, self.node_name, error_message)
 
         ocr_prompt = prompt_config.get('ocr_prompt')
         if not ocr_prompt:
             error_message = 'Missing ocr_prompt in prompt_config'
-            self.logger.error(error_message)
+            logger.error(error_message)
             return add_node_error(state, self.node_name, error_message)
 
         output_language = prompt_config.get(
@@ -112,7 +112,7 @@ class LLMAttachmentNode(BaseLangGraphNode):
 
         for attachment in attachments:
             if not attachment.get('is_image'):
-                self.logger.info(
+                logger.info(
                     f"Non-image attachment {attachment.get('filename')} "
                     f"skipped LLM processing"
                 )
@@ -121,7 +121,7 @@ class LLMAttachmentNode(BaseLangGraphNode):
 
             ocr_content = attachment.get('ocr_content', '').strip()
             if not ocr_content:
-                self.logger.warning(
+                logger.warning(
                     f"Attachment {attachment.get('filename')} has no OCR "
                     f"content, skipping LLM processing"
                 )
@@ -132,7 +132,7 @@ class LLMAttachmentNode(BaseLangGraphNode):
             image_count += 1
 
             if not force and attachment.get('llm_content'):
-                self.logger.info(
+                logger.info(
                     f"Attachment {attachment.get('filename')} already "
                     f"has LLM content, skipping in normal mode"
                 )
@@ -141,7 +141,7 @@ class LLMAttachmentNode(BaseLangGraphNode):
                 continue
 
             try:
-                self.logger.info(
+                logger.info(
                     f"Processing attachment {attachment.get('filename')} "
                     f"with LLM"
                 )
@@ -155,13 +155,13 @@ class LLMAttachmentNode(BaseLangGraphNode):
 
                 if llm_content:
                     attachment['llm_content'] = llm_content
-                    self.logger.info(
+                    logger.info(
                         f"LLM processing successful for "
                         f"{attachment.get('filename')}"
                     )
                 else:
                     attachment['llm_content'] = ''
-                    self.logger.warning(
+                    logger.warning(
                         f"LLM processing completed for "
                         f"{attachment.get('filename')} - "
                         f"no content generated"
@@ -170,7 +170,7 @@ class LLMAttachmentNode(BaseLangGraphNode):
                 processed_count += 1
 
             except Exception as e:
-                self.logger.error(
+                logger.error(
                     f"LLM processing failed for "
                     f"{attachment.get('filename')}: {e}"
                 )
@@ -183,7 +183,7 @@ class LLMAttachmentNode(BaseLangGraphNode):
 
             updated_attachments.append(attachment)
 
-        self.logger.info(
+        logger.info(
             f"LLM Attachment processing completed: {image_count} images, "
             f"{processed_count} processed, {skipped_count} skipped"
         )
@@ -208,6 +208,6 @@ class LLMAttachmentNode(BaseLangGraphNode):
                 self.node_name,
                 error_message
             )
-            self.logger.error(error_message)
+            logger.error(error_message)
 
         return updated_state

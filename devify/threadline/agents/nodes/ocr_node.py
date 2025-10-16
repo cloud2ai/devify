@@ -55,7 +55,12 @@ class OCRNode(BaseLangGraphNode):
         has_images = any(att.get('is_image') for att in attachments)
 
         if not has_images:
-            self.logger.info("No image attachments, skipping OCR")
+            email_id = state.get('id')
+            user_id = state.get('user_id')
+            logger.info(
+                f"No image attachments for email {email_id}, "
+                f"user {user_id}, skipping OCR"
+            )
             return False
 
         return True
@@ -84,7 +89,7 @@ class OCRNode(BaseLangGraphNode):
 
         for attachment in attachments:
             if not attachment.get('is_image'):
-                self.logger.info(
+                logger.info(
                     f"Non-image attachment {attachment.get('filename')} "
                     f"skipped OCR processing"
                 )
@@ -94,7 +99,7 @@ class OCRNode(BaseLangGraphNode):
             image_count += 1
 
             if not force and attachment.get('ocr_content'):
-                self.logger.info(
+                logger.info(
                     f"Attachment {attachment.get('filename')} already "
                     f"has OCR content, skipping in normal mode"
                 )
@@ -104,7 +109,7 @@ class OCRNode(BaseLangGraphNode):
 
             try:
                 file_path = attachment.get('file_path')
-                self.logger.info(
+                logger.info(
                     f"Processing attachment {attachment.get('filename')} "
                     f"({file_path})"
                 )
@@ -113,12 +118,12 @@ class OCRNode(BaseLangGraphNode):
 
                 if text and text.strip():
                     attachment['ocr_content'] = text.strip()
-                    self.logger.info(
+                    logger.info(
                         f"OCR successful for {attachment.get('filename')}"
                     )
                 else:
                     attachment['ocr_content'] = ''
-                    self.logger.warning(
+                    logger.warning(
                         f"OCR completed for "
                         f"{attachment.get('filename')} - "
                         f"no content recognized"
@@ -127,7 +132,7 @@ class OCRNode(BaseLangGraphNode):
                 processed_count += 1
 
             except Exception as e:
-                self.logger.error(
+                logger.error(
                     f"OCR failed for {attachment.get('filename')}: {e}"
                 )
                 attachment['ocr_content'] = ''
@@ -139,8 +144,11 @@ class OCRNode(BaseLangGraphNode):
 
             updated_attachments.append(attachment)
 
-        self.logger.info(
-            f"OCR processing completed: {image_count} images, "
+        email_id = state.get('id')
+        user_id = state.get('user_id')
+        logger.info(
+            f"[{self.node_name}] OCR completed for email {email_id}, "
+            f"user {user_id}: {image_count} images, "
             f"{processed_count} processed, {skipped_count} skipped"
         )
 
@@ -163,6 +171,6 @@ class OCRNode(BaseLangGraphNode):
                 self.node_name,
                 error_message
             )
-            self.logger.error(error_message)
+            logger.error(error_message)
 
         return updated_state

@@ -62,7 +62,7 @@ class SummaryNode(BaseLangGraphNode):
         llm_content = state.get('llm_content', '').strip()
 
         if not force and not llm_content:
-            self.logger.error(
+            logger.error(
                 "No email LLM content available for summary generation"
             )
             return False
@@ -87,7 +87,7 @@ class SummaryNode(BaseLangGraphNode):
         prompt_config = state.get('prompt_config')
         if not prompt_config:
             error_message = 'No prompt_config found in State'
-            self.logger.error(error_message)
+            logger.error(error_message)
             return add_node_error(state, self.node_name, error_message)
 
         summary_prompt = prompt_config.get('summary_prompt')
@@ -97,7 +97,7 @@ class SummaryNode(BaseLangGraphNode):
                 'Missing summary_prompt or summary_title_prompt in '
                 'prompt_config'
             )
-            self.logger.error(error_message)
+            logger.error(error_message)
             return add_node_error(state, self.node_name, error_message)
 
         output_language = prompt_config.get(
@@ -125,18 +125,18 @@ class SummaryNode(BaseLangGraphNode):
         if ocr_contents:
             combined_content += "\n\n--- ATTACHMENT OCR CONTENT ---\n\n"
             combined_content += "\n\n".join(ocr_contents)
-            self.logger.info(
+            logger.info(
                 f"Included {len(ocr_contents)} OCR contents in summary"
             )
         else:
-            self.logger.info("No attachment OCR content available for summary")
+            logger.info("No attachment OCR content available for summary")
 
         summary_content = state.get('summary_content', '')
         summary_title = state.get('summary_title', '')
 
         try:
             if not summary_content or force:
-                self.logger.info("Generating summary content")
+                logger.info("Generating summary content")
                 summary_content = call_llm(
                     summary_prompt,
                     combined_content,
@@ -144,12 +144,12 @@ class SummaryNode(BaseLangGraphNode):
                 )
                 summary_content = summary_content.strip()
                 if summary_content:
-                    self.logger.info("Summary content generated successfully")
+                    logger.info("Summary content generated successfully")
                 else:
-                    self.logger.warning("No summary content generated")
+                    logger.warning("No summary content generated")
 
             if not summary_title or force:
-                self.logger.info("Generating summary title")
+                logger.info("Generating summary title")
                 summary_title = call_llm(
                     summary_title_prompt,
                     combined_content,
@@ -157,9 +157,9 @@ class SummaryNode(BaseLangGraphNode):
                 )
                 summary_title = summary_title.strip()
                 if summary_title:
-                    self.logger.info("Summary title generated successfully")
+                    logger.info("Summary title generated successfully")
                 else:
-                    self.logger.warning("No summary title generated")
+                    logger.warning("No summary title generated")
 
             return {
                 **state,
@@ -168,7 +168,7 @@ class SummaryNode(BaseLangGraphNode):
             }
 
         except Exception as e:
-            self.logger.error(f"Summary generation failed: {e}")
+            logger.error(f"Summary generation failed: {e}")
             error_message = f'Summary generation failed: {str(e)}'
             updated_state = add_node_error(
                 state,
