@@ -178,7 +178,7 @@ class TaskLockTest(TestCase):
 
     def test_prevent_duplicate_task_decorator_with_user_id(self):
         """Test prevent_duplicate_task decorator with user-specific locks"""
-        @prevent_duplicate_task('user_task', timeout=60, user_id_param='user_id')
+        @prevent_duplicate_task('user_task', timeout=60, lock_param='user_id')
         def test_function(user_id):
             return {'status': 'success', 'user_id': user_id}
 

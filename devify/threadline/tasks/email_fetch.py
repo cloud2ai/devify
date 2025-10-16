@@ -303,7 +303,7 @@ def haraka_email_fetch():
 @shared_task
 @prevent_duplicate_task(
     "fetch_user_imap_emails",
-    user_id_param="user_id",
+    lock_param="user_id",
     timeout=300
 )
 def fetch_user_imap_emails(

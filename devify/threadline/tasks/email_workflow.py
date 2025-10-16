@@ -30,7 +30,7 @@ logger = logging.getLogger(__name__)
 @shared_task
 @prevent_duplicate_task(
     "process_email_workflow",
-    user_id_param="email_id",
+    lock_param="email_id",
     timeout=settings.TASK_TIMEOUT_MINUTES
 )
 def process_email_workflow(

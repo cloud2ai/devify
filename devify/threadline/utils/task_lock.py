@@ -117,25 +117,58 @@ def force_release_all_locks():
 def prevent_duplicate_task(
     lock_name: str,
     timeout: int = settings.TASK_TIMEOUT_MINUTES,
-    user_id_param: str = None
+    lock_param: str = None
 ):
     """
     Decorator to prevent duplicate task execution
 
     Args:
-        lock_name: Lock name for the task
+        lock_name: Base lock name for the task
         timeout: Lock timeout in seconds
-        user_id_param: Parameter name for user ID
-            (for user-specific locks)
+        lock_param: Parameter name to use for generating unique lock
+            (e.g., 'email_id', 'user_id', 'task_id')
+            If provided, the lock name will be: {lock_name}_{param_value}
+            If not provided, all tasks share the same lock
+
+    Examples:
+        # Single global lock for the task
+        @prevent_duplicate_task("email_fetch")
+        def fetch_emails():
+            pass
+
+        # Per-user lock
+        @prevent_duplicate_task("fetch_user_emails", lock_param="user_id")
+        def fetch_user_emails(user_id):
+            pass
+
+        # Per-email lock
+        @prevent_duplicate_task("process_email", lock_param="email_id")
+        def process_email(email_id, force=False):
+            pass
     """
     def decorator(func):
         def wrapper(*args, **kwargs):
             # Build lock name
             task_lock_name = lock_name
-            if user_id_param and user_id_param in kwargs:
-                task_lock_name = (
-                    f"{lock_name}_{kwargs[user_id_param]}"
+
+            if lock_param:
+                # Try to get parameter value from kwargs first,
+                # then from args[0]
+                param_value = kwargs.get(lock_param) or (
+                    args[0] if args else None
                 )
+
+                if param_value:
+                    task_lock_name = f"{lock_name}_{param_value}"
+                    logger.debug(
+                        f"Built lock name with {lock_param}={param_value}: "
+                        f"{task_lock_name}"
+                    )
+                else:
+                    logger.warning(
+                        f"Could not extract {lock_param} from task "
+                        f"arguments, using base lock name: {lock_name}"
+                    )
 
             # Check if task is already running
             if is_task_locked(task_lock_name):
