@@ -38,8 +38,8 @@ SILENCED_SYSTEM_CHECKS = [
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-# Load env from parent path
-ENV_DIR = os.path.join(BASE_DIR, ".env")
+# Load env from project root (two levels up from BASE_DIR)
+ENV_DIR = BASE_DIR.parent.parent / ".env"
 load_dotenv(ENV_DIR)
 
 # Quick-start development settings - unsuitable for production
@@ -108,6 +108,14 @@ INSTALLED_APPS = [
     # Extends allauth to support social authentication
     # (e.g., logging in with Facebook, Google, etc.).
     'allauth.socialaccount',
+
+    # Headless API for frontend-backend separation (allauth >= 65.0.0)
+    # Provides REST API endpoints for authentication without Django forms
+    'allauth.headless',
+
+    # Social account providers
+    'allauth.socialaccount.providers.google',
+    'allauth.socialaccount.providers.weixin',
 
     # Adds user registration endpoints to dj-rest-auth, enabling JWT-based
     # user registration and management (e.g., email verification, password reset).
@@ -179,7 +187,9 @@ ROOT_URLCONF = 'core.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [],
+        'DIRS': [
+            os.path.join(BASE_DIR, 'accounts', 'templates'),
+        ],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -276,7 +286,7 @@ USE_TZ = True
 # the translations for the 'cloud_platform' app can be stored in:
 # 'yourapp/locale/zh_hans/LC_MESSAGES'.
 LOCALE_PATHS = [
-    os.path.join(BASE_DIR, 'locale'),  # Locale folder at the project root
+    os.path.join(BASE_DIR.parent, 'locale'),
 ]
 
 # ============================
@@ -355,8 +365,29 @@ CORS_ALLOW_METHODS = [
 ]
 
 # ============================
+# Session and Cookie Configuration
+# ============================
+
+# Allow session cookies to be sent cross-origin for OAuth flow
+# SameSite=None allows cookies to be sent in cross-site requests
+# This is necessary for OAuth callbacks from different domains
+SESSION_COOKIE_SAMESITE = None
+
+# Secure=True requires HTTPS; set False for local development
+# In production, this should be True
+SESSION_COOKIE_SECURE = os.getenv('DJANGO_DEBUG', 'True').lower() not in ('true', '1', 'yes', 'on')
+
+# Allow session cookies to be shared across subdomains (if needed)
+# SESSION_COOKIE_DOMAIN = os.getenv('SESSION_COOKIE_DOMAIN', None)
+
+# CSRF cookie configuration for cross-origin requests
+CSRF_COOKIE_SAMESITE = None
+CSRF_COOKIE_SECURE = os.getenv('DJANGO_DEBUG', 'True').lower() not in ('true', '1', 'yes', 'on')
+
+# ============================
 # External Libraries Configuration
 # ============================
+from .accounts import *
 from .celery import *
 from .rest import *
 from .swagger import *
@@ -368,8 +399,8 @@ from .cache import *
 
 # DRF Spectacular settings for API documentation
 SPECTACULAR_SETTINGS = {
-    'TITLE': 'Mito API',
-    'DESCRIPTION': 'API documentation for Mito project',
+    'TITLE': 'Devify API',
+    'DESCRIPTION': 'API documentation for Devify project',
     'VERSION': '1.0.0',
     'SERVE_INCLUDE_SCHEMA': True,
     'COMPONENT_SPLIT_REQUEST': True,

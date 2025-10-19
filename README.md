@@ -151,6 +151,43 @@ This step is required for both development and production environments.
 cp env.sample .env
 ```
 
+## User Authentication
+
+Devify supports **Email Registration** and **Google OAuth** login. Both methods require users to complete a setup process (virtual email, preferences, etc.) after initial authentication.
+
+### Google OAuth Setup (Optional)
+
+If you want to enable Google login, follow these steps:
+
+**1. Create OAuth Credentials:**
+
+Visit [Google Cloud Console](https://console.cloud.google.com/):
+- Create or select a project
+- Enable "Google+ API"
+- Go to **Credentials** → **Create Credentials** → **OAuth 2.0 Client ID**
+- Application type: **Web application**
+- Add authorized redirect URIs:
+  - Development: `http://localhost:8000/accounts/google/login/callback/`
+  - Production: `https://yourdomain.com/accounts/google/login/callback/`
+
+**2. Configure in `.env`:**
+
+```bash
+# Accounts & Authentication Configuration
+GOOGLE_OAUTH_CLIENT_ID=your_client_id_from_google
+GOOGLE_OAUTH_CLIENT_SECRET=your_client_secret_from_google
+
+# Registration Configuration (required for all users)
+# Note: Virtual email domain uses AUTO_ASSIGN_EMAIL_DOMAIN configured above
+REGISTRATION_TOKEN_EXPIRY_HOURS=24
+# Frontend URL - Django will redirect here after OAuth login
+FRONTEND_URL=http://localhost:3000
+```
+
+**3. API Documentation:**
+
+View available authentication endpoints at `http://localhost:8000/api/schema/swagger-ui/` after starting the server.
+
 ### Docker Build Configuration
 
 Devify supports using Chinese mirrors for faster package downloads during Docker builds. This is particularly useful for users in China or regions with slow access to default package sources.

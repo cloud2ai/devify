@@ -2,8 +2,8 @@ from django.contrib import admin
 from django.http import JsonResponse
 from django.urls import path, include
 
+from accounts.views import OAuthCallbackRedirectView
 from .swagger import schema_view, swagger_view, redoc_view
-from accounts.views import WeChatAppLoginView
 
 # Define project URL routing configuration
 urlpatterns = [
@@ -34,14 +34,25 @@ urlpatterns = [
     # auth.urls (no trailing slash)
     path('', include('auth.urls')),
 
+    # Custom OAuth callback redirect with JWT tokens
+    # This must come BEFORE allauth.urls to intercept the redirect
+    path(
+        'accounts/oauth/callback/',
+        OAuthCallbackRedirectView.as_view(),
+        name='oauth_callback_redirect'
+    ),
+
+    # Django-allauth OAuth callback routes
+    # Required for OAuth provider callbacks (e.g., Google, WeChat)
+    # Even with Headless API, these endpoints are needed for OAuth handshake
+    path('accounts/', include('allauth.urls')),
+
+    # Django-allauth Headless API endpoints
+    # REST API for frontend-backend separation (allauth >= 65.0.0)
+    # Provides authentication APIs without Django form views
+    path('_allauth/', include('allauth.headless.urls')),
+
     # Threadline API routes
     # Email processing and threadline management endpoints
     path('api/v1/', include('threadline.urls')),
-
-    # FIXME(Ray): Implement this method according to real project
-    # Simulates WeChat mini-program login functionality
-    # Endpoint for WeChat authentication
-    # path('api/v1/auth/wechat/login',
-    #      WeChatAppLoginView.as_view(),
-    #      name='wechat_auth'),
 ]

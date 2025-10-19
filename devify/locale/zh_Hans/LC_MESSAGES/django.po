@@ -173,3 +173,11 @@ msgstr "JIRA链接"
 #: devify/v1/jirabot/tasks/notifications.py:195
 msgid "[AI] Email Processing: {status}"
 msgstr "[AI] 邮件处理: {status}"
+
+#: accounts/serializers.py
+msgid "This email is already registered via %(providers)s. Please use %(providers)s to login instead."
+msgstr "该邮箱已通过 %(providers)s 注册，请使用 %(providers)s 登录。"
+
+#: accounts/serializers.py
+msgid "This email address is already registered. Please login instead."
+msgstr "该邮箱已注册，请直接登录。"

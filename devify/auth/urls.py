@@ -8,6 +8,15 @@ from dj_rest_auth.registration.views import (
     SocialLoginView, SocialConnectView
 )
 
+from accounts.views import (
+    CheckVirtualEmailUsernameView,
+    CompleteGoogleSetupView,
+    CompleteRegistrationView,
+    GetAvailableScenesView,
+    SendRegistrationEmailView,
+    VerifyRegistrationTokenView,
+)
+
 urlpatterns = [
     # Login endpoint
     path(
@@ -75,4 +84,47 @@ urlpatterns = [
     #     SocialDisconnectView.as_view(),
     #     name='social_disconnect'
     # ),
+
+    # Custom registration endpoints
+    path(
+        'api/v1/auth/register/send-email',
+        SendRegistrationEmailView.as_view(),
+        name='register_send_email'
+    ),
+    path(
+        'api/v1/auth/register/verify-token/<str:token>',
+        VerifyRegistrationTokenView.as_view(),
+        name='register_verify_token'
+    ),
+    path(
+        'api/v1/auth/register/complete',
+        CompleteRegistrationView.as_view(),
+        name='register_complete'
+    ),
+    path(
+        'api/v1/auth/check-username/<str:username>',
+        CheckVirtualEmailUsernameView.as_view(),
+        name='check_username'
+    ),
+
+    # OAuth complete setup (generic for all OAuth providers)
+    path(
+        'api/v1/auth/oauth/complete-setup',
+        CompleteGoogleSetupView.as_view(),
+        name='oauth_complete_setup'
+    ),
+
+    # Backward compatibility: Google-specific endpoint
+    path(
+        'api/v1/auth/google/complete-setup',
+        CompleteGoogleSetupView.as_view(),
+        name='google_complete_setup'
+    ),
+
+    # Utility endpoints
+    path(
+        'api/v1/auth/scenes',
+        GetAvailableScenesView.as_view(),
+        name='available_scenes'
+    ),
 ]

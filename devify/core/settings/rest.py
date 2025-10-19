@@ -30,6 +30,7 @@ from datetime import timedelta
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
         'rest_framework_simplejwt.authentication.JWTAuthentication',
+        'rest_framework.authentication.SessionAuthentication',
     ),
     'DEFAULT_RENDERER_CLASSES': (
         'core.settings.renders.CustomJSONRenderer',
@@ -103,4 +104,7 @@ SIMPLE_JWT = {
 REST_AUTH = {
     "USE_JWT": True,
     "JWT_AUTH_HTTPONLY": False,
+    "USER_DETAILS_SERIALIZER": (
+        "accounts.serializers.UserDetailsSerializer"
+    ),
 }
