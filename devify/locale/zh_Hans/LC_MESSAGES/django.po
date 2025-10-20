@@ -181,3 +181,75 @@ msgstr "该邮箱已通过 %(providers)s 注册，请使用 %(providers)s 登录
 #: accounts/serializers.py
 msgid "This email address is already registered. Please login instead."
 msgstr "该邮箱已注册，请直接登录。"
+
+#: accounts/serializers.py
+msgid "No user found with this email address"
+msgstr "未找到使用此邮箱的用户"
+
+#: accounts/serializers.py
+msgid "OAuth users cannot reset password. Please login with your OAuth provider."
+msgstr "OAuth 用户无法重置密码，请使用您的 OAuth 提供商登录。"
+
+#: accounts/serializers.py
+msgid "Please complete registration first"
+msgstr "请先完成注册"
+
+#: accounts/serializers.py
+msgid "User profile not found"
+msgstr "未找到用户档案"
+
+#: accounts/views.py accounts/services/email.py
+msgid "Password reset email sent successfully"
+msgstr "密码重置邮件已成功发送"
+
+#: accounts/views.py accounts/services/email.py
+msgid "Failed to send password reset email"
+msgstr "发送密码重置邮件失败"
+
+#: accounts/views.py
+msgid "Failed to process password reset request"
+msgstr "处理密码重置请求失败"
+
+#: accounts/views.py
+msgid "All fields are required"
+msgstr "所有字段都是必填的"
+
+#: accounts/views.py
+msgid "Passwords do not match"
+msgstr "两次输入的密码不一致"
+
+#: accounts/views.py
+msgid "Invalid reset link"
+msgstr "无效的重置链接"
+
+#: accounts/views.py
+msgid "Invalid or expired reset link"
+msgstr "无效或已过期的重置链接"
+
+#: accounts/views.py
+msgid "Password must be at least 8 characters long"
+msgstr "密码至少需要 8 个字符"
+
+#: accounts/views.py
+msgid "Password cannot exceed 32 characters"
+msgstr "密码不能超过 32 个字符"
+
+#: accounts/views.py
+msgid "Password must contain both letters and numbers"
+msgstr "密码必须同时包含字母和数字"
+
+#: accounts/views.py
+msgid "Password has been reset successfully"
+msgstr "密码已成功重置"
+
+#: accounts/views.py
+msgid "Failed to reset password"
+msgstr "重置密码失败"
+
+#: accounts/services/email.py
+msgid "Reset Your AimyChats Password"
+msgstr "重置您的 AimyChats 密码"
+
+#: accounts/services/email.py
+msgid "Please reset your password by visiting: %(url)s"
+msgstr "请访问以下链接重置您的密码：%(url)s"

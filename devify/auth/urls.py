@@ -1,6 +1,6 @@
 from django.urls import path
 from dj_rest_auth.views import (
-    LoginView, LogoutView, UserDetailsView,
+    LoginView, LogoutView,
     PasswordResetView, PasswordResetConfirmView, PasswordChangeView,
 )
 from dj_rest_auth.registration.views import (
@@ -12,7 +12,10 @@ from accounts.views import (
     CheckVirtualEmailUsernameView,
     CompleteGoogleSetupView,
     CompleteRegistrationView,
+    ConfirmPasswordResetView,
+    CustomUserDetailsView,
     GetAvailableScenesView,
+    SendPasswordResetEmailView,
     SendRegistrationEmailView,
     VerifyRegistrationTokenView,
 )
@@ -33,19 +36,19 @@ urlpatterns = [
     # Get or update user details
     path(
         'api/v1/auth/user',
-        UserDetailsView.as_view(),
+        CustomUserDetailsView.as_view(),
         name='rest_user_details'
     ),
-    # Request password reset
+    # Request password reset (custom implementation)
     path(
         'api/v1/auth/password/reset',
-        PasswordResetView.as_view(),
+        SendPasswordResetEmailView.as_view(),
         name='rest_password_reset'
     ),
-    # Confirm password reset
+    # Confirm password reset (custom implementation)
     path(
         'api/v1/auth/password/reset/confirm',
-        PasswordResetConfirmView.as_view(),
+        ConfirmPasswordResetView.as_view(),
         name='rest_password_reset_confirm'
     ),
     # Change password

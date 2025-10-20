@@ -73,6 +73,10 @@ SOCIALACCOUNT_LOGIN_ON_GET = True
 # Unique email addresses (prevent duplicate registrations)
 ACCOUNT_UNIQUE_EMAIL = True
 
+# Login methods (replaces deprecated AUTHENTICATION_METHOD)
+# Allow both email and username login
+ACCOUNT_LOGIN_METHODS = ['email', 'username']
+
 # Email-based authentication for social accounts
 # If OAuth email matches existing user, auto-connect instead of creating new user
 SOCIALACCOUNT_EMAIL_AUTHENTICATION = True
@@ -86,6 +90,17 @@ SOCIALACCOUNT_EMAIL_AUTHENTICATION_AUTO_CONNECT = True
 FRONTEND_URL = os.getenv('FRONTEND_URL', 'http://localhost:3000')
 
 # Keep OAuth endpoints active (HEADLESS_ONLY=False)
+
+# ============================
+# Password Reset Configuration
+# ============================
+
+# Password reset token validity (in seconds)
+# Django default is 3 days (259200 seconds)
+# We set it to 1 day (86400 seconds) for better security
+PASSWORD_RESET_TIMEOUT = int(
+    os.getenv('PASSWORD_RESET_TIMEOUT', '86400')
+)
 # OAuth flows require traditional /accounts/ endpoints for provider callbacks
 HEADLESS_ONLY = False
 

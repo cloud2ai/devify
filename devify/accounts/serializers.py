@@ -371,6 +371,7 @@ class UserDetailsSerializer(serializers.ModelSerializer):
     """
     Custom user details serializer for dj-rest-auth.
     Includes virtual email address from EmailAlias and profile information.
+    Also includes authentication method information and password change capability.
     """
     virtual_email = serializers.SerializerMethodField(
         read_only=True,
@@ -384,6 +385,11 @@ class UserDetailsSerializer(serializers.ModelSerializer):
         help_text=_("User profile information")
     )
 
+    auth_info = serializers.SerializerMethodField(
+        read_only=True,
+        help_text=_("Authentication method and related information")
+    )
+
     class Meta:
         model = User
         fields = [
@@ -393,14 +399,16 @@ class UserDetailsSerializer(serializers.ModelSerializer):
             'first_name',
             'last_name',
             'virtual_email',
-            'profile'
+            'profile',
+            'auth_info'
         ]
         read_only_fields = [
             'id',
             'username',
             'email',
             'virtual_email',
-            'profile'
+            'profile',
+            'auth_info'
         ]
 
     def get_virtual_email(self, obj):
@@ -441,3 +449,97 @@ class UserDetailsSerializer(serializers.ModelSerializer):
             }
         except Profile.DoesNotExist:
             return None
+
+    def get_auth_info(self, obj):
+        """
+        Get authentication method information.
+
+        Returns authentication type, provider info, and capabilities.
+        """
+        auth_info = {
+            'method': 'email',
+            'provider': None,
+            'provider_account_id': None,
+            'provider_email': None,
+            'can_change_password': obj.has_usable_password(),
+            'login_identifier': None
+        }
+
+        try:
+            social_accounts = SocialAccount.objects.filter(user=obj)
+
+            if social_accounts.exists():
+                social_account = social_accounts.first()
+                provider_id = social_account.provider
+
+                provider_name_map = {
+                    'google': 'Google',
+                    'github': 'GitHub',
+                    'facebook': 'Facebook',
+                    'twitter': 'Twitter',
+                }
+
+                auth_info['method'] = 'oauth'
+                auth_info['provider'] = provider_name_map.get(
+                    provider_id,
+                    provider_id.title()
+                )
+                auth_info['provider_account_id'] = social_account.uid
+                auth_info['provider_email'] = (
+                    social_account.extra_data.get('email')
+                )
+                auth_info['login_identifier'] = (
+                    f"{auth_info['provider']} "
+                    f"({auth_info['provider_email'] or social_account.uid})"
+                )
+            else:
+                auth_info['login_identifier'] = obj.email
+
+        except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(
+                f"Error getting auth info for user {obj.id}: {e}"
+            )
+
+        return auth_info
+
+
+class CustomPasswordResetSerializer(serializers.Serializer):
+    """
+    Custom password reset serializer that only allows email-registered users.
+    OAuth users are rejected with appropriate error message.
+    """
+    email = serializers.EmailField()
+
+    def validate_email(self, value):
+        """
+        Validate that the email belongs to an email-registered user.
+        """
+        try:
+            user = User.objects.get(email=value)
+        except User.DoesNotExist:
+            raise serializers.ValidationError(
+                _("No user found with this email address")
+            )
+
+        if not user.has_usable_password():
+            raise serializers.ValidationError(
+                _(
+                    "OAuth users cannot reset password. "
+                    "Please login with your OAuth provider."
+                )
+            )
+
+        try:
+            profile = user.profile
+            if not profile.registration_completed:
+                raise serializers.ValidationError(
+                    _("Please complete registration first")
+                )
+        except Profile.DoesNotExist:
+            raise serializers.ValidationError(
+                _("User profile not found")
+            )
+
+        return value
