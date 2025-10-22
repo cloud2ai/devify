@@ -337,7 +337,10 @@ class JiraIssueHandler:
         if not summary:
             return ''
         # Remove line breaks and trim spaces
-        return summary.replace('\n', ' ').replace('\r', ' ').strip()
+        cleaned = summary.replace('\n', ' ').replace('\r', ' ').strip()
+        # Remove emoji characters
+        cleaned = self._remove_emoji(cleaned)
+        return cleaned
 
     def _remove_emoji(self, text: str) -> str:
         """
