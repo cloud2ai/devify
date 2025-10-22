@@ -124,10 +124,10 @@ class EmailSaveService:
                 f"email {email_msg.id}"
             )
 
-            # Create user-specific attachment directory
+            # Create email-specific attachment directory using UUID
             user_attachment_dir = os.path.join(
                 settings.EMAIL_ATTACHMENT_DIR,
-                f"email_{email_msg.id}"
+                str(email_msg.uuid)
             )
             os.makedirs(user_attachment_dir, exist_ok=True)
 

@@ -1,0 +1,19 @@
+# Scenarios configuration with metadata and prompt file paths
+default_prompt_file: prompts/default.yaml
+
+scenarios:
+  chat:
+    zh-CN: 日常聊天
+    en-US: Daily Chat
+    description:
+      zh-CN: 处理日常聊天记录和沟通内容
+      en-US: Handle daily chat records and communication content
+    prompt_file: prompts/chat.yaml
+
+  product_issue:
+    zh-CN: 产品问题跟踪
+    en-US: Product Issue Tracking
+    description:
+      zh-CN: 跟踪和管理产品相关问题和反馈
+      en-US: Track and manage product-related issues and feedback
+    prompt_file: prompts/product_issue.yaml

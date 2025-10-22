@@ -62,6 +62,7 @@ wait_for_db() {
 run_migrations() {
     log "Running Django migrations..."
     python manage.py migrate --noinput
+
     log "Ensuring superuser exists..."
     DJANGO_SUPERUSER_USERNAME=${DJANGO_SUPERUSER_USERNAME:-admin}
     DJANGO_SUPERUSER_EMAIL=${DJANGO_SUPERUSER_EMAIL:-admin@example.com}

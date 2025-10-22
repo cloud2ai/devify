@@ -54,7 +54,7 @@ urlpatterns = [
     # Threadlines endpoints (EmailMessage with attachments)
     path('threadlines', EmailMessageAPIView.as_view(),
          name='threadlines-list'),
-    path('threadlines/<int:pk>', EmailMessageDetailAPIView.as_view(),
+    path('threadlines/<uuid:uuid>', EmailMessageDetailAPIView.as_view(),
          name='threadlines-detail'),
 
     # Monitoring endpoints

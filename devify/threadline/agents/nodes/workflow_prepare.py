@@ -238,16 +238,19 @@ class WorkflowPrepareNode(BaseLangGraphNode):
             state: Current email state
 
         Returns:
-            EmailState: Validated state
+            EmailState: Validated state (with defaults for missing fields)
 
         Raises:
             ValueError: If critical fields are missing
         """
+        # Handle missing subject with default value
         if not state.get('subject'):
-            raise ValueError(
-                f"EmailMessage {state.get('id')} missing subject - "
-                f"required for processing"
+            email_id = state.get('id')
+            logger.warning(
+                f"EmailMessage {email_id} has no subject, "
+                f"using default value '(No Subject)'"
             )
+            state = {**state, 'subject': '(No Subject)'}
 
         if not state.get('sender'):
             raise ValueError(

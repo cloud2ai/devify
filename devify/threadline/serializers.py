@@ -1,6 +1,9 @@
-from rest_framework import serializers
+import re
+
+from django.conf import settings
 from django.contrib.auth.models import User
 from django.utils.translation import gettext_lazy as _
+from rest_framework import serializers
 
 from .models import (
     Settings,
@@ -268,7 +271,7 @@ class EmailMessageSerializer(serializers.ModelSerializer):
     class Meta:
         model = EmailMessage
         fields = [
-            'id', 'user', 'user_id', 'message_id',
+            'id', 'uuid', 'user', 'user_id', 'message_id',
             'subject', 'sender', 'recipients', 'received_at',
             'raw_content', 'html_content', 'text_content',
             'summary_title', 'summary_content', 'summary_priority',
@@ -276,7 +279,7 @@ class EmailMessageSerializer(serializers.ModelSerializer):
             'attachments', 'created_at', 'updated_at'
         ]
         read_only_fields = [
-            'id', 'status', 'created_at', 'updated_at'
+            'id', 'uuid', 'status', 'created_at', 'updated_at'
         ]
 
     def get_attachments(self, obj) -> list:
@@ -348,6 +351,77 @@ class EmailMessageSerializer(serializers.ModelSerializer):
                 )
 
         return value
+
+    def _replace_image_placeholders_with_urls(
+        self,
+        content: str,
+        attachment_url_map: dict
+    ) -> str:
+        """
+        Replace image placeholders with Markdown image syntax.
+
+        Args:
+            content: Content with [IMAGE: filename] placeholders
+            attachment_url_map: Dict mapping safe_filename to URL
+
+        Returns:
+            str: Content with placeholders replaced by ![](url)
+        """
+        if not content:
+            return content
+
+        pattern = r'\[IMAGE:\s*([^\]]+)\]'
+
+        def replacer(match):
+            filename = match.group(1).strip()
+            url = attachment_url_map.get(filename, '')
+            return f"![]({url})" if url else match.group(0)
+
+        return re.sub(pattern, replacer, content)
+
+    def to_representation(self, instance):
+        """
+        Convert instance to representation with image placeholders replaced.
+
+        Dynamically generates URLs from attachment file_path for automatic
+        backward compatibility with both old (email_id) and new (uuid) paths.
+
+        Args:
+            instance: EmailMessage instance
+
+        Returns:
+            dict: Serialized data with replaced image placeholders
+        """
+        data = super().to_representation(instance)
+
+        # Build filename to URL mapping from attachments
+        attachment_url_map = {}
+        for att in instance.attachments.all():
+            if att.is_image and att.file_path:
+                # Extract relative path from file_path
+                # Supports both: email_217/file.jpg and uuid/file.jpg
+                rel_path = att.file_path.replace(
+                    settings.EMAIL_ATTACHMENT_DIR + '/',
+                    ''
+                ).lstrip('/')
+
+                # Generate URL
+                if settings.ATTACHMENT_BASE_URL:
+                    url = f"{settings.ATTACHMENT_BASE_URL}/attachments/{rel_path}"
+                else:
+                    url = f"/attachments/{rel_path}"
+
+                attachment_url_map[att.safe_filename] = url
+
+        # Replace placeholders in all content fields
+        for field in ['llm_content', 'summary_content']:
+            if data.get(field):
+                data[field] = self._replace_image_placeholders_with_urls(
+                    data[field],
+                    attachment_url_map
+                )
+
+        return data
 
 
 class EmailMessageCreateSerializer(serializers.ModelSerializer):

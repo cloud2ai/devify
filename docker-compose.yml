@@ -76,6 +76,7 @@ services:
       - ./docker/nginx/default.conf:/etc/nginx/conf.d/default.conf
       - ./docker/nginx/certs:/certs
       - ./data/django/staticfiles:/staticfiles:ro
+      - ./data/email_attachments:/opt/email_attachments:ro
       - ./data/logs/nginx:/var/log/nginx
     ports:
       - "${NGINX_HTTP_PORT:-10080}:80"

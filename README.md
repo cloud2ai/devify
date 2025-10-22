@@ -170,6 +170,8 @@ Visit [Google Cloud Console](https://console.cloud.google.com/):
   - Development: `http://localhost:8000/accounts/google/login/callback/`
   - Production: `https://yourdomain.com/accounts/google/login/callback/`
 
+  **Important**: Only add the URI **with port number** (`localhost:8000`). Do NOT add `http://localhost/accounts/google/login/callback/` (without port), as the development environment runs on port 8000.
+
 **2. Configure in `.env`:**
 
 ```bash
@@ -184,7 +186,20 @@ REGISTRATION_TOKEN_EXPIRY_HOURS=24
 FRONTEND_URL=http://localhost:3000
 ```
 
-**3. API Documentation:**
+**3. Configure Django Site (Required for OAuth):**
+
+After running migrations, configure the Site domain in Django Admin:
+
+1. Access Django Admin: `http://localhost:8000/admin/`
+2. Go to **Sites** → **Sites** → Click on **example.com**
+3. Update:
+   - **Domain name**: `localhost:8000` (Development) or `yourdomain.com` (Production)
+   - **Display name**: `Devify Development` or your site name
+4. Click **Save**
+
+**Note**: This is required for OAuth redirect URLs to work correctly. Google OAuth does not allow private IP addresses (like `192.168.x.x`), so use `localhost` for development.
+
+**4. API Documentation:**
 
 View available authentication endpoints at `http://localhost:8000/api/schema/swagger-ui/` after starting the server.
 

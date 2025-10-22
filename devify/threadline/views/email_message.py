@@ -174,28 +174,36 @@ class EmailMessageDetailAPIView(BaseAPIView):
     APIView for individual EmailMessage operations
     """
 
+    lookup_field = 'uuid'
+
     def get_queryset(self):
         """
         Get EmailMessage queryset with related objects
         """
         return EmailMessage.objects.select_related('user').all()
 
+    def get_object(self, uuid):
+        """
+        Get email message by UUID with user ownership validation
+        """
+        return EmailMessage.objects.get(uuid=uuid, user=self.request.user)
+
     @extend_schema(
         operation_id='threadlines_retrieve',
         summary='Get threadline details',
-        description='Get details of a specific threadline',
+        description='Get details of a specific threadline by UUID',
         responses={
             200: response(EmailMessageSerializer),
             404: error_response(),
             401: error_response()
         }
     )
-    def get(self, request, pk):
+    def get(self, request, uuid):
         """
-        Retrieve a specific threadline
+        Retrieve a specific threadline by UUID
         """
         try:
-            message = self.get_object(pk)
+            message = self.get_object(uuid)
             serializer = EmailMessageSerializer(message, context={'request': request})
 
             return Response({
@@ -205,7 +213,7 @@ class EmailMessageDetailAPIView(BaseAPIView):
             }, status=status.HTTP_200_OK)
 
         except Exception as e:
-            logger.error(f"Error retrieving threadline {pk}: {str(e)}")
+            logger.error(f"Error retrieving threadline {uuid}: {str(e)}")
             return Response({
                 'code': 404,
                 'message': 'Threadline not found',
@@ -224,12 +232,12 @@ class EmailMessageDetailAPIView(BaseAPIView):
             401: error_response()
         }
     )
-    def put(self, request, pk):
+    def put(self, request, uuid):
         """
         Update a specific email message (full update)
         """
         try:
-            message = self.get_object(pk)
+            message = self.get_object(uuid)
             serializer = EmailMessageUpdateSerializer(
                 message,
                 data=request.data,
@@ -247,7 +255,7 @@ class EmailMessageDetailAPIView(BaseAPIView):
                 }, status=status.HTTP_200_OK)
 
         except Exception as e:
-            logger.error(f"Error updating email message {pk}: {str(e)}")
+            logger.error(f"Error updating email message {uuid}: {str(e)}")
             return Response({
                 'code': 400,
                 'message': str(e),
@@ -266,12 +274,12 @@ class EmailMessageDetailAPIView(BaseAPIView):
             401: error_response()
         }
     )
-    def patch(self, request, pk):
+    def patch(self, request, uuid):
         """
         Partially update a specific email message
         """
         try:
-            message = self.get_object(pk)
+            message = self.get_object(uuid)
             serializer = EmailMessageUpdateSerializer(
                 message,
                 data=request.data,
@@ -290,7 +298,7 @@ class EmailMessageDetailAPIView(BaseAPIView):
                 }, status=status.HTTP_200_OK)
 
         except Exception as e:
-            logger.error(f"Error updating email message {pk}: {str(e)}")
+            logger.error(f"Error updating email message {uuid}: {str(e)}")
             return Response({
                 'code': 400,
                 'message': str(e),
@@ -307,12 +315,12 @@ class EmailMessageDetailAPIView(BaseAPIView):
             401: error_response()
         }
     )
-    def delete(self, request, pk):
+    def delete(self, request, uuid):
         """
         Delete a specific email message
         """
         try:
-            message = self.get_object(pk)
+            message = self.get_object(uuid)
             message.delete()
 
             return Response({
@@ -322,7 +330,7 @@ class EmailMessageDetailAPIView(BaseAPIView):
             }, status=status.HTTP_204_NO_CONTENT)
 
         except Exception as e:
-            logger.error(f"Error deleting email message {pk}: {str(e)}")
+            logger.error(f"Error deleting email message {uuid}: {str(e)}")
             return Response({
                 'code': 404,
                 'message': 'Email message not found',

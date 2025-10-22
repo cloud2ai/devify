@@ -1,3 +1,5 @@
+import uuid as uuid_lib
+
 from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError
 from django.conf import settings
@@ -219,6 +221,15 @@ class EmailMessage(models.Model):
     Email message details
     """
 
+    uuid = models.UUIDField(
+        unique=True,
+        editable=False,
+        db_index=True,
+        null=True,
+        blank=True,
+        verbose_name=_('UUID'),
+        help_text=_('Unique identifier for external references')
+    )
     user = models.ForeignKey(
         User,
         on_delete=models.CASCADE,
@@ -392,6 +403,15 @@ class EmailAttachment(models.Model):
     Status is now managed by the parent EmailMessage.status field
     for unified workflow control.
     """
+    uuid = models.UUIDField(
+        unique=True,
+        editable=False,
+        db_index=True,
+        null=True,
+        blank=True,
+        verbose_name=_('UUID'),
+        help_text=_('Unique identifier for external references')
+    )
     user = models.ForeignKey(
         User,
         on_delete=models.CASCADE,

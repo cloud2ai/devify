@@ -57,6 +57,8 @@ EMAIL_ATTACHMENT_DIR = os.getenv(
     'EMAIL_ATTACHMENT_DIR', '/opt/email_attachments')
 TMP_EMAIL_ATTACHMENT_DIR = '/tmp/email_attachments'
 
+# Attachment URL Configuration
+ATTACHMENT_BASE_URL = os.getenv('ATTACHMENT_BASE_URL', '')
 
 # Task Timeout Configuration
 TASK_TIMEOUT_MINUTES = os.getenv('TASK_TIMEOUT_MINUTES', 10)

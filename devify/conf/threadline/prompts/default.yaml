@@ -1,0 +1,100 @@
+# Default prompts and shared snippets
+# Shared snippets can be referenced in prompts using {variable_name}
+
+shared:
+  zh-CN:
+    image_placeholder: "[IMAGE: filename.png]"
+    output_requirements: "对话文本必须为纯文本（不包括表情符号、特殊字符等），结构清晰。不改变任何原始含义并保留所有信息。输出必须是结构良好、层次清晰的纯文本，不包含任何额外的解释、摘要或多余内容。"
+    content_processing: "完全保留和描述所有内容，不遗漏任何信息。必要时使用Markdown格式处理代码或引用内容（例如，``` 用于代码块，> 用于引用）。"
+
+  en-US:
+    image_placeholder: "[IMAGE: filename.png]"
+    output_requirements: "Conversation text must be plain text (excluding emojis, special characters, etc.) with clear structure. Without altering any original meaning and retaining all information. Output must be well-structured, hierarchically clear plain text, without any additional explanations, summaries, or extra content."
+    content_processing: "Fully retain and describe all content without omission. Using Markdown formatting when necessary for code or quoted content (e.g., ``` for code blocks, > for quotes)."
+
+# Common prompts (language-agnostic)
+# These prompts are used for all languages
+common:
+  email_content_prompt: |
+    Please output in {language}.
+
+    Your task is to organize the provided content — which may include email threads, chat logs, or message exchanges — into a standardized Markdown-formatted conversation for archival and easy reference.
+    Ensure the output preserves all original information while presenting it in a clean, consistent, and chronological structure (from the earliest to the latest).
+    Apply minimal editing only to improve readability, and clearly mark any assumptions.
+
+    Output Format (Markdown):
+
+    Each message must strictly follow this format:
+
+    - Speaker (Date Time)
+    Message content
+
+    Additional rules:
+
+    Date and Time
+    - If the date is unknown, display only the time.
+    - If known, include both date and time in a consistent format (e.g., 2025-10-22 14:05).
+
+    Images
+    - Use placeholders in the format [IMAGE: filename.png], placed on a separate line in their original position.
+
+    Plain Text Only
+    - The conversation must contain plain text only (no emojis, markdown decorations, or special characters).
+
+    No Additional Commentary
+    - Do not include explanations, analysis, or summaries outside of the formatted conversation.
+
+  ocr_prompt: |
+    Please output in {language}.
+
+    Your task is to transform OCR-recognized content into a complete, natural language narrative. Never output raw text lists or tables — instead, describe all information as if you were explaining the content to someone who cannot see the image.
+
+    Task Objectives:
+
+    Complete Description
+    - Describe ALL OCR content comprehensively, including titles, categories, labels, metrics, numerical values, timestamps, locations, status indicators, and any other visible information.
+    - Preserve all information from the original OCR without omission or distortion.
+    - Maintain consistency with the source material at all times.
+
+    Data Relationships & Trends
+    - Describe trends, changes, and patterns explicitly using descriptive terms: "increased by X%", "decreased from Y to Z", "peaked at", "dropped to", "remained stable at", "fluctuated between".
+    - For charts and graphs: describe the overall trend, notable peaks/valleys, and any anomalies or outliers.
+    - For tables: explain relationships between rows/columns, comparisons, and significant differences.
+    - Express data in context rather than isolated numbers (e.g., "CPU usage reached 95% at noon, significantly higher than the morning average of 45%").
+
+    Logical Organization
+    - Structure your description by logical groupings: chronologically for time-series data, by category for classifications, by metric for performance data, or by section for documents.
+    - Use clear transitions between different sections or topics.
+    - Present information in a reader-friendly flow that makes relationships and hierarchies clear.
+
+    Accuracy & Clarity
+    - For uncertain, incomplete, or potentially erroneous OCR content, mark it as [unclear] and briefly explain the issue (e.g., "text partially obscured", "ambiguous characters").
+    - Emphasize critical, abnormal, or important information naturally within your description.
+    - Avoid speculation or subjective interpretation — stick to what is visible in the OCR results.
+    - Keep proper nouns, technical terms, product names, and brand names in their original language. Do not translate them (e.g., keep "CPU", "AWS", "Kubernetes", "Chrome" as-is, even when outputting in Chinese).
+
+    Output Format
+    - Use natural language paragraphs or structured bullet points, whichever is more appropriate for the content type.
+    - Do NOT reproduce original tables, lists, or raw OCR text.
+    - Do NOT add summaries, conclusions, or commentary beyond describing what is present.
+    - Keep the description clear, concise, and informative.
+
+    Common Scenarios
+    - Performance monitoring dashboards (CPU, memory, network bandwidth, disk I/O)
+    - Charts and graphs (line charts, bar charts, pie charts showing trends or distributions)
+    - Data tables and reports (financial statements, statistical summaries, inventory lists)
+    - Document pages (contracts, presentations, meeting notes, screenshots of text)
+    - Any text, numbers, or structured information captured via OCR.
+
+  summary_title_prompt: |
+    Please output in {language}.
+
+    Extract a single concise title from the provided chat records.
+
+    Requirements:
+    - The title must accurately capture the core topic, problem, or discussion point
+    - Use clear, specific language. Avoid vague terms
+    - Maximum length: 200 characters
+    - If multiple topics exist, extract only the most critical and central one
+    - Generate only the title text without any prefixes, tags, or brackets
+    - Do not add explanations, summaries, or any additional text

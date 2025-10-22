@@ -54,25 +54,10 @@ class GetAvailableScenesView(APIView):
 
         try:
             config_manager = PromptConfigManager()
-
-            if not config_manager.yaml_config:
-                return Response(
-                    {
-                        'success': False,
-                        'error': _(
-                            'Configuration not available'
-                        )
-                    },
-                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
-                )
-
-            scene_config = config_manager.yaml_config.get(
-                'scene_config',
-                {}
-            )
+            available_scenes = config_manager.get_available_scenes()
 
             scenes = []
-            for scene_key, scene_data in scene_config.items():
+            for scene_key in available_scenes:
                 try:
                     scene_info = config_manager.get_scene_config(
                         scene_key,
