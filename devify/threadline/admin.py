@@ -259,7 +259,7 @@ class EmailMessageAdmin(admin.ModelAdmin):
             'classes': ('collapse',)
         }),
         (_('LLM Processing'), {
-            'fields': ('llm_content',),
+            'fields': ('llm_content', 'metadata'),
             'classes': ('collapse',)
         }),
         (_('Status'), {

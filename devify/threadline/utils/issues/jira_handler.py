@@ -16,7 +16,7 @@ from typing import Dict, Any, Optional, List
 
 from devtoolbox.api_clients.jira_client import JiraClient
 
-from threadline.utils.summary import call_llm
+from threadline.utils.llm import call_llm
 
 logger = logging.getLogger(__name__)
 

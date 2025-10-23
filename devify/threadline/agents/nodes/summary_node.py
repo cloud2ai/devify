@@ -7,11 +7,10 @@ It operates purely on State without database access.
 
 import logging
 from typing import Dict, Any
-from django.conf import settings
 
 from threadline.agents.nodes.base_node import BaseLangGraphNode
 from threadline.agents.email_state import EmailState, add_node_error
-from threadline.utils.summary import call_llm
+from threadline.utils.llm import call_llm
 
 logger = logging.getLogger(__name__)
 
@@ -100,11 +99,6 @@ class SummaryNode(BaseLangGraphNode):
             logger.error(error_message)
             return add_node_error(state, self.node_name, error_message)
 
-        output_language = prompt_config.get(
-            'output_language',
-            settings.LLM_OUTPUT_LANGUAGE
-        )
-
         content = (
             f"Subject: {state.get('subject', '')}\n"
             f"Text Content: {state.get('llm_content', '')}\n"
@@ -139,8 +133,7 @@ class SummaryNode(BaseLangGraphNode):
                 logger.info("Generating summary content")
                 summary_content = call_llm(
                     summary_prompt,
-                    combined_content,
-                    output_language
+                    combined_content
                 )
                 summary_content = summary_content.strip()
                 if summary_content:
@@ -152,8 +145,7 @@ class SummaryNode(BaseLangGraphNode):
                 logger.info("Generating summary title")
                 summary_title = call_llm(
                     summary_title_prompt,
-                    combined_content,
-                    output_language
+                    combined_content
                 )
                 summary_title = summary_title.strip()
                 if summary_title:

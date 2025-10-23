@@ -286,6 +286,16 @@ class EmailMessage(models.Model):
         verbose_name=_('Summary Priority')
     )
 
+    # Structured metadata for intelligent search and filtering
+    metadata = models.JSONField(
+        default=dict,
+        blank=True,
+        verbose_name=_('Metadata'),
+        help_text=_(
+            'Structured metadata for intelligent search and filtering'
+        )
+    )
+
     # LLM processed/organized content for this email
     llm_content = models.TextField(
         blank=True,

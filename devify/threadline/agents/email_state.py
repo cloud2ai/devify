@@ -60,6 +60,7 @@ class EmailState(TypedDict, total=False):
     summary_title: str | None
     summary_content: str | None
     llm_content: str | None
+    metadata: Dict[str, Any] | None
 
     # Issue creation results (core fields - engine agnostic)
     issue_id: int | None              # Database Issue.id
@@ -120,6 +121,7 @@ def create_email_state(
         "summary_title": None,
         "summary_content": None,
         "llm_content": None,
+        "metadata": None,
         "issue_id": None,
         "issue_url": None,
         "issue_metadata": None,

@@ -20,6 +20,7 @@ from threadline.agents.nodes.ocr_node import OCRNode
 from threadline.agents.nodes.llm_attachment_node import LLMAttachmentNode
 from threadline.agents.nodes.llm_email_node import LLMEmailNode
 from threadline.agents.nodes.summary_node import SummaryNode
+from threadline.agents.nodes.metadata_node import MetadataNode
 from threadline.agents.nodes.issue_node import IssueNode
 from threadline.agents.email_state import (
     EmailState,
@@ -81,8 +82,9 @@ def create_email_processing_graph():
     3. LLMAttachmentNode - Process OCR content with LLM
     4. LLMEmailNode - Process email content with LLM
     5. SummaryNode - Generate email summary
-    6. IssueNode - Validate and prepare issue creation
-    7. WorkflowFinalizeNode - Sync all results to database
+    6. MetadataNode - Extract structured metadata from summary
+    7. IssueNode - Validate and prepare issue creation
+    8. WorkflowFinalizeNode - Sync all results to database
 
     Returns:
         Compiled LangGraph workflow
@@ -96,6 +98,7 @@ def create_email_processing_graph():
     workflow.add_node("llm_attachment", LLMAttachmentNode())
     workflow.add_node("llm_email", LLMEmailNode())
     workflow.add_node("summary", SummaryNode())
+    workflow.add_node("metadata", MetadataNode())
     workflow.add_node("issue", IssueNode())
     workflow.add_node("workflow_finalize", WorkflowFinalizeNode())
 
@@ -105,7 +108,8 @@ def create_email_processing_graph():
     workflow.add_edge("ocr", "llm_attachment")
     workflow.add_edge("llm_attachment", "llm_email")
     workflow.add_edge("llm_email", "summary")
-    workflow.add_edge("summary", "issue")
+    workflow.add_edge("summary", "metadata")
+    workflow.add_edge("metadata", "issue")
     workflow.add_edge("issue", "workflow_finalize")
     workflow.add_edge("workflow_finalize", END)
 

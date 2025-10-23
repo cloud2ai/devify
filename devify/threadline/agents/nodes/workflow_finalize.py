@@ -196,81 +196,109 @@ class WorkflowFinalizeNode(BaseLangGraphNode):
                 id=self.email.id
             )
 
+            field_updates = {
+                'summary_title': state.get('summary_title', ''),
+                'summary_content': state.get('summary_content', ''),
+                'llm_content': state.get('llm_content', ''),
+                'metadata': state.get('metadata')
+            }
+
             update_fields = []
+            sync_details = []
 
-            summary_title = state.get('summary_title', '')
-            if summary_title:
-                email.summary_title = summary_title
-                update_fields.append('summary_title')
-                logger.info("Synced summary_title to database")
+            for field_name, field_value in field_updates.items():
+                if not field_value:
+                    continue
 
-            summary_content = state.get('summary_content', '')
-            if summary_content:
-                email.summary_content = summary_content
-                update_fields.append('summary_content')
-                logger.info("Synced summary_content to database")
+                setattr(email, field_name, field_value)
+                update_fields.append(field_name)
 
-            llm_content = state.get('llm_content', '')
-            if llm_content:
-                email.llm_content = llm_content
-                update_fields.append('llm_content')
-                logger.info("Synced llm_content to database")
+                if isinstance(field_value, dict):
+                    detail = f"{field_name}({len(field_value)} keys)"
+                    logger.debug(
+                        f"{field_name}: {list(field_value.keys())}"
+                    )
+                else:
+                    detail = f"{field_name}({len(field_value)} chars)"
+                    logger.debug(
+                        f"{field_name}: {str(field_value)[:100]}"
+                    )
+                sync_details.append(detail)
 
             if update_fields:
+                logger.debug(
+                    f"Saving EmailMessage {self.email.id} "
+                    f"with fields: {update_fields}"
+                )
                 email.save(update_fields=update_fields)
                 logger.info(
-                    f"EmailMessage {self.email.id} saved to database "
-                    f"with fields: {update_fields}"
+                    f"Synced EmailMessage {self.email.id}: "
+                    f"{', '.join(sync_details)}"
                 )
 
             attachments = state.get('attachments', [])
             if attachments:
+                att_sync_count = 0
+                att_sync_summary = []
+
                 for att_data in attachments:
                     att_id = att_data.get('id')
                     if not att_id:
                         continue
 
-                    att_update_fields = []
+                    att_field_updates = {
+                        'ocr_content': att_data.get('ocr_content'),
+                        'llm_content': att_data.get('llm_content')
+                    }
+
                     att_updates = {}
+                    att_details = []
 
-                    ocr_content = att_data.get('ocr_content')
-                    if ocr_content:
-                        att_updates['ocr_content'] = ocr_content
-                        att_update_fields.append('ocr_content')
+                    for field_name, field_value in (
+                        att_field_updates.items()
+                    ):
+                        if not field_value:
+                            continue
 
-                    llm_content = att_data.get('llm_content')
-                    if llm_content:
-                        att_updates['llm_content'] = llm_content
-                        att_update_fields.append('llm_content')
+                        att_updates[field_name] = field_value
+                        field_type = field_name.split('_')[0]
+                        att_details.append(
+                            f"{field_type}({len(field_value)} chars)"
+                        )
+                        logger.debug(
+                            f"Attachment {att_id} {field_name}: "
+                            f"{field_value[:100]}"
+                        )
 
                     if att_updates:
+                        logger.debug(
+                            f"Updating attachment {att_id} "
+                            f"with fields: {list(att_updates.keys())}"
+                        )
                         EmailAttachment.objects.filter(
                             id=att_id
                         ).update(**att_updates)
-                        logger.info(
-                            f"Synced attachment {att_id} fields: "
-                            f"{att_update_fields}"
+                        att_sync_count += 1
+                        att_sync_summary.append(
+                            f"#{att_id}[{', '.join(att_details)}]"
                         )
+
+                if att_sync_count > 0:
+                    logger.info(
+                        f"Synced {att_sync_count} attachment(s): "
+                        f"{', '.join(att_sync_summary)}"
+                    )
 
             issue_result = state.get('issue_result_data')
             if issue_result:
-                logger.info(
-                    f"Issue data found in state (engine: "
-                    f"{issue_result.get('engine')}), creating Issue record"
-                )
-                # _create_issue_record will raise exception if it fails
-                # No need to check for None - exception will propagate up
                 issue = self._create_issue_record(email, issue_result)
                 logger.info(
-                    f"Created Issue record: ID={issue.id}, "
+                    f"Created Issue: "
+                    f"ID={issue.id}, "
+                    f"engine={issue.engine}, "
                     f"external_id={issue.external_id}, "
-                    f"engine={issue.engine}"
+                    f"url={issue.issue_url}"
                 )
-
-        logger.info(
-            f"All data synced to database for EmailMessage "
-            f"{self.email.id}"
-        )
 
     def _create_issue_record(
         self,
@@ -302,18 +330,15 @@ class WorkflowFinalizeNode(BaseLangGraphNode):
         """
         engine = issue_result_data.get('engine', 'unknown')
         external_id = issue_result_data.get('external_id')
+        title = issue_result_data.get('title', 'Email Issue')
 
-        logger.info(
-            f"Creating Issue record with data: "
+        logger.debug(
+            f"Creating Issue record: "
             f"engine={engine}, "
             f"external_id={external_id}, "
-            f"issue_url={issue_result_data.get('issue_url')}, "
-            f"title={issue_result_data.get('title', 'Email Issue')[:50]}"
+            f"title={title[:50]}"
         )
 
-        # Prevent duplicate records for the same external issue
-        # Note: An email can have multiple issues, but the same
-        # external issue (external_id) should only have one DB record
         if external_id:
             existing_issue = Issue.objects.filter(
                 email_message=email,
@@ -321,20 +346,17 @@ class WorkflowFinalizeNode(BaseLangGraphNode):
             ).first()
 
             if existing_issue:
-                logger.warning(
-                    f"Issue record for {engine} issue {external_id} "
-                    f"already exists in database (ID: {existing_issue.id}). "
-                    f"Skipping duplicate creation and returning existing record."
+                logger.info(
+                    f"Issue already exists: "
+                    f"ID={existing_issue.id}, "
+                    f"external_id={external_id}"
                 )
                 return existing_issue
 
-        # Create new Issue record
-        # If this fails, let the exception propagate up
-        # It will be caught by BaseLangGraphNode and properly handled
         issue = Issue.objects.create(
             user=email.user,
             email_message=email,
-            title=issue_result_data.get('title', 'Email Issue'),
+            title=title,
             description=issue_result_data.get(
                 'description', 'No content'
             ),
@@ -347,9 +369,6 @@ class WorkflowFinalizeNode(BaseLangGraphNode):
                 'created_from': 'langgraph_workflow',
                 **issue_result_data.get('metadata', {})
             }
-        )
-        logger.info(
-            f"Created Issue database record (ID: {issue.id})"
         )
         return issue
 

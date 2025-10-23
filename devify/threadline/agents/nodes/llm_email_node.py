@@ -8,11 +8,10 @@ information. It operates purely on State without database access.
 import logging
 import re
 from typing import Dict, Any
-from django.conf import settings
 
 from threadline.agents.nodes.base_node import BaseLangGraphNode
 from threadline.agents.email_state import EmailState, add_node_error
-from threadline.utils.summary import call_llm
+from threadline.utils.llm import call_llm
 
 logger = logging.getLogger(__name__)
 
@@ -109,18 +108,12 @@ class LLMEmailNode(BaseLangGraphNode):
             logger.error(error_message)
             return add_node_error(state, self.node_name, error_message)
 
-        output_language = prompt_config.get(
-            'output_language',
-            settings.LLM_OUTPUT_LANGUAGE
-        )
-
         try:
             logger.info("Processing email content with LLM")
 
             llm_result = call_llm(
                 email_content_prompt,
-                content_with_ocr,
-                output_language
+                content_with_ocr
             )
             llm_content = llm_result.strip()
 

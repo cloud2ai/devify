@@ -54,7 +54,7 @@ Comments
 2. Do not use inline comments; comments must be above the code block.
 
 Code Formatting
-1. Limit each line of code to a maximum of 73 characters. Use line breaks and indentation for readability.
+1. Limit each line of code to a maximum of 79 characters. Use line breaks and indentation for readability.
 
 Import Rules
 1. Use a three-part import structure:
