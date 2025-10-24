@@ -238,7 +238,9 @@ class EmailMessageAdmin(admin.ModelAdmin):
     ]
     readonly_fields = [
         'created_at', 'updated_at', 'message_id', 'attachment_links',
-        'issue_links'
+        'issue_links', 'raw_content_preview', 'html_content_preview',
+        'text_content_preview', 'summary_content_preview',
+        'llm_content_preview', 'metadata_preview'
     ]
 
     fieldsets = (
@@ -248,17 +250,38 @@ class EmailMessageAdmin(admin.ModelAdmin):
                 'recipients', 'received_at'
             )
         }),
-        (_('Content'), {
-            'fields': ('raw_content', 'html_content', 'text_content'),
-            'classes': ('collapse',)
-        }),
-        (_('Summary'), {
+        (_('Content Preview'), {
             'fields': (
-                'summary_title', 'summary_content', 'summary_priority'
+                'raw_content_preview',
+                'html_content_preview',
+                'text_content_preview'
             ),
             'classes': ('collapse',)
         }),
-        (_('LLM Processing'), {
+        (_('Content (Full)'), {
+            'fields': ('raw_content', 'html_content', 'text_content'),
+            'classes': ('collapse',)
+        }),
+        (_('Summary Preview'), {
+            'fields': (
+                'summary_title',
+                'summary_content_preview',
+                'summary_priority'
+            ),
+            'classes': ('collapse',)
+        }),
+        (_('Summary (Full)'), {
+            'fields': ('summary_content',),
+            'classes': ('collapse',)
+        }),
+        (_('LLM Processing Preview'), {
+            'fields': (
+                'llm_content_preview',
+                'metadata_preview'
+            ),
+            'classes': ('collapse',)
+        }),
+        (_('LLM Processing (Full)'), {
             'fields': ('llm_content', 'metadata'),
             'classes': ('collapse',)
         }),
@@ -266,7 +289,10 @@ class EmailMessageAdmin(admin.ModelAdmin):
             'fields': ('status', 'fetch_retry_count', 'error_message')
         }),
         (_('Related Objects'), {
-            'fields': ('attachment_links', 'issue_links'),
+            'fields': (
+                'attachment_links',
+                'issue_links'
+            ),
             'classes': ('collapse',)
         }),
         (_('Timestamps'), {
@@ -338,6 +364,64 @@ class EmailMessageAdmin(admin.ModelAdmin):
             links.append(link)
 
         return mark_safe('<br>'.join(links))
+
+    @admin.display(description=_('Raw Content Preview'))
+    def raw_content_preview(self, obj):
+        """Display truncated raw content."""
+        if not obj.raw_content:
+            return "无内容"
+        content = (obj.raw_content[:500] + '...'
+                  if len(obj.raw_content) > 500
+                  else obj.raw_content)
+        return mark_safe(
+            f'<pre style="white-space: pre-wrap; max-height: 200px; '
+            f'overflow-y: auto;">{content}</pre>'
+        )
+
+    @admin.display(description=_('HTML Content Preview'))
+    def html_content_preview(self, obj):
+        """Display truncated HTML content."""
+        if not obj.html_content:
+            return "无内容"
+        content = (obj.html_content[:500] + '...'
+                  if len(obj.html_content) > 500
+                  else obj.html_content)
+        return mark_safe(
+            f'<div style="max-height: 200px; overflow-y: auto; '
+            f'border: 1px solid #ddd; padding: 10px;">{content}</div>'
+        )
+
+    @admin.display(description=_('Text Content Preview'))
+    def text_content_preview(self, obj):
+        """Display truncated text content."""
+        if not obj.text_content:
+            return "无内容"
+        content = obj.text_content[:500] + '...' if len(obj.text_content) > 500 else obj.text_content
+        return mark_safe(f'<pre style="white-space: pre-wrap; max-height: 200px; overflow-y: auto;">{content}</pre>')
+
+    @admin.display(description=_('Summary Content Preview'))
+    def summary_content_preview(self, obj):
+        """Display truncated summary content."""
+        if not obj.summary_content:
+            return "无内容"
+        content = obj.summary_content[:500] + '...' if len(obj.summary_content) > 500 else obj.summary_content
+        return mark_safe(f'<div style="max-height: 200px; overflow-y: auto; border: 1px solid #ddd; padding: 10px;">{content}</div>')
+
+    @admin.display(description=_('LLM Content Preview'))
+    def llm_content_preview(self, obj):
+        """Display truncated LLM content."""
+        if not obj.llm_content:
+            return "无内容"
+        content = obj.llm_content[:500] + '...' if len(obj.llm_content) > 500 else obj.llm_content
+        return mark_safe(f'<pre style="white-space: pre-wrap; max-height: 200px; overflow-y: auto;">{content}</pre>')
+
+    @admin.display(description=_('Metadata Preview'))
+    def metadata_preview(self, obj):
+        """Display truncated metadata."""
+        if not obj.metadata:
+            return "无元数据"
+        metadata_str = format_json_preview(obj.metadata, max_length=500)
+        return mark_safe(f'<pre style="white-space: pre-wrap; max-height: 200px; overflow-y: auto;">{metadata_str}</pre>')
 
     def save_model(self, request, obj, form, change):
         """

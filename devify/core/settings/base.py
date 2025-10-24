@@ -297,6 +297,24 @@ LOCALE_PATHS = [
 STATIC_ROOT = os.path.join(BASE_DIR, "staticfiles")
 STATIC_URL = 'static/'
 
+# ============================
+# File Upload Configuration
+# ============================
+
+# Maximum size for uploaded files (in bytes)
+# 100MB = 100 * 1024 * 1024 bytes
+FILE_UPLOAD_MAX_MEMORY_SIZE = 100 * 1024 * 1024  # 100MB
+
+# Maximum size for request data (in bytes)
+# This includes all POST data, not just file uploads
+DATA_UPLOAD_MAX_MEMORY_SIZE = 100 * 1024 * 1024  # 100MB
+
+# Maximum number of fields in a form
+FILE_UPLOAD_MAX_NUMBER_FIELDS = 1000
+
+# Maximum number of files that can be uploaded in a single request
+FILE_UPLOAD_MAX_NUMBER_FILES = 100
+
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.1/ref/settings/#default-auto-field
 
