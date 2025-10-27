@@ -201,6 +201,7 @@ class WorkflowPrepareNode(BaseLangGraphNode):
             'summary_title': self.email.summary_title or None,
             'summary_content': self.email.summary_content or None,
             'llm_content': self.email.llm_content or None,
+            'metadata': self.email.metadata or None,
             'issue_id': existing_issue.id if existing_issue else None,
             'issue_url': existing_issue.issue_url if existing_issue else None,
             'issue_metadata': issue_metadata,

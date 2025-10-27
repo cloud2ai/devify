@@ -188,20 +188,26 @@ class LLMEmailNode(BaseLangGraphNode):
             f"Created OCR content map with {len(ocr_content_map)} entries"
         )
 
+        # Add OCR content as context without removing placeholders
+        # This allows LLM to understand image content while
+        # preserving placeholders for later processing
         replaced_count = 0
         for filename in placeholders:
             filename_stripped = filename.strip()
             if filename_stripped in ocr_content_map:
                 placeholder = f"[IMAGE: {filename}]"
                 ocr_content = ocr_content_map[filename_stripped]
+
+                # Add OCR content AFTER the placeholder
+                # This keeps the placeholder for Jira processing
                 content = content.replace(
                     placeholder,
-                    f"\n[OCR Content for {filename_stripped}]:\n"
+                    f"{placeholder}\n[OCR Content for {filename_stripped}]:\n"
                     f"{ocr_content}\n"
                 )
                 replaced_count += 1
                 logger.debug(
-                    f"Replaced placeholder for {filename_stripped}"
+                    f"Added OCR content for {filename_stripped}"
                 )
             else:
                 logger.warning(

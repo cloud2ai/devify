@@ -32,10 +32,13 @@ class MetadataNode(BaseLangGraphNode):
     - Read prompt configuration from State (no database access)
     - Combine summary information for metadata extraction
     - Execute LLM processing to generate structured metadata
-    - Validate JSON structure (category, scene, keywords, participants, timeline)
+    - Validate and normalize metadata (type checking for common list fields)
     - Update State with metadata
     - Skip if metadata already exists (unless force mode)
     - Handle LLM errors gracefully with retries
+
+    Note: Metadata field definitions are driven by prompts, not hard-coded.
+    The node only validates data types (e.g., ensuring list fields are lists).
     """
 
     def __init__(self):
@@ -75,8 +78,9 @@ class MetadataNode(BaseLangGraphNode):
         """
         Execute metadata extraction.
 
-        Analyzes summary title and content to generate structured metadata
-        including category, scene, keywords, participants, and timeline.
+        Analyzes summary title and content to generate structured metadata.
+        The specific fields are determined by the metadata_prompt in the
+        prompt_config, not hard-coded in this node.
 
         Args:
             state (EmailState): Current email state
@@ -123,43 +127,31 @@ class MetadataNode(BaseLangGraphNode):
                     max_retries=3
                 )
 
-                # Validate required fields
-                required_fields = [
-                    'category',
-                    'scene',
+                # Validate and normalize metadata (type checking only, no field requirement)
+                # Ensure common list fields are actually lists
+                common_list_fields = [
                     'keywords',
                     'participants',
+                    'locations',
                     'timeline'
                 ]
-                missing_fields = [
-                    field for field in required_fields
-                    if field not in metadata
+                for field in common_list_fields:
+                    if field in metadata and not isinstance(metadata[field], list):
+                        logger.warning(
+                            f"Metadata field '{field}' is not a list, "
+                            f"converting to list"
+                        )
+                        metadata[field] = []
+
+                # Log metadata fields for debugging
+                list_fields_info = [
+                    f"{field}:{len(metadata.get(field, []))}"
+                    for field in common_list_fields
+                    if field in metadata
                 ]
-
-                if missing_fields:
-                    error_message = (
-                        f"Metadata JSON missing required fields: "
-                        f"{missing_fields}"
-                    )
-                    logger.error(error_message)
-                    return add_node_error(
-                        state,
-                        self.node_name,
-                        error_message
-                    )
-
-                # Ensure keywords, participants, and timeline are lists
-                if not isinstance(metadata.get('keywords'), list):
-                    metadata['keywords'] = []
-                if not isinstance(metadata.get('participants'), list):
-                    metadata['participants'] = []
-                if not isinstance(metadata.get('timeline'), list):
-                    metadata['timeline'] = []
-
                 logger.info(
-                    f"Metadata generated successfully with "
-                    f"{len(metadata.get('keywords', []))} keywords, "
-                    f"{len(metadata.get('participants', []))} participants"
+                    f"Metadata generated successfully: "
+                    f"{', '.join(list_fields_info) if list_fields_info else 'no list fields'}"
                 )
 
                 return {

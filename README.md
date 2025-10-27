@@ -413,12 +413,14 @@ To simplify configuration, all required settings should be added here. Below are
 1. **Enter the API container:**
 
    ```bash
-   docker exec -it devify-api python manager.py init_threadline_settings --user admin
+   docker exec -it devify-api python manage.py init_threadline_settings --user admin
    ```
 
 **Note:**
-- The initialization command is idempotent and safe to run multiple times.
-- All values are stored in JSON format and should be customized according to your actual email, JIRA, and AI integration requirements.
+- The initialization command is idempotent and safe to run multiple times
+- JIRA configuration is loaded from `conf/threadline/issues/jira_config.yaml` (YAML format)
+- Other settings are stored in JSON format in the database
+- Settings can be customized via Django Admin after initialization
 
 2. **Edit the settings in Django Admin:**
 
@@ -652,59 +654,166 @@ The issue configuration supports multiple engines (JIRA, email, Slack, etc.) wit
 | Key                | Type     | Description                                      | Example                      |
 |--------------------|----------|--------------------------------------------------|------------------------------|
 | enable             | boolean  | Whether issue creation is enabled                | true                         |
-| engine             | string   | Issue creation engine type                       | "jira"                       |
-| jira               | object   | JIRA-specific configuration (when engine="jira") | See JIRA config below        |
+| issue_engine       | string   | Issue creation engine type                       | "jira"                       |
+| jira               | object   | JIRA-specific configuration                      | See JIRA config below        |
+| language           | string   | LLM output language                              | "Chinese" or "English"       |
+| fields             | object   | Field configurations (see below)                 | See JIRA config below        |
 
-#### JIRA Configuration (when engine="jira")
+#### JIRA Configuration
 
-| Key                | Type     | Description                                      | Example                      |
-|--------------------|----------|--------------------------------------------------|------------------------------|
-| url                | string   | JIRA server URL                                  | "https://jira.example.com"   |
-| username           | string   | JIRA account username                            | "jira-user"                  |
-| api_token          | string   | JIRA API token or password                       | "your-api-token"             |
-| summary_prefix     | string   | Prefix for issue summary                         | "[AI]"                       |
-| summary_timestamp  | boolean  | Add timestamp to summary                         | true                         |
-| project_key        | string   | Default JIRA project key                         | "PRJ"                        |
-| allow_project_keys | array    | Allowed project keys for validation              | ["PRJ", "REQ"]               |
-| project_prompt     | string   | LLM prompt for project key selection (empty = use default) | "" or "The project key is: ..." |
-| default_issue_type | string   | Default issue type for new issues                | "Task"                       |
-| default_priority   | string   | Default priority for new issues                  | "High"                       |
-| epic_link          | string   | Epic link key (optional)                         | "PRJ-1234"                   |
-| assignee           | string   | Default assignee username (optional)             | "jira-assignee"              |
-| allow_assignees    | array    | Allowed assignees for validation                 | ["assignee1", "assignee2"]   |
-| assignee_prompt    | string   | LLM prompt for assignee selection (empty = use default) | "" or "Assign the issue to..." |
-| description_prompt | string   | LLM prompt for description formatting (empty = use default) | "" or "Convert the provided..." |
+JIRA issue creation is configured via YAML file at `conf/threadline/issues/jira_config.yaml`.
+All configuration is automatically loaded during settings initialization.
 
-**Example configuration:**
+**Configuration Structure:**
 
-```json
-{
-  "enable": false,
-  "engine": "jira",
-  "jira": {
-    "url": "your-jira-url",
-    "username": "your-jira-username",
-    "api_token": "your-api-token-or-password",
-    "summary_prefix": "[AI]",
-    "summary_timestamp": true,
-    "project_key": "your-default-project-key",
-    "allow_project_keys": ["PRJ", "REQ"],
-    "project_prompt": "",
-    "default_issue_type": "your-default-issue-type",
-    "default_priority": "your-default-priority",
-    "epic_link": "your-epic-link-key",
-    "assignee": "your-default-assignee-username",
-    "allow_assignees": ["assignee1", "assignee2"],
-    "description_prompt": "",
-    "assignee_prompt": ""
-  }
-}
+```yaml
+# Basic settings
+enable: true              # Enable/disable issue creation
+issue_engine: jira       # Issue engine type
+language: Chinese        # LLM output language
+
+# JIRA connection
+jira:
+  url: "https://jira.example.com/"
+  username: "your-username"
+  api_token: "your-api-token"
+
+# Field configurations
+fields:
+  # Static fields - Fixed values
+  project_key_config:
+    jira_field: project
+    default: "REQ"
+
+  issue_type_config:
+    jira_field: issuetype
+    default: "New Feature"
+
+  priority_config:
+    jira_field: priority
+    default: "High"
+
+  summary_config:
+    prefix: "[AI]"
+    add_timestamp: true
+
+  description_config:
+    jira_field: description
+
+  # LLM fields - Smart processing
+  assignee_config:
+    use_llm: true
+    jira_field: assignee
+    default: "default-user"
+    allow_values: ["user1", "user2", "user3"]
+    prompt: "Match assignee based on content"
+
+  components_config:
+    use_llm: true
+    fetch_from_api: true
+    jira_field: components
+
+  epic_link_config:
+    use_llm: true
+    fetch_from_api: true
+    jira_field: customfield_10014
+    default: "REQ-100"
 ```
 
-**Note about prompts:**
-- If `project_prompt`, `assignee_prompt`, or `description_prompt` are empty strings (`""`), the system will use the default values directly without calling LLM
-- This is the recommended approach for simple setups where you want to use fixed project keys, assignees, and standard description formatting
-- If you want LLM-based dynamic selection, provide custom prompts for these fields
+**JIRA Field Types:**
+
+Fields fall into three categories:
+
+1. **Standard Fields**: Use simple names
+   - Example: `project`, `summary`, `description`, `components`
+
+2. **Custom Fields**: Use `customfield_XXXXX` format
+   - Example: `customfield_10014` (Epic Link)
+   - Find your custom field ID via JIRA Admin or API
+
+3. **Processing Types**:
+   - **Static**: Fixed values (no LLM, no API fetch)
+   - **LLM**: Smart content generation
+   - **API Fetch**: Dynamic options from JIRA
+
+**How to Configure:**
+
+1. Edit `conf/threadline/issues/jira_config.yaml`
+2. Update JIRA credentials and project settings
+3. Add optional LLM-based features
+4. Run: `python manage.py init_threadline_settings --user username`
+
+**How LLM Prompt System Works:**
+
+The system uses a three-stage processing pipeline for LLM-based fields:
+
+1. **Stage 1: Static Fields**
+   - Fields with fixed default values (project, issue_type, priority)
+   - No LLM processing needed
+
+2. **Stage 2: API Data Fetching**
+   - Fields with `fetch_from_api: true` fetch available options from JIRA
+   - Example: `components_config` fetches all project components
+   - Example: `epic_link_config` fetches all Epic issues
+   - Data is stored for LLM to select from
+
+3. **Stage 3: LLM Analysis**
+   - LLM receives the email content and available options
+   - Each LLM field has:
+     - **allow_values**: Available options (from API or config)
+     - **prompt**: Custom instructions or default behavior
+     - **default**: Fallback value if LLM returns empty
+
+**Prompt Customization:**
+
+You can customize prompts in two ways:
+
+1. **Default Prompt** (if `prompt` is empty):
+   - With allow_values: Selection prompt ("Choose from available options")
+   - Without allow_values: Generation prompt ("Generate based on content")
+
+2. **Custom Prompt** (if `prompt` is provided):
+   ```yaml
+   assignee_config:
+     use_llm: true
+     jira_field: assignee
+     prompt: "Match the most appropriate assignee based on content"
+     allow_values: ["user1", "user2", "user3"]
+   ```
+
+**Example LLM Processing Flow:**
+
+```
+Email Content: "Need to fix login bug"
+↓
+1. Fetch components from JIRA API → ["Frontend", "Backend", "API"]
+2. Build LLM prompt:
+   {
+     "components": ["Frontend", "Backend", "API"]
+   }
+   Prompt: "Select components. Available: Frontend, Backend, API"
+3. LLM analyzes content → Returns: ["Frontend", "Backend"]
+4. Validate and use default if empty
+5. Create JIRA issue with selected components
+```
+
+**Text Formatting Features:**
+
+The system automatically handles:
+- Converting descriptions to JIRA Wiki format with proper indentation
+- Adding indentation to plain text paragraphs for better readability
+- Adding timestamps to summaries
+- Processing attachments
+- Error handling and fallbacks
+
+**Formatting Details:**
+- Plain text paragraphs are converted to quote blocks (bq.) for better readability and indentation
+- List items (* and #) automatically get proper indentation
+- Headers, code blocks, and special formatting remain unchanged
+- Quote blocks provide visual distinction and indentation for regular paragraphs
+- Special JIRA Wiki syntax is preserved correctly
+
+For detailed configuration options, see: `devify/devify/conf/threadline/issues/README.md`
 
 ### Prompt Config (prompt_config)
 

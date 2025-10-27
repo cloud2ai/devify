@@ -1,0 +1,69 @@
+# JIRA Issue Configuration
+# This file defines the JIRA issue creation settings
+
+enable: true
+issue_engine: jira
+
+jira:
+  url: "http://office.oneprocloud.com.cn:9005/"
+  username: "jirabot"
+  api_token: "your-api-token-here"
+
+language: "Chinese"
+
+fields:
+  # Static fields - Fixed values
+  project_key_config:
+    jira_field: project
+    default: "REQ"
+
+  issue_type_config:
+    jira_field: issuetype
+    default: "New Feature"
+
+  priority_config:
+    jira_field: priority
+    default: "High"
+
+  summary_config:
+    prefix: "[AI]"
+    add_timestamp: true
+
+  description_config:
+    jira_field: description
+
+  # LLM fields - Smart processing
+  assignee_config:
+    use_llm: true
+    jira_field: assignee
+    default: "liulixiang"
+    allow_values:
+      - "zhaoming"
+      - "zhangjiaqi"
+      - "guohewei"
+      - "zhangle"
+      - "luoxiangru"
+      - "liulixiang"
+      - "zhangtianjie"
+      - "zhaojiangbo"
+      - "wangjunfeng"
+      - "lijianhai"
+      - "yongmengmeng"
+      - "xuxingzhuang"
+      - "maohongming"
+      - "lizengyuan"
+      - "liuxun"
+      - "zhangweizhen"
+    prompt: "Match the most appropriate assignee from the list based on the issue content."
+
+  components_config:
+    use_llm: true
+    fetch_from_api: true
+    jira_field: components
+    default: []
+
+  epic_link_config:
+    use_llm: true
+    fetch_from_api: true
+    jira_field: customfield_10014
+    default: "REQ-100"

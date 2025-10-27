@@ -8,7 +8,7 @@ zh-CN:
     请扮演一名专业的产品经理助手，基于提供的聊天记录、邮件内容或OCR识别文本，从中精准提取产品问题相关的元数据信息。请严格遵循以下要求，确保输出结果完整、格式化、可供机器直接解析使用。禁止任何主观推测或多余输出。
 
     任务目标：
-    从原始文本中提取可用于产品问题追踪与检索的核心元数据，包括问题分类、使用场景、关键词、参与者及时间节点。所有输出必须结构化、标准化，便于后续索引或分析。
+    从原始文本中提取可用于产品问题追踪与检索的核心元数据，包括问题分类、使用场景、关键词、参与者、地点、项目名称及时间节点。重点提取时间（when）、地点（where）、人物（who）、项目名称（project）这四类核心信息。时间包括具体的日期时间、时间范围或时间节点；地点包括具体位置、场所、区域或环境；人物包括参与者、责任人、涉及的相关人员；项目名称包括产品名称、系统名称、项目代号等。所有输出必须结构化、标准化，便于后续索引或分析。
 
     输出格式要求：
     1. 输出格式：严格使用 JSON。
@@ -24,8 +24,10 @@ zh-CN:
     {
       "category": "string，问题类型分类，表示问题的性质，如：功能异常、性能问题、交互体验、兼容性问题、安全漏洞、数据错误等；若不确定请留空。",
       "scene": "string，问题发生的具体产品模块或功能位置，如：登录模块、移动端同步功能、云备份界面、数据导出功能、用户设置页面等；若无法确定请留空。",
+      "project_name": "string，项目名称，包括产品名称、系统名称、项目代号等；若不确定请留空。",
       "keywords": ["string", "string", "..."],
       "participants": ["string", "string", "..."],
+      "locations": ["string", "string", "..."],
       "timeline": ["YYYY-MM-DD", "YYYY-MM-DD（推测）", "..."]
     }
 
@@ -33,51 +35,54 @@ zh-CN:
     - 所有字段名称必须与定义完全一致（区分大小写）。
     - 不得输出多余层级、解释、或非 JSON 内容。
     - 若时间信息模糊，请优先转化为推测日期形式（如"2025-10-01（推测）"）。
-    - 若无任何时间信息，请返回空数组 []。
+    - 若无任何时间信息、地点信息或项目信息，请返回空数组 [] 或空字符串 ""。
 
     示例：
     输入：
-    王强反馈移动端文件同步功能在10月20日测试中出现延迟，张丽建议检查后台接口性能，李浩确认问题出现在Android端。
+    王强在北京办公室反馈Devify项目移动端文件同步功能在10月20日测试中出现延迟，张丽在上海建议检查后台接口性能，李浩在广州确认问题出现在Android端。
 
     输出：
     {
       "category": "性能问题",
       "scene": "移动端同步功能",
+      "project_name": "Devify",
       "keywords": ["文件同步", "性能", "延迟", "Android"],
       "participants": ["王强", "张丽", "李浩"],
+      "locations": ["北京办公室", "上海", "广州"],
       "timeline": ["2025-10-20"]
     }
 
   summary_prompt: |
-    请扮演一名产品经理，基于下方提供的聊天记录、邮件内容以及OCR识别的文本，按照指定逻辑进行结构化总结。你的目标是发现项目中在使用产品过程中存在的各种问题，并以解决问题为导向，整理关键信息和待办事项，为后续处理提供依据。请严格遵循以下规则：
+    请扮演一名产品经理，基于下方提供的聊天记录、邮件内容以及OCR识别的文本，按照指定逻辑进行结构化总结。总结时必须突出标注时间、地点、人物、项目名称等关键要素，确保这些核心信息在标签整理和议题总结中清晰可见。你的目标是发现项目中在使用产品过程中存在的各种问题，并以解决问题为导向，整理关键信息和待办事项，为后续处理提供依据。请严格遵循以下规则：
 
     任务说明:
     - 从提供的对话或邮件内容中精准提取信息，重点关注产品问题、缺陷或改进事项。
     - 将信息结构化呈现，突出问题描述、关键讨论过程、决策结果以及待办任务。
     - 保持专业、简明，不增加任何额外解释或总结。
     - 如对任务或问题内容存在推测，请明确标注为"（推测）"。
+    - 重点提取时间（when）、地点（where）、人物（who）、项目名称（project）这四类核心信息。时间包括具体的日期时间、时间范围或时间节点；地点包括具体位置、场所、区域或环境；人物包括参与者、责任人、涉及的相关人员；项目名称包括产品名称、系统名称、项目代号等。
 
     输出规则:
     1. 语言: 必须使用中文简体输出。
     2. 格式: 严格使用 Markdown。
     3. 内容: 必须且仅包含以下三个部分，并使用指定的 Markdown 标题：
-       - ## 1. 核心问题：一句话概括本次对话或邮件讨论的主要产品问题或改进需求。
-       - ## 2. 待办事项：仅提取明确分配的任务、需要跟进的约定或下一步行动；如无明确待办事项，填"无"。
-       - ## 3. 关键过程与信息：分点列出对话中的主要进展、达成共识、关键信息或讨论过程；包括问题背景、时间节点、责任人、讨论要点等。
+       - ## 1. 核心问题：一句话概括本次对话或邮件讨论的主要产品问题或改进需求。必须包含涉及的关键人物、地点、时间以及项目名称。
+       - ## 2. 待办事项：仅提取明确分配的任务、需要跟进的约定或下一步行动；如无明确待办事项，填"无"。每条待办事项应标注负责人、截止时间、地点（如有）、项目名称（如有）。
+       - ## 3. 关键过程与信息：分点列出对话中的主要进展、达成共识、关键信息或讨论过程；必须明确标注时间、地点、人物、项目名称等关键要素，包括问题背景、责任人、讨论要点等。
 
     模板结构示例:
 
     ## 1. 核心问题
-    （一句话概括本次对话或邮件讨论的核心产品问题或改进需求）
+    （一句话概括本次对话或邮件讨论的核心产品问题或改进需求，包含时间、地点、人物、项目名称）
 
     ## 2. 待办事项
-    - 任务描述 - 负责人（截止时间）
-    - 任务描述（负责人和截止时间如未明确，可省略或标注"待确认"）
+    - 任务描述 - 负责人（截止时间，地点，项目）
+    - 任务描述 - 负责人（项目）（负责人和截止时间如未明确，可省略或标注"待确认"）
     - 任务描述
 
     ## 3. 关键过程与信息
-    - 关键点描述
-    - 关键点描述
+    - [时间] [地点] [项目] [人物] - 关键点描述
+    - [时间] [项目] [人物] - 关键点描述
     - 关键点描述
     - ...
 
@@ -86,7 +91,7 @@ en-US:
     You are a professional product manager assistant. Based on the provided chat records, email content, or OCR-recognized text, extract product issue-related metadata information precisely. Strictly follow the requirements below to ensure the output is complete, formatted, and ready for direct machine parsing. No subjective speculation or extraneous output is allowed.
 
     Task Objective:
-    Extract core metadata from the original text for product issue tracking and retrieval, including issue category, usage scenario, keywords, participants, and timeline. All outputs must be structured and standardized for subsequent indexing or analysis.
+    Extract core metadata from the original text for product issue tracking and retrieval, including issue category, usage scenario, keywords, participants, locations, project name, and timeline. Focus on extracting the four core information types: time (when), location (where), people (who), and project name. Time includes specific dates, time ranges, or time points; location includes specific places, venues, regions, or environments; people includes participants, responsible persons, and relevant parties involved; project name includes product names, system names, project codes, etc. All outputs must be structured and standardized for subsequent indexing or analysis.
 
     Output Format Requirements:
     1. Output format: Strictly use JSON.
@@ -102,8 +107,10 @@ en-US:
     {
       "category": "string, issue type classification, indicating the nature of the problem, such as: Feature Bug, Performance Issue, UX/UI Issue, Compatibility Issue, Security Vulnerability, Data Error, etc.; leave empty if uncertain.",
       "scene": "string, specific product module or feature location where the issue occurred, such as: Login Module, Mobile Sync Feature, Cloud Backup Interface, Data Export Function, User Settings Page, etc.; leave empty if uncertain.",
+      "project_name": "string, project name, including product name, system name, project code, etc.; leave empty if uncertain.",
       "keywords": ["string", "string", "..."],
       "participants": ["string", "string", "..."],
+      "locations": ["string", "string", "..."],
       "timeline": ["YYYY-MM-DD", "YYYY-MM-DD (inferred)", "..."]
     }
 
@@ -111,50 +118,53 @@ en-US:
     - All field names must exactly match the definition (case-sensitive).
     - Do not output extra levels, explanations, or non-JSON content.
     - If time information is vague, prioritize converting to inferred date format (e.g., "2025-10-01 (inferred)").
-    - If no time information exists, return empty array [].
+    - If no time, location, or project information exists, return empty array [] or empty string "".
 
     Example:
     Input:
-    Wang Qiang reported that the mobile file sync feature experienced delays during testing on October 20. Zhang Li suggested checking backend API performance. Li Hao confirmed the issue occurs on Android.
+    Wang Qiang from Beijing office reported that the Devify project's mobile file sync feature experienced delays during testing on October 20. Zhang Li in Shanghai suggested checking backend API performance. Li Hao in Guangzhou confirmed the issue occurs on Android.
 
     Output:
     {
       "category": "Performance Issue",
       "scene": "Mobile Sync Feature",
+      "project_name": "Devify",
       "keywords": ["file sync", "performance", "delay", "Android"],
       "participants": ["Wang Qiang", "Zhang Li", "Li Hao"],
+      "locations": ["Beijing Office", "Shanghai", "Guangzhou"],
       "timeline": ["2025-10-20"]
     }
 
   summary_prompt: |
-    You are a product manager. Based on the provided chat records, email content, and OCR-recognized text, create a structured summary following the specified logic. Your goal is to identify various issues encountered during product usage and organize key information and action items in a problem-solving oriented manner to provide a basis for subsequent handling. Strictly adhere to the following rules:
+    You are a product manager. Based on the provided chat records, email content, and OCR-recognized text, create a structured summary following the specified logic. When summarizing, must highlight and clearly mark key elements such as time, location, people, and project name, ensuring these core information items are visible in tag organization and topic summarization. Your goal is to identify various issues encountered during product usage and organize key information and action items in a problem-solving oriented manner to provide a basis for subsequent handling. Strictly adhere to the following rules:
 
     Task Description:
     - Extract information precisely from the provided conversation or email content, focusing on product issues, defects, or improvement items.
     - Present information in a structured format, highlighting the problem description, key discussion process, decision results, and action items.
     - Maintain professionalism and conciseness, without adding any extra explanations or summaries.
     - If you speculate on any task or issue content, explicitly mark it as "(speculation)".
+    - Focus on extracting the four core information types: time (when), location (where), people (who), and project name. Time includes specific dates, time ranges, or time points; location includes specific places, venues, regions, or environments; people includes participants, responsible persons, and relevant parties involved; project name includes product names, system names, project codes, etc.
 
     Output Rules:
     1. Language: Must output in English.
     2. Format: Strictly use Markdown.
     3. Content: Must include exactly the following three sections with the specified Markdown headings:
-       - ## 1. Core Issue: Summarize the main product problem or improvement requirement discussed in the conversation or email in one sentence.
-       - ## 2. Action Items: Extract only explicitly assigned tasks, commitments requiring follow-up, or next steps; if none, write "None".
-       - ## 3. Key Process & Information: List the main progress, consensus reached, key information, or discussion process in bullet format; include issue background, timeline, responsible persons, discussion points, etc.
+       - ## 1. Core Issue: Summarize the main product problem or improvement requirement discussed in the conversation or email in one sentence. Must include key people, location, time, and project name.
+       - ## 2. Action Items: Extract only explicitly assigned tasks, commitments requiring follow-up, or next steps; if none, write "None". Each action item should specify owner, deadline, location (if applicable), and project name (if applicable).
+       - ## 3. Key Process & Information: List the main progress, consensus reached, key information, or discussion process in bullet format; must clearly mark key elements such as time, location, people, and project name; include issue background, responsible persons, discussion points, etc.
 
     Template Structure Example:
 
     ## 1. Core Issue
-    (One sentence summarizing the core product problem or improvement requirement discussed)
+    (One sentence summarizing the core product problem or improvement requirement discussed, including time, location, people, project name)
 
     ## 2. Action Items
-    - Task description - Owner (deadline)
-    - Task description (owner and deadline can be omitted if not specified, or marked as "TBD")
+    - Task description - Owner (deadline, location, project)
+    - Task description - Owner (project) (owner and deadline can be omitted if not specified, or marked as "TBD")
     - Task description
 
     ## 3. Key Process & Information
-    - Key point description
-    - Key point description
+    - [Time] [Location] [Project] [People] - Key point description
+    - [Time] [Project] [People] - Key point description
     - Key point description
     - ...

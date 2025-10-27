@@ -232,7 +232,7 @@ class IssueNode(BaseLangGraphNode):
             user_id = state.get('user_id')
             attachments = state.get('attachments', [])
 
-            jira_handler = JiraIssueHandler(jira_config)
+            jira_handler = JiraIssueHandler(issue_config)
             force = state.get('force', False)
 
             logger.info(
@@ -251,6 +251,7 @@ class IssueNode(BaseLangGraphNode):
                 'summary_content': description,
                 'llm_content': state.get('llm_content', ''),
                 'subject': state.get('subject', ''),
+                'metadata': state.get('metadata', {}),
             }
 
             issue_key = jira_handler.create_issue(
