@@ -713,54 +713,78 @@ from configuration."""
 
         for field_name, field_config in llm_fields.items():
             jira_field = field_config["jira_field"]
+            default_value = field_config.get("default")
+            allow_values = field_config.get("allow_values", [])
 
-            if jira_field in llm_response:
-                value = llm_response[jira_field]
-
-                # Check if value is empty
-                is_empty = (
-                    not value or
-                    (isinstance(value, str) and not value.strip())
-                )
-
-                if is_empty:
-                    # Try to use default value from config
-                    default_value = field_config.get("default")
-                    if default_value:
-                        logger.warning(
-                            f"LLM returned empty value for {jira_field}. "
-                            f"Using default value: {default_value}"
-                        )
-                        value = default_value
-                    else:
-                        # No default value configured - skip field
-                        logger.debug(
-                            f"Skipping empty value for {jira_field} "
-                            f"(no default configured)"
-                        )
-                        continue
-
-                # Special handling for components field
-                # If LLM returns a string instead of list, convert it
-                if field_name == "components" and isinstance(value, str):
-                    # Split by comma or just wrap in a list
-                    if "," in value:
-                        value = [item.strip() for item in value.split(",")]
-                    else:
-                        value = [value]
-
-                # Store with jira_field as key (not field_name)
-                # This ensures consistency between LLM output
-                # and JIRA field names
-                validated_data[jira_field] = value
-                logger.debug(
-                    f"Mapped {jira_field}: {value}"
-                )
-            else:
+            if jira_field not in llm_response:
                 logger.warning(
                     f"Field {jira_field} not in LLM response, "
                     f"skipping field"
                 )
+                continue
+
+            value = llm_response[jira_field]
+
+            # Check if value is empty
+            is_empty = (
+                not value or
+                (isinstance(value, str) and not value.strip())
+            )
+
+            # Handle empty or invalid values
+            if is_empty:
+                if default_value:
+                    logger.warning(
+                        f"LLM returned empty value for {jira_field}. "
+                        f"Using default value: {default_value}"
+                    )
+                    value = default_value
+                else:
+                    logger.debug(
+                        f"Skipping empty value for {jira_field} "
+                        f"(no default configured)"
+                    )
+                    continue
+            elif allow_values:
+                # Validate against allow_values
+                if isinstance(value, list):
+                    normalized_value = [str(item).strip() for item in value]
+                    normalized_allow = [str(av).strip() for av in allow_values]
+                    is_valid = all(
+                        item in normalized_allow for item in normalized_value
+                    )
+                else:
+                    normalized_value = str(value).strip()
+                    normalized_allow = [str(av).strip() for av in allow_values]
+                    is_valid = normalized_value in normalized_allow
+
+                if not is_valid:
+                    if default_value:
+                        logger.warning(
+                            f"LLM returned invalid value '{value}' for "
+                            f"{jira_field}. Available options: {allow_values}. "
+                            f"Using default value: {default_value}"
+                        )
+                        value = default_value
+                    else:
+                        logger.warning(
+                            f"LLM returned invalid value '{value}' for "
+                            f"{jira_field}. Available options: {allow_values}. "
+                            f"Default not configured, skipping field."
+                        )
+                        continue
+
+            # Special handling for components field
+            # If LLM returns a string instead of list, convert it
+            if field_name == "components" and isinstance(value, str):
+                if "," in value:
+                    value = [item.strip() for item in value.split(",")]
+                else:
+                    value = [value]
+
+            # Store validated value
+            validated_data[jira_field] = value
+            logger.debug(f"Mapped {jira_field}: {value}")
 
         return validated_data
 
