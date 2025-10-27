@@ -105,8 +105,8 @@ class WorkflowFinalizeNode(BaseLangGraphNode):
         workflow results.
 
         1. Determine workflow success/failure based on node_errors
-        2. If successful: sync data to database and set SUCCESS status
-        3. If failed: only set FAILED status, no data sync
+        2. Always sync available data to database (if exists)
+        3. Set SUCCESS or FAILED status based on errors
         """
         has_errors = has_node_errors(state)
         force = state.get('force', False)
@@ -120,22 +120,12 @@ class WorkflowFinalizeNode(BaseLangGraphNode):
                 f"Workflow failed with errors in nodes: {error_nodes}"
             )
 
-            # Do not sync any data when workflow fails
-            # This ensures data consistency: FAILED = no data saved
-            # User should use force=true to retry after fixing issues
-            issue_result = state.get('issue_result_data')
-            if issue_result:
-                logger.warning(
-                    f"Workflow failed but issue was created in "
-                    f"external system ({issue_result.get('engine')}): "
-                    f"{issue_result.get('external_id')}. "
-                    "Issue will NOT be synced to database due to workflow "
-                    "errors. Use force=true to retry after fixing issues."
-                )
-
+            # Sync partial data even when workflow fails
+            # Preserves successfully generated content while marking as failed
             logger.info(
-                "Skipping all data sync due to workflow errors"
+                "Syncing partial data despite workflow errors"
             )
+            self._sync_data_to_database(state)
 
             if not force:
                 self.email.set_status(
@@ -196,99 +186,13 @@ class WorkflowFinalizeNode(BaseLangGraphNode):
                 id=self.email.id
             )
 
-            field_updates = {
-                'summary_title': state.get('summary_title', ''),
-                'summary_content': state.get('summary_content', ''),
-                'llm_content': state.get('llm_content', ''),
-                'metadata': state.get('metadata')
-            }
+            # Sync email fields
+            self._sync_email_fields(email, state)
 
-            update_fields = []
-            sync_details = []
+            # Sync attachments
+            self._sync_email_attachments(state)
 
-            for field_name, field_value in field_updates.items():
-                if not field_value:
-                    continue
-
-                setattr(email, field_name, field_value)
-                update_fields.append(field_name)
-
-                if isinstance(field_value, dict):
-                    detail = f"{field_name}({len(field_value)} keys)"
-                    logger.debug(
-                        f"{field_name}: {list(field_value.keys())}"
-                    )
-                else:
-                    detail = f"{field_name}({len(field_value)} chars)"
-                    logger.debug(
-                        f"{field_name}: {str(field_value)[:100]}"
-                    )
-                sync_details.append(detail)
-
-            if update_fields:
-                logger.debug(
-                    f"Saving EmailMessage {self.email.id} "
-                    f"with fields: {update_fields}"
-                )
-                email.save(update_fields=update_fields)
-                logger.info(
-                    f"Synced EmailMessage {self.email.id}: "
-                    f"{', '.join(sync_details)}"
-                )
-
-            attachments = state.get('attachments', [])
-            if attachments:
-                att_sync_count = 0
-                att_sync_summary = []
-
-                for att_data in attachments:
-                    att_id = att_data.get('id')
-                    if not att_id:
-                        continue
-
-                    att_field_updates = {
-                        'ocr_content': att_data.get('ocr_content'),
-                        'llm_content': att_data.get('llm_content')
-                    }
-
-                    att_updates = {}
-                    att_details = []
-
-                    for field_name, field_value in (
-                        att_field_updates.items()
-                    ):
-                        if not field_value:
-                            continue
-
-                        att_updates[field_name] = field_value
-                        field_type = field_name.split('_')[0]
-                        att_details.append(
-                            f"{field_type}({len(field_value)} chars)"
-                        )
-                        logger.debug(
-                            f"Attachment {att_id} {field_name}: "
-                            f"{field_value[:100]}"
-                        )
-
-                    if att_updates:
-                        logger.debug(
-                            f"Updating attachment {att_id} "
-                            f"with fields: {list(att_updates.keys())}"
-                        )
-                        EmailAttachment.objects.filter(
-                            id=att_id
-                        ).update(**att_updates)
-                        att_sync_count += 1
-                        att_sync_summary.append(
-                            f"#{att_id}[{', '.join(att_details)}]"
-                        )
-
-                if att_sync_count > 0:
-                    logger.info(
-                        f"Synced {att_sync_count} attachment(s): "
-                        f"{', '.join(att_sync_summary)}"
-                    )
-
+            # Create issue if exists
             issue_result = state.get('issue_result_data')
             if issue_result:
                 issue = self._create_issue_record(email, issue_result)
@@ -299,6 +203,88 @@ class WorkflowFinalizeNode(BaseLangGraphNode):
                     f"external_id={issue.external_id}, "
                     f"url={issue.issue_url}"
                 )
+
+    def _sync_email_fields(
+        self, email: EmailMessage, state: EmailState
+    ) -> None:
+        """
+        Sync email message fields from state.
+
+        Args:
+            email: EmailMessage object to update
+            state: Current email state
+        """
+        field_updates = {
+            'summary_title': state.get('summary_title', ''),
+            'summary_content': state.get('summary_content', ''),
+            'llm_content': state.get('llm_content', ''),
+            'metadata': state.get('metadata')
+        }
+
+        update_fields = []
+        sync_details = []
+
+        for field_name, field_value in field_updates.items():
+            if not field_value:
+                continue
+
+            setattr(email, field_name, field_value)
+            update_fields.append(field_name)
+
+            if isinstance(field_value, dict):
+                detail = f"{field_name}({len(field_value)} keys)"
+                logger.debug(f"{field_name}: {list(field_value.keys())}")
+            else:
+                detail = f"{field_name}({len(field_value)} chars)"
+                logger.debug(f"{field_name}: {str(field_value)[:100]}")
+            sync_details.append(detail)
+
+        if update_fields:
+            email.save(update_fields=update_fields)
+            logger.info(
+                f"Synced EmailMessage {email.id}: "
+                f"{', '.join(sync_details)}"
+            )
+
+    def _sync_email_attachments(self, state: EmailState) -> None:
+        """
+        Sync email attachments from state.
+
+        Args:
+            state: Current email state
+        """
+        attachments = state.get('attachments', [])
+        if not attachments:
+            return
+
+        att_sync_count = 0
+        att_sync_summary = []
+
+        for att_data in attachments:
+            att_id = att_data.get('id')
+            if not att_id:
+                continue
+
+            att_updates = {}
+            if att_data.get('ocr_content'):
+                att_updates['ocr_content'] = att_data.get('ocr_content')
+            if att_data.get('llm_content'):
+                att_updates['llm_content'] = att_data.get('llm_content')
+
+            if att_updates:
+                EmailAttachment.objects.filter(id=att_id).update(**att_updates)
+                att_sync_count += 1
+                field_names = list(att_updates.keys())
+                att_sync_summary.append(f"#{att_id}[{', '.join(field_names)}]")
+                logger.debug(
+                    f"Updated attachment {att_id} with fields: {field_names}"
+                )
+
+        if att_sync_count > 0:
+            logger.info(
+                f"Synced {att_sync_count} attachment(s): "
+                f"{', '.join(att_sync_summary)}"
+            )
 
     def _create_issue_record(
         self,

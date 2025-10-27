@@ -100,7 +100,8 @@ from devtoolbox.api_clients.jira_client import JiraClient
 from ..llm import call_llm
 from .jira_utils import (
     build_summary_field, get_grouped_configs, preprocess_api_data,
-    build_description_field, build_field_prompt, DEFAULT_LANGUAGE
+    build_description_field, build_field_prompt, remove_emoji,
+    DEFAULT_LANGUAGE
 )
 
 logger = logging.getLogger(__name__)
@@ -476,13 +477,15 @@ class JiraIssueHandler:
             if isinstance(value, list):
                 for item in value:
                     if item:
-                        # Remove spaces for JIRA label compatibility
+                        # Remove spaces and emojis for JIRA label compatibility
                         label = str(item).replace(' ', '')
+                        label = remove_emoji(label)
                         labels.append(label)
             # Handle other values (e.g., category, scene)
             else:
-                # Remove spaces for JIRA label compatibility
+                # Remove spaces and emojis for JIRA label compatibility
                 label = str(value).replace(' ', '')
+                label = remove_emoji(label)
                 labels.append(label)
 
         logger.debug(f"Extracted {len(labels)} labels from metadata")
