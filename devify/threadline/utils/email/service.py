@@ -14,7 +14,6 @@ from typing import Dict, List, Optional
 from django.contrib.auth.models import User
 from django.db.models import Q
 from django.utils import timezone
-from django.conf import settings
 
 from threadline.models import (
     EmailAlias,
@@ -42,6 +41,7 @@ class EmailSaveService:
         self._email_to_user_map = {}
         self._user_cache = {}
         self._mappings_loaded = False
+
 
     def save_email(
         self,
@@ -124,10 +124,12 @@ class EmailSaveService:
                 f"email {email_msg.id}"
             )
 
-            # Create email-specific attachment directory using UUID
+            # Create email-specific attachment directory using message_id
+            # message_id format is "email_XXXXXXXX" which is filesystem-safe
+            attachment_dir_name = email_msg.message_id
             user_attachment_dir = os.path.join(
                 settings.EMAIL_ATTACHMENT_DIR,
-                str(email_msg.uuid)
+                attachment_dir_name
             )
             os.makedirs(user_attachment_dir, exist_ok=True)
 

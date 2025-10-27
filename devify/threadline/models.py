@@ -225,8 +225,7 @@ class EmailMessage(models.Model):
         unique=True,
         editable=False,
         db_index=True,
-        null=True,
-        blank=True,
+        default=uuid_lib.uuid4,
         verbose_name=_('UUID'),
         help_text=_('Unique identifier for external references')
     )
@@ -417,8 +416,7 @@ class EmailAttachment(models.Model):
         unique=True,
         editable=False,
         db_index=True,
-        null=True,
-        blank=True,
+        default=uuid_lib.uuid4,
         verbose_name=_('UUID'),
         help_text=_('Unique identifier for external references')
     )
