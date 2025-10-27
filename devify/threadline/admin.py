@@ -37,7 +37,7 @@ Last Updated: 2024
 import json
 
 from django import forms
-from django.contrib import admin
+from django.contrib import admin, messages
 from django.db import models
 from django.urls import reverse
 from django.utils.safestring import mark_safe
@@ -52,6 +52,7 @@ from .models import (
     EmailAttachment,
     Issue
 )
+from .tasks.email_workflow import process_email_workflow
 
 
 def format_json_preview(value, max_length=100):
@@ -242,6 +243,7 @@ class EmailMessageAdmin(admin.ModelAdmin):
         'text_content_preview', 'summary_content_preview',
         'llm_content_preview', 'metadata_preview'
     ]
+    actions = ['trigger_processing', 'trigger_processing_force']
 
     fieldsets = (
         (_('Email Information'), {
@@ -431,6 +433,62 @@ class EmailMessageAdmin(admin.ModelAdmin):
         """
         obj._from_admin = True
         super().save_model(request, obj, form, change)
+
+    @admin.action(description=_('Trigger processing for selected emails'))
+    def trigger_processing(self, request, queryset):
+        """
+        Trigger email processing workflow for selected emails.
+
+        This action schedules the email processing task for selected
+        email messages. Will skip already processed emails.
+        """
+        count = 0
+        for email in queryset:
+            try:
+                process_email_workflow.delay(str(email.id), force=False)
+                count += 1
+            except Exception as e:
+                self.message_user(
+                    request,
+                    f"Failed to trigger processing for email {email.id}: {e}",
+                    level=messages.ERROR
+                )
+
+        self.message_user(
+            request,
+            f"Successfully triggered processing for {count} email(s)",
+            level=messages.SUCCESS
+        )
+
+    @admin.action(
+        description=_('Force reprocess selected emails')
+    )
+    def trigger_processing_force(self, request, queryset):
+        """
+        Force reprocess selected emails regardless of current status.
+
+        This action triggers reprocessing even if the email has already
+        been processed. Use this to regenerate summaries, metadata,
+        or issue records.
+        """
+        count = 0
+        for email in queryset:
+            try:
+                process_email_workflow.delay(str(email.id), force=True)
+                count += 1
+            except Exception as e:
+                self.message_user(
+                    request,
+                    f"Failed to force reprocess email {email.id}: {e}",
+                    level=messages.ERROR
+                )
+
+        self.message_user(
+            request,
+            f"Successfully triggered force reprocessing for {count} email(s)",
+            level=messages.SUCCESS
+        )
+
 
     def get_queryset(self, request):
         """Optimize queryset with select_related and prefetch_related."""
