@@ -58,7 +58,8 @@ class SummaryNode(BaseLangGraphNode):
             return False
 
         force = state.get('force', False)
-        llm_content = state.get('llm_content', '').strip()
+        llm_content_raw = state.get('llm_content', '')
+        llm_content = llm_content_raw.strip() if llm_content_raw else ''
 
         if not force and not llm_content:
             logger.error(
@@ -108,8 +109,17 @@ class SummaryNode(BaseLangGraphNode):
         attachments = state.get('attachments', [])
 
         for att in attachments:
-            llm_content = att.get('llm_content', '').strip()
-            if att.get('is_image') and llm_content:
+            # Only process image attachments
+            if not att.get('is_image'):
+                continue
+
+            # Get llm_content and check if it exists
+            llm_content_raw = att.get('llm_content')
+            if not llm_content_raw:
+                continue
+
+            llm_content = llm_content_raw.strip()
+            if llm_content:
                 safe_filename = att.get('safe_filename', att.get('filename'))
                 ocr_contents.append(
                     f"[Attachment: {safe_filename}]\n{llm_content}"
@@ -131,11 +141,14 @@ class SummaryNode(BaseLangGraphNode):
         try:
             if not summary_content or force:
                 logger.info("Generating summary content")
-                summary_content = call_llm(
+                summary_content_raw = call_llm(
                     summary_prompt,
                     combined_content
                 )
-                summary_content = summary_content.strip()
+                if summary_content_raw:
+                    summary_content = summary_content_raw.strip()
+                else:
+                    summary_content = ''
                 if summary_content:
                     logger.info("Summary content generated successfully")
                 else:
@@ -143,11 +156,14 @@ class SummaryNode(BaseLangGraphNode):
 
             if not summary_title or force:
                 logger.info("Generating summary title")
-                summary_title = call_llm(
+                summary_title_raw = call_llm(
                     summary_title_prompt,
                     combined_content
                 )
-                summary_title = summary_title.strip()
+                if summary_title_raw:
+                    summary_title = summary_title_raw.strip()
+                else:
+                    summary_title = ''
                 if summary_title:
                     logger.info("Summary title generated successfully")
                 else:

@@ -111,11 +111,13 @@ class LLMEmailNode(BaseLangGraphNode):
         try:
             logger.info("Processing email content with LLM")
 
+            logger.debug(f"Before LLM call: {content_with_ocr}")
             llm_result = call_llm(
                 email_content_prompt,
                 content_with_ocr
             )
-            llm_content = llm_result.strip()
+            logger.debug(f"After LLM call: {llm_result}")
+            llm_content = llm_result.strip() if llm_result else ''
 
             if llm_content:
                 logger.info("LLM email processing successful")
@@ -133,6 +135,7 @@ class LLMEmailNode(BaseLangGraphNode):
                 }
 
         except Exception as e:
+            logger.exception(e)
             logger.error(f"LLM email processing failed: {e}")
             error_message = f'LLM email processing failed: {str(e)}'
             updated_state = add_node_error(
@@ -174,15 +177,30 @@ class LLMEmailNode(BaseLangGraphNode):
 
         ocr_content_map = {}
         for att in attachments:
-            llm_content = att.get('llm_content', '').strip()
-            if att.get('is_image') and llm_content:
-                safe_filename = att.get('safe_filename') or att.get('filename')
-                if safe_filename:
-                    ocr_content_map[safe_filename] = llm_content
-                    logger.debug(
-                        f"Mapped {safe_filename} to OCR content "
-                        f"({len(llm_content)} chars)"
-                    )
+            # Only process image attachments
+            if not att.get('is_image'):
+                continue
+
+            filename = att.get('filename')
+            logger.debug(f"Processing image attachment: {filename}")
+
+            # Get llm_content and check if it exists
+            llm_content_raw = att.get('llm_content')
+            if llm_content_raw:
+                llm_content = llm_content_raw.strip()
+            else:
+                logger.debug(
+                    f"No LLM content for {filename}, skipping"
+                )
+                continue
+
+            safe_filename = att.get('safe_filename') or filename
+            if safe_filename:
+                ocr_content_map[safe_filename] = llm_content
+                logger.debug(
+                    f"Mapped {safe_filename} to OCR content "
+                    f"({len(llm_content)} chars)"
+                )
 
         logger.info(
             f"Created OCR content map with {len(ocr_content_map)} entries"

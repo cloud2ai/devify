@@ -879,10 +879,17 @@ from configuration."""
                 file_path = attachment.get("file_path", "")
                 file_size = attachment.get("file_size", 0)
 
+                # Only process image attachments
+                if not is_image:
+                    logger.debug(
+                        f"Skipping non-image attachment: {filename}"
+                    )
+                    skipped_count += 1
+                    continue
+
                 logger.info(
-                    f"Processing attachment: {filename} "
-                    f"(type: {content_type}, is_image: {is_image}, "
-                    f"size: {file_size} bytes)"
+                    f"Processing image attachment: {filename} "
+                    f"(type: {content_type}, size: {file_size} bytes)"
                 )
 
                 logger.debug(
@@ -890,7 +897,9 @@ from configuration."""
                 )
 
                 if not os.path.exists(file_path):
-                    logger.warning(f"Attachment file not found: {file_path}")
+                    logger.warning(
+                        f"Attachment file not found: {file_path}"
+                    )
                     skipped_count += 1
                     continue
 

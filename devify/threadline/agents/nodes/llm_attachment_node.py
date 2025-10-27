@@ -144,7 +144,7 @@ class LLMAttachmentNode(BaseLangGraphNode):
                     ocr_prompt,
                     ocr_content
                 )
-                llm_content = llm_result.strip()
+                llm_content = llm_result.strip() if llm_result else ''
 
                 if llm_content:
                     attachment['llm_content'] = llm_content

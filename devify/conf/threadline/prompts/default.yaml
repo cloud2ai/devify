@@ -47,44 +47,46 @@ common:
   ocr_prompt: |
     Please output in {language}.
 
-    Your task is to transform OCR-recognized content into a complete, natural language narrative. Never output raw text lists or tables — instead, describe all information as if you were explaining the content to someone who cannot see the image.
+    Your task is to CLEAN and ORGANIZE OCR-recognized content, making it more readable and well-structured while remaining faithful to the original OCR text. DO NOT add interpretations, explanations, or extra information beyond what is present in the OCR results.
 
     Task Objectives:
 
-    Complete Description
-    - Describe ALL OCR content comprehensively, including titles, categories, labels, metrics, numerical values, timestamps, locations, status indicators, and any other visible information.
-    - Preserve all information from the original OCR without omission or distortion.
-    - Maintain consistency with the source material at all times.
+    Complete Information Preservation
+    - Include ALL OCR content regardless of whether it seems relevant or not.
+    - Do NOT filter out any text based on relevance judgment.
+    - Describe everything visible in the screenshot: titles, menus, toolbars, status bars, buttons, labels, etc.
+    - Even if some content appears to be UI elements or seems unrelated, still include it in your output.
+    - Keep all numbers, codes, timestamps, and identifiers exactly as they appear.
 
-    Data Relationships & Trends
-    - Describe trends, changes, and patterns explicitly using descriptive terms: "increased by X%", "decreased from Y to Z", "peaked at", "dropped to", "remained stable at", "fluctuated between".
-    - For charts and graphs: describe the overall trend, notable peaks/valleys, and any anomalies or outliers.
-    - For tables: explain relationships between rows/columns, comparisons, and significant differences.
-    - Express data in context rather than isolated numbers (e.g., "CPU usage reached 95% at noon, significantly higher than the morning average of 45%").
+    Clean and Organize OCR Text
+    - Correct obvious OCR errors (e.g., "1" → "I", "rn" → "m") when the correct word is clear from context.
+    - Fix spacing issues (combine split words, add missing spaces).
+    - Remove redundant repeated characters or artifacts.
+    - Organize text into logical paragraphs or sections based on the original structure.
 
-    Logical Organization
-    - Structure your description by logical groupings: chronologically for time-series data, by category for classifications, by metric for performance data, or by section for documents.
-    - Use clear transitions between different sections or topics.
-    - Present information in a reader-friendly flow that makes relationships and hierarchies clear.
+    Preserve Original Content
+    - DO NOT add interpretations, explanations, or supplementary information beyond what is in the OCR text.
+    - DO NOT expand brief notes into detailed descriptions (unless it's a list/table that needs language conversion).
+    - DO NOT translate specialized terms or brand names.
+    - If the OCR text is incomplete or unclear, keep it as-is without adding speculation.
 
-    Accuracy & Clarity
-    - For uncertain, incomplete, or potentially erroneous OCR content, mark it as [unclear] and briefly explain the issue (e.g., "text partially obscured", "ambiguous characters").
-    - Emphasize critical, abnormal, or important information naturally within your description.
-    - Avoid speculation or subjective interpretation — stick to what is visible in the OCR results.
+    Maintain Accuracy
     - Keep proper nouns, technical terms, product names, and brand names in their original language. Do not translate them (e.g., keep "CPU", "AWS", "Kubernetes", "Chrome" as-is, even when outputting in Chinese).
+    - Preserve all numbers, dates, and technical data exactly as they appear.
+    - If OCR result is ambiguous, mark uncertain parts but do not add explanations.
 
     Output Format
-    - Use natural language paragraphs or structured bullet points, whichever is more appropriate for the content type.
-    - Do NOT reproduce original tables, lists, or raw OCR text.
-    - Do NOT add summaries, conclusions, or commentary beyond describing what is present.
-    - Keep the description clear, concise, and informative.
+    - Output clean, well-structured text that mirrors the original content's organization.
+    - For lists: convert bullet points or numbered items into natural language sentences that describe each item.
+    - For tables: describe the information in natural language, mentioning row and column relationships when relevant.
+    - For documents: maintain the original hierarchy (titles, sections, paragraphs).
+    - Do NOT add summaries, conclusions, or commentary beyond what is present in the OCR text.
+    - Do NOT expand on what the original text says or speculate about missing information.
 
-    Common Scenarios
-    - Performance monitoring dashboards (CPU, memory, network bandwidth, disk I/O)
-    - Charts and graphs (line charts, bar charts, pie charts showing trends or distributions)
-    - Data tables and reports (financial statements, statistical summaries, inventory lists)
-    - Document pages (contracts, presentations, meeting notes, screenshots of text)
-    - Any text, numbers, or structured information captured via OCR.
+    Critical Rules
+    - If the OCR text is incomplete or ends abruptly, output exactly what is there without adding anything. Do NOT suggest what might have followed or what the complete version could be.
+    - NEVER omit content because you think it's "not relevant" or "UI noise". Screenshots often include important context in UI elements, headers, footers, and status indicators.
+    - Completeness is more important than relevance - your job is to clean and organize, not to filter content.
 
   summary_title_prompt: |
     Please output in {language}.

@@ -78,6 +78,7 @@ class BaseLangGraphNode(ABC):
 
         except Exception as e:
             logger.error(f"[{self.node_name}] Error occurred: {e}")
+            logger.exception(e)
             return self._handle_error(e, state)
 
     def can_enter_node(self, state: EmailState) -> bool:
