@@ -5,8 +5,10 @@ This module contains APIView classes for EmailMessage model CRUD operations.
 """
 
 import logging
+import re
 from rest_framework import status, serializers
 from rest_framework.response import Response
+from django.db.models import Q
 from drf_spectacular.utils import extend_schema, OpenApiParameter
 from drf_spectacular.types import OpenApiTypes
 from core.swagger import response, error_response, pagination_response
@@ -71,14 +73,32 @@ class EmailMessageAPIView(BaseAPIView):
             self.request = request
             queryset = self.filter_by_user(self.get_queryset())
 
-            # Search functionality
+            # Enhanced search functionality with multi-keyword AND logic
             search = request.query_params.get('search', None)
             if search:
-                queryset = queryset.filter(
-                    Q(subject__icontains=search) |
-                    Q(sender__icontains=search) |
-                    Q(recipients__icontains=search)
-                )
+                # Parse multiple keywords from search query
+                # Support space or comma separated keywords
+                # This will split "lizengyuan project" into
+                # ["lizengyuan", "project"]
+                # But keep "lizengyuan" as a single keyword
+                keywords = [k.strip() for k in re.split(r'[,\s]+', search)
+                            if k.strip()]
+
+                logger.info(f"Search query parsed into keywords: {keywords}")
+
+                if keywords:
+                    # Build AND logic: each keyword must match at least one field
+                    for keyword in keywords:
+                        logger.debug(f"Filtering by keyword: '{keyword}'")
+                        queryset = queryset.filter(
+                            Q(subject__icontains=keyword) |
+                            Q(sender__icontains=keyword) |
+                            Q(recipients__icontains=keyword) |
+                            Q(summary_title__icontains=keyword) |
+                            Q(summary_content__icontains=keyword) |
+                            Q(llm_content__icontains=keyword) |
+                            Q(text_content__icontains=keyword)
+                        )
 
             # Filter by status
             message_status = request.query_params.get('status', None)
@@ -204,7 +224,8 @@ class EmailMessageDetailAPIView(BaseAPIView):
         """
         try:
             message = self.get_object(uuid)
-            serializer = EmailMessageSerializer(message, context={'request': request})
+            serializer = EmailMessageSerializer(
+                message, context={'request': request})
 
             return Response({
                 'code': 200,
@@ -246,7 +267,8 @@ class EmailMessageDetailAPIView(BaseAPIView):
 
             if serializer.is_valid(raise_exception=True):
                 updated_message = serializer.save()
-                response_serializer = EmailMessageSerializer(updated_message, context={'request': request})
+                response_serializer = EmailMessageSerializer(
+                    updated_message, context={'request': request})
 
                 return Response({
                     'code': 200,

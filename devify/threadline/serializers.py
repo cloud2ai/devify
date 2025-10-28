@@ -275,8 +275,8 @@ class EmailMessageSerializer(serializers.ModelSerializer):
             'subject', 'sender', 'recipients', 'received_at',
             'raw_content', 'html_content', 'text_content',
             'summary_title', 'summary_content', 'summary_priority',
-            'llm_content', 'status', 'status_display', 'error_message',
-            'attachments', 'created_at', 'updated_at'
+            'llm_content', 'metadata', 'status', 'status_display',
+            'error_message', 'attachments', 'created_at', 'updated_at'
         ]
         read_only_fields = [
             'id', 'uuid', 'status', 'created_at', 'updated_at'
@@ -393,6 +393,28 @@ class EmailMessageSerializer(serializers.ModelSerializer):
             dict: Serialized data with replaced image placeholders
         """
         data = super().to_representation(instance)
+
+        # Check if this is a list view by checking if parent serializer has many=True
+        is_list_view = self.parent is not None
+
+        # Only limit content for list views to reduce payload size
+        # Detail views should return full content
+        if is_list_view:
+            # Remove large content fields to reduce payload size
+            data.pop('raw_content', None)
+            data.pop('html_content', None)
+
+            # Limit text_content and llm_content for preview
+            max_length = 500
+            if data.get('text_content'):
+                if len(data['text_content']) > max_length:
+                    text_content = data['text_content'][:max_length] + '...'
+                    data['text_content'] = text_content
+
+            if data.get('llm_content'):
+                if len(data['llm_content']) > max_length:
+                    llm_content = data['llm_content'][:max_length] + '...'
+                    data['llm_content'] = llm_content
 
         # Build filename to URL mapping from attachments
         attachment_url_map = {}
