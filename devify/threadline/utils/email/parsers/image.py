@@ -705,6 +705,15 @@ class EmailImageProcessor:
                 return info
         return None
 
+    def _find_by_filename(self, filename: str,
+                          image_placeholders: Dict) -> Optional[Dict]:
+        """Find image by filename in placeholders and return info dict."""
+        for placeholder, info in image_placeholders.items():
+            info_filename = info.get('filename', '')
+            if (filename in info_filename or info_filename in filename):
+                return info
+        return None
+
     def _extract_filename(self, src: str) -> str:
         """Extract filename from file:// URL."""
         return src.split('/')[-1] if '/' in src else src
