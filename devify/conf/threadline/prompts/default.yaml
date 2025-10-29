@@ -52,46 +52,72 @@ common:
   ocr_prompt: |
     Please output in {language}.
 
-    Your task is to CLEAN and ORGANIZE OCR-recognized content, making it more readable and well-structured while remaining faithful to the original OCR text. DO NOT add interpretations, explanations, or extra information beyond what is present in the OCR results.
+    Your task is to UNDERSTAND and DESCRIBE the key information from OCR-recognized content using clear, natural language. Analyze the OCR text to extract meaningful information, important data points, and critical details, then present them in a structured and readable format.
 
     Task Objectives:
 
-    Complete Information Preservation
-    - Include ALL OCR content regardless of whether it seems relevant or not.
-    - Do NOT filter out any text based on relevance judgment.
-    - Describe everything visible in the screenshot: titles, menus, toolbars, status bars, buttons, labels, etc.
-    - Even if some content appears to be UI elements or seems unrelated, still include it in your output.
-    - Keep all numbers, codes, timestamps, and identifiers exactly as they appear.
+    Understand and Extract Key Information
+    - Analyze the OCR content to understand its meaning and context.
+    - Identify key information: important data points, values, statuses, actions, and events.
+    - Extract relevant details: numbers, dates, names, locations, errors, warnings, configurations, etc.
+    - Recognize the type of content: screenshots, documents, forms, logs, error messages, etc.
+    - Understand relationships between different pieces of information (causes, effects, sequences, etc.).
 
-    Clean and Organize OCR Text
-    - Correct obvious OCR errors (e.g., "1" → "I", "rn" → "m") when the correct word is clear from context.
-    - Fix spacing issues (combine split words, add missing spaces).
-    - Remove redundant repeated characters or artifacts.
-    - Organize text into logical paragraphs or sections based on the original structure.
+    Describe Key Information Clearly
+    - Present extracted information in natural, fluent language appropriate for {language}.
+    - Organize information logically (by importance, timeline, category, etc.).
+    - Use clear, descriptive sentences that convey the meaning and context.
+    - For technical content: explain what it means, not just what it says.
+    - For UI screenshots: describe what is shown (controls, states, data) and their significance.
+    - For error messages: explain the error, its context, and potential causes.
+    - For forms/data: extract and describe the key fields and values.
 
-    Preserve Original Content
-    - DO NOT add interpretations, explanations, or supplementary information beyond what is in the OCR text.
-    - DO NOT expand brief notes into detailed descriptions (unless it's a list/table that needs language conversion).
-    - DO NOT translate specialized terms or brand names.
-    - If the OCR text is incomplete or unclear, keep it as-is without adding speculation.
-
-    Maintain Accuracy
-    - Keep proper nouns, technical terms, product names, and brand names in their original language. Do not translate them (e.g., keep "CPU", "AWS", "Kubernetes", "Chrome" as-is, even when outputting in Chinese).
-    - Preserve all numbers, dates, and technical data exactly as they appear.
-    - If OCR result is ambiguous, mark uncertain parts but do not add explanations.
+    Maintain Accuracy and Completeness
+    - All specific values (numbers, codes, timestamps, IDs) must be preserved exactly as they appear.
+    - Keep proper nouns, technical terms, and brand names in their original language, especially English terms (e.g., "CPU", "AWS", "Kubernetes", "Error 404", "Save", "Cancel").
+    - For English proper nouns, technical terms, or key phrases: keep them in English, but you may add translations in parentheses when helpful for understanding.
+      Example: "OpenAI API (OpenAI 应用程序接口)" or "Error 404 Not Found (错误 404 未找到)"
+      Example: "Save Button (保存按钮)" or "User Profile (用户配置文件)"
+    - Translations in parentheses are optional and should only be added when they enhance understanding in the target language.
+    - When output language is English, keep all terms in English without translation parentheses.
+    - Include all relevant key information; do not omit important details.
+    - If OCR text is unclear or ambiguous, describe what can be determined and mark uncertain parts.
+    - Correct obvious OCR errors only when the correct value is clear from context.
 
     Output Format
-    - Output clean, well-structured text that mirrors the original content's organization.
-    - For lists: convert bullet points or numbered items into natural language sentences that describe each item.
-    - For tables: describe the information in natural language, mentioning row and column relationships when relevant.
-    - For documents: maintain the original hierarchy (titles, sections, paragraphs).
-    - Do NOT add summaries, conclusions, or commentary beyond what is present in the OCR text.
-    - Do NOT expand on what the original text says or speculate about missing information.
+    - Start with a brief overview of what the content is (e.g., "Screenshot showing...", "Error message indicating...", "Form containing...").
+    - Then describe the key information in a structured, paragraph-based format.
+    - Use clear headings or sections if the content has multiple distinct parts.
+    - For lists/tables: extract and describe the key items and their relationships.
+    - For logs: identify and describe significant events, errors, or patterns.
+    - For UI elements: describe their states, values, and any important interactions visible.
+
+    Content Filtering (Use Extreme Caution)
+    - Only omit content that is CLEARLY and OBVIOUSLY irrelevant with 100% certainty.
+    - Examples of clearly irrelevant content (safe to omit):
+      * Pure decorative elements (repeated logos, background patterns, non-functional graphics)
+      * Redundant repeated text that adds no new information (same text appearing 3+ times identically)
+      * Generic UI chrome that is identical across all instances (standard window borders, scroll bars)
+    - Examples of content to ALWAYS KEEP (even if seems minor):
+      * Any text with numbers, codes, IDs, timestamps, or identifiers
+      * Status indicators, warning messages, error codes, or alerts
+      * Button labels, menu items, or options (even if standard UI)
+      * Field names, labels, or captions in forms or interfaces
+      * Any text that might indicate context, state, or configuration
+      * Page numbers, version numbers, or metadata
+      * Tooltips, hints, or help text
+    - When in doubt, ALWAYS INCLUDE rather than omit. It is better to include potentially irrelevant content than to risk losing important information.
+    - If you are uncertain whether content is relevant, err on the side of inclusion and describe it.
+    - Remember: What seems irrelevant in isolation might be crucial context when combined with other information.
 
     Critical Rules
-    - If the OCR text is incomplete or ends abruptly, output exactly what is there without adding anything. Do NOT suggest what might have followed or what the complete version could be.
-    - NEVER omit content because you think it's "not relevant" or "UI noise". Screenshots often include important context in UI elements, headers, footers, and status indicators.
-    - Completeness is more important than relevance - your job is to clean and organize, not to filter content.
+    - Focus on MEANING and CONTEXT, not just raw text extraction.
+    - Extract and DESCRIBE key information rather than just copying OCR text.
+    - Use natural language that a human would understand without seeing the original image.
+    - Prioritize important information while being extremely cautious about omitting anything.
+    - If content is technical, provide explanations that make it accessible.
+    - Be concise but comprehensive - cover all important points without unnecessary verbosity.
+    - When filtering content, apply the principle: "When uncertain, include and describe."
 
   summary_title_prompt: |
     Please output in {language}.

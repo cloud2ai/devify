@@ -228,9 +228,8 @@ class EmailMessageAdmin(admin.ModelAdmin):
     """Admin interface for EmailMessage model."""
 
     list_display = [
-        'subject_preview', 'user', 'sender', 'status',
-        'fetch_retry_count', 'attachment_count', 'issue_count',
-        'received_at'
+        'id', 'uuid', 'summary_title_preview', 'subject_preview', 'user',
+        'status', 'attachment_count', 'issue_count', 'received_at'
     ]
     list_filter = ['status', 'received_at', 'created_at']
     search_fields = [
@@ -310,6 +309,14 @@ class EmailMessageAdmin(admin.ModelAdmin):
     formfield_overrides = {
         models.JSONField: {'widget': JSONEditorWidget}
     }
+
+    @admin.display(description=_('Summary Title'))
+    def summary_title_preview(self, obj):
+        """Display truncated summary title."""
+        if not obj.summary_title:
+            return '-'
+        return (obj.summary_title[:60] + '...'
+                if len(obj.summary_title) > 60 else obj.summary_title)
 
     @admin.display(description=_('Subject'))
     def subject_preview(self, obj):
