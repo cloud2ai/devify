@@ -6,13 +6,13 @@ languages and scenes. It provides dynamic language detection and
 fallback mechanisms for international users.
 """
 
+import logging
 import os
 import re
-import yaml
-import logging
-from typing import Dict, Any, Optional
+from typing import Any, Dict, Optional
 
 from django.conf import settings
+import yaml
 
 logger = logging.getLogger(__name__)
 
@@ -78,8 +78,16 @@ class PromptConfigManager:
         self,
         scene: str
     ) -> Optional[Dict[str, Any]]:
-        """Load scene-specific prompts from prompts/{scene}.yaml"""
+        """
+        Load scene-specific prompts from prompts/{scene}.yaml
+
+        Note: Scene prompts are cached but language-specific rendering
+        happens at runtime, so language changes take effect immediately.
+        """
         if scene in self.scene_prompts_cache:
+            logger.debug(
+                f"Using cached scene prompts for scene: {scene}"
+            )
             return self.scene_prompts_cache[scene]
 
         scenarios = self.scenarios_config.get('scenarios', {})
@@ -146,66 +154,95 @@ class PromptConfigManager:
     ) -> Dict[str, Any]:
         """
         Merge scene prompts with default prompts
-        Priority: scene prompts > language-specific > common prompts
-        Common prompts are rendered with English shared snippets
-        Language-specific prompts are rendered with their language snippets
+        All prompts are now unified in common section
+        Priority: scene common prompts > default common prompts
+        Runtime replacement of {language} variable with language display name
         """
         merged = {}
 
         # Get language display name for {language} variable
         lang_display = self._get_language_display_name(language)
+        logger.info(
+            f"Prompt language config: code={language}, "
+            f"display_name={lang_display}"
+        )
 
-        en_shared_snippets = self.default_prompts.get('shared', {}).get(
-            'en-US',
-            {}
+        # Prepare shared snippets with language variable
+        # Use DEFAULT_LANGUAGE or first available language
+        shared_snippets_all = self.default_prompts.get('shared', {})
+        default_shared_lang = (
+            settings.DEFAULT_LANGUAGE
+            if settings.DEFAULT_LANGUAGE in shared_snippets_all
+            else (list(shared_snippets_all.keys())[0]
+                  if shared_snippets_all
+                  else settings.DEFAULT_LANGUAGE)
+        )
+        shared_snippets = shared_snippets_all.get(
+            default_shared_lang, {}
         ).copy()
-        en_shared_snippets['language'] = lang_display
+        shared_snippets['language'] = lang_display
 
-        common_prompts = self.default_prompts.get('common', {})
-        for key, value in common_prompts.items():
+        logger.info(
+            f"Using language for prompts: {lang_display} "
+            f"(code={language}, shared_snippets_lang={default_shared_lang})"
+        )
+
+        # Load default common prompts
+        default_common_prompts = self.default_prompts.get('common', {})
+        for key, value in default_common_prompts.items():
             if isinstance(value, str):
-                merged[key] = self._render_prompt(value, en_shared_snippets)
-            else:
-                merged[key] = value
-
-        lang_shared_snippets = self.default_prompts.get('shared', {}).get(
-            language,
-            {}
-        ).copy()
-        lang_shared_snippets['language'] = lang_display
-
-        default_lang_prompts = self.default_prompts.get(language, {})
-        for key, value in default_lang_prompts.items():
-            if isinstance(value, str):
-                merged[key] = self._render_prompt(value, lang_shared_snippets)
-            else:
-                merged[key] = value
-
-        if scene_prompts:
-            scene_lang_prompts = scene_prompts.get(language, {})
-            for key, value in scene_lang_prompts.items():
-                if isinstance(value, str):
-                    merged[key] = self._render_prompt(
-                        value,
-                        lang_shared_snippets
+                rendered = self._render_prompt(value, shared_snippets)
+                merged[key] = rendered
+                # Log first 100 chars of prompt to show language usage
+                if key in ['summary_prompt', 'metadata_prompt',
+                          'email_content_prompt']:
+                    preview = rendered[:100].replace('\n', ' ')
+                    logger.info(
+                        f"Rendered {key} preview (first 100 chars): "
+                        f"{preview}..."
                     )
+            else:
+                merged[key] = value
+
+        # Override with scene-specific prompts if available
+        if scene_prompts:
+            scene_common_prompts = scene_prompts.get('common', {})
+            for key, value in scene_common_prompts.items():
+                if isinstance(value, str):
+                    rendered = self._render_prompt(value, shared_snippets)
+                    merged[key] = rendered
+                    if key in ['summary_prompt', 'metadata_prompt',
+                              'email_content_prompt']:
+                        preview = rendered[:100].replace('\n', ' ')
+                        logger.info(
+                            f"Scene-specific {key} preview: {preview}..."
+                        )
                 else:
                     merged[key] = value
 
         return merged
 
     def get_language_config(self, language: str) -> Dict[str, Any]:
-        """Get language configuration for display purposes"""
-        languages = self.languages_config.get('languages', [])
+        """
+        Get language configuration for display purposes.
 
-        for lang in languages:
-            if lang.get('code') == language:
-                return {
-                    'name': lang.get('name'),
-                    'native_name': lang.get('native_name')
-                }
+        Args:
+            language: Language code (e.g., 'zh-CN', 'en-US', 'es')
 
-        raise KeyError(f"Language '{language}' not found")
+        Returns:
+            dict: Language configuration with name, native_name, english_name
+
+        Raises:
+            KeyError: If language not found
+        """
+        lang_config = self._find_language_config(language)
+        if not lang_config:
+            raise KeyError(f"Language '{language}' not found")
+
+        return {
+            'name': lang_config.get('name'),
+            'native_name': lang_config.get('native_name')
+        }
 
     def get_scene_config(
         self,
@@ -241,6 +278,10 @@ class PromptConfigManager:
         Loads scene prompts, merges with defaults, and renders variables
         """
         lang = self._normalize_language(language)
+        logger.info(
+            f"Loading prompt config: scene={scene}, "
+            f"input_language={language}, normalized_language={lang}"
+        )
 
         scene_prompts = self._load_scene_prompts(scene)
 
@@ -252,63 +293,136 @@ class PromptConfigManager:
                 f"and language '{lang}'"
             )
 
+        logger.info(
+            f"Prompt config loaded successfully: "
+            f"scene={scene}, language={lang}, "
+            f"has_summary_prompt={'summary_prompt' in merged_prompts}, "
+            f"has_metadata_prompt={'metadata_prompt' in merged_prompts}, "
+            f"has_email_content_prompt={'email_content_prompt' in merged_prompts}"
+        )
+
         return merged_prompts
+
+    def _find_language_config(self, language: str) -> Optional[Dict[str, Any]]:
+        """
+        Find language configuration by code, supporting partial matches.
+
+        Args:
+            language: Language code (e.g., 'zh-CN', 'zh', 'en-US', 'en')
+
+        Returns:
+            dict: Language config dict or None if not found
+        """
+        if not language:
+            logger.warning("_find_language_config: empty language input")
+            return None
+
+        languages = self.languages_config.get('languages', [])
+        language_lower = language.lower().strip()
+        available_codes = [lang.get('code') for lang in languages if lang.get('code')]
+
+        logger.debug(
+            f"_find_language_config: input={language}, "
+            f"available_codes={available_codes}"
+        )
+
+        # First try exact match
+        for lang in languages:
+            if lang.get('code') == language:
+                logger.debug(
+                    f"_find_language_config: exact match found: "
+                    f"{lang.get('code')} -> {lang.get('name')}"
+                )
+                return lang
+
+        # Then try prefix match (e.g., 'zh' matches 'zh-CN')
+        for lang in languages:
+            code = lang.get('code', '').lower()
+            if code and (code.startswith(language_lower[:2]) or
+                         language_lower.startswith(code[:2])):
+                logger.debug(
+                    f"_find_language_config: prefix match found: "
+                    f"{language} -> {lang.get('code')} ({lang.get('name')})"
+                )
+                return lang
+
+        logger.warning(
+            f"_find_language_config: no match found for language={language}, "
+            f"available={available_codes}"
+        )
+        return None
+
+    def _normalize_language(self, language: str) -> str:
+        """
+        Normalize language code to full format.
+
+        Examples: 'en' -> 'en-US', 'zh' -> 'zh-CN'
+
+        Returns:
+            str: Full language code or default if not found
+        """
+        if not language:
+            logger.warning(
+                f"_normalize_language: empty input, "
+                f"using default={settings.DEFAULT_LANGUAGE}"
+            )
+            return settings.DEFAULT_LANGUAGE
+
+        lang_config = self._find_language_config(language)
+        if lang_config:
+            normalized = lang_config.get('code', settings.DEFAULT_LANGUAGE)
+            logger.debug(
+                f"_normalize_language: {language} -> {normalized}"
+            )
+            return normalized
+
+        logger.warning(
+            f"_normalize_language: no config found for {language}, "
+            f"using default={settings.DEFAULT_LANGUAGE}"
+        )
+        return settings.DEFAULT_LANGUAGE
 
     def _get_language_display_name(self, language: str) -> str:
         """
-        Get language display name from languages.yaml
+        Get language name for LLM prompts.
 
         Args:
             language: Language code (e.g., 'zh-CN', 'en-US', 'es')
 
         Returns:
-            str: Language display name (e.g., '中文', 'English')
+            str: Language name from config or original code if not found
         """
-        languages = self.languages_config.get('languages', [])
-
-        for lang in languages:
-            if lang.get('code') == language:
-                return lang.get('native_name', language)
-
-        # Fallback for common variations
-        if language.startswith('zh'):
-            return '中文'
-        if language.startswith('en'):
-            return 'English'
-        if language.startswith('es'):
-            return 'Español'
-
+        lang_config = self._find_language_config(language)
+        if lang_config:
+            return lang_config.get('name', language)
         return language
 
-    def _normalize_language(self, language: str) -> str:
-        """Normalize language code with fallback mechanism"""
-        if self._language_exists(language):
-            return language
-        if language.startswith('zh') and self._language_exists('zh-CN'):
-            return 'zh-CN'
-        return settings.DEFAULT_LANGUAGE
-
-    def _language_exists(self, language: str) -> bool:
-        """Check if language exists in configuration"""
-        languages = self.languages_config.get('languages', [])
-        for lang in languages:
-            if lang.get('code') == language:
-                return True
-        return False
 
     def generate_user_config(
         self,
         language: str,
         scene: str
     ) -> Dict[str, Any]:
-        """Generate user configuration based on language and scene"""
+        """
+        Generate user configuration based on language and scene
+
+        Note: New version stores language and scene, not full prompts.
+        Prompts are loaded dynamically at runtime.
+        """
         lang = self._normalize_language(language)
-        config = {'language': lang, 'scene': scene}
-        config.update(self.get_prompt_config(scene, lang))
+        config = {
+            'language': lang,
+            'scene': scene
+        }
         return config
 
     def get_available_languages(self) -> Dict[str, Dict[str, str]]:
-        """Get available languages with display names"""
+        """
+        Get available languages with display names.
+
+        Returns:
+            dict: Dictionary mapping language codes to their display info
+        """
         result = {}
         languages = self.languages_config.get('languages', [])
 
@@ -326,3 +440,81 @@ class PromptConfigManager:
         """Get list of available scenes"""
         scenarios = self.scenarios_config.get('scenarios', {})
         return sorted(scenarios.keys())
+
+    def load_prompt_config(self, user) -> Dict[str, Any]:
+        """
+        Load complete prompt configuration for a user, ready for processing.
+
+        This method handles:
+        - Loading user's scene preference from Settings
+        - Loading user's language preference from Settings
+        - Backward compatibility with legacy prompt_config (full prompts)
+        - Dynamic generation of prompt_config if needed
+        - Fallback to defaults if user settings are missing
+
+        Args:
+            user: Django User instance
+
+        Returns:
+            dict: Complete prompt_config with all prompts ready to use
+
+        Raises:
+            Exception: If even default config cannot be generated
+        """
+        from threadline.models import Settings
+
+        # Check if user has legacy prompt_config (contains full prompts)
+        try:
+            prompt_config_raw = Settings.get_user_prompt_config(user)
+
+            # Detect legacy format (contains prompt fields)
+            legacy_prompt_fields = [
+                'summary_prompt',
+                'metadata_prompt',
+                'email_content_prompt'
+            ]
+            has_full_prompts = any(
+                key in prompt_config_raw
+                for key in legacy_prompt_fields
+            )
+
+            if has_full_prompts:
+                # Legacy format: return as-is
+                # User has custom prompts, prioritize them over dynamic generation
+                logger.info(
+                    f"Using legacy prompt_config for user {user.id} "
+                    f"(custom prompts found: "
+                    f"{[k for k in legacy_prompt_fields if k in prompt_config_raw]}). "
+                    f"Language field (if present) will be ignored."
+                )
+                if 'language' in prompt_config_raw:
+                    logger.warning(
+                        f"User {user.id} has both legacy prompts and "
+                        f"language field. Legacy prompts take priority. "
+                        f"To use dynamic language-based prompts, remove "
+                        f"legacy prompt fields from prompt_config."
+                    )
+                return prompt_config_raw
+
+            # New format: extract scene and language
+            scene = prompt_config_raw.get('scene', settings.DEFAULT_SCENE)
+            language = prompt_config_raw.get(
+                'language', settings.DEFAULT_LANGUAGE
+            )
+            logger.info(
+                f"Loaded prompt_config from Settings for user {user.id}: "
+                f"scene={scene}, language={language}, "
+                f"raw_config={prompt_config_raw}"
+            )
+
+        except ValueError:
+            # No prompt_config found, use defaults
+            scene = settings.DEFAULT_SCENE
+            language = settings.DEFAULT_LANGUAGE
+            logger.info(
+                f"No prompt_config found for user {user.id}, "
+                f"using defaults: scene={scene}, language={language}"
+            )
+
+        # Generate complete prompt_config dynamically
+        return self.get_prompt_config(scene, language)

@@ -13,6 +13,7 @@ from threadline.agents.nodes.base_node import BaseLangGraphNode
 from threadline.agents.email_state import EmailState, add_node_error
 from threadline.models import EmailMessage, Issue, Settings
 from threadline.state_machine import EmailStatus
+from threadline.utils.prompt_config_manager import PromptConfigManager
 
 logger = logging.getLogger(__name__)
 
@@ -121,13 +122,17 @@ class WorkflowPrepareNode(BaseLangGraphNode):
 
         prompt_config = None
         issue_config = None
+
+        # Load prompt_config using PromptConfigManager
+        # This handles backward compatibility and dynamic generation internally
         try:
-            prompt_config = Settings.get_user_prompt_config(self.email.user)
+            prompt_manager = PromptConfigManager()
+            prompt_config = prompt_manager.load_prompt_config(self.email.user)
             logger.info(
                 f"Loaded prompt_config for user {self.email.user_id}"
             )
-        except ValueError as e:
-            logger.warning(
+        except Exception as e:
+            logger.error(
                 f"Failed to load prompt_config for user "
                 f"{self.email.user_id}: {e}"
             )

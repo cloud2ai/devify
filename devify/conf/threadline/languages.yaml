@@ -1,11 +1,13 @@
 # Supported languages configuration
+# name: Used for LLM prompts (English format)
+# native_name: Used for UI display (native language format)
 languages:
   - code: zh-CN
-    name: 简体中文
+    name: Chinese
     native_name: 简体中文
   - code: en-US
     name: English
     native_name: English
   - code: es
-    name: Español
+    name: Spanish
     native_name: Español

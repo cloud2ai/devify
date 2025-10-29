@@ -817,24 +817,119 @@ For detailed configuration options, see: `devify/devify/conf/threadline/issues/R
 
 ### Prompt Config (prompt_config)
 
-| Config Key              | Description                                                                                   | Required |
-|------------------------|-----------------------------------------------------------------------------------------------|----------|
-| `output_language`      | Default output language for LLM responses                                                     | Yes      |
-| `email_content_prompt` | Organizes email/chat content for LLM processing.                                              | Yes      |
-| `ocr_prompt`           | Processes OCR text from images for LLM summarization.                                         | Yes      |
-| `summary_prompt`       | Summarizes email and attachment content for JIRA issue creation.                              | Yes      |
-| `summary_title_prompt` | Generates a structured and concise JIRA issue title.                                          | Yes      |
+The prompt configuration system has been redesigned for better maintainability and multi-language support. Prompt templates are now centrally managed in YAML configuration files, and the `prompt_config` setting only stores language and scene preferences.
 
-**Example:**
+#### Architecture Overview
+
+- **Centralized Prompt Templates**: All prompt templates are defined in `conf/threadline/prompts/default.yaml` under the `common` section
+- **Dynamic Language Support**: Prompts use a `{language}` variable that is replaced at runtime based on user preferences
+- **Scene-Specific Customization**: Scene-specific prompt files (e.g., `chat.yaml`, `product_issue.yaml`) can override common prompts if needed
+- **Backward Compatibility**: Legacy format with full prompt strings is still supported for users with custom prompts
+
+#### New Format (Recommended)
+
+The new format only stores language and scene preferences. The system dynamically generates complete prompt configurations at runtime.
+
+| Config Key              | Description                                                                                   | Required | Example                    |
+|------------------------|-----------------------------------------------------------------------------------------------|----------|----------------------------|
+| `language`             | Language code for LLM output (e.g., `zh-CN`, `en-US`, `es`)                                  | Yes      | `"zh-CN"`                  |
+| `scene`                | Scene identifier for scenario-specific processing (e.g., `chat`, `product_issue`)            | Yes      | `"chat"`                   |
+
+**Example (New Format):**
+```json
+{
+  "language": "zh-CN",
+  "scene": "chat"
+}
+```
+
+This will automatically load the appropriate prompts from the YAML configuration files with the correct language settings.
+
+#### Legacy Format (Backward Compatible)
+
+If you have existing custom prompts, they will continue to work. The system detects legacy format by checking for prompt fields (`summary_prompt`, `metadata_prompt`, `email_content_prompt`, etc.).
+
+**Legacy Format:**
 ```json
 {
   "output_language": "zh-hans",
-  "email_content_prompt": "Organize the provided email content (which may include chat records or message bodies) in chronological order into a conversation text with minimal polishing (clearly mark any assumptions), without altering any original meaning and retaining all information. Output format: [Date Time] Speaker: Content (on a single line, or wrapped across multiple lines if necessary), with image placeholders [IMAGE: filename.png] placed on separate lines in their original positions. Date and time: if the date is unknown, display only the time; if known, display both date and time. Conversation text must be plain text (excluding emojis, special characters, etc.) with clear structure. Always preserve the original language of the conversation; if the specified output language differs from the original language, include the original text on top and the translated text below. No explanations or additional content should be provided.",
-  "ocr_prompt": "Organize the provided OCR results into plain text output, using Markdown formatting when necessary for code or quoted content (e.g., ``` for code blocks, > for quotes). Describe all explanatory or interpretive content in the specified output language, while keeping all actual OCR text in the original language from the image. Fully retain and describe all content without omission. Clearly highlight any normal, abnormal, or valuable information. Attempt to correct and standardize incomplete, unclear, or potentially erroneous OCR content without altering its original meaning, and mark any uncertain parts as [unclear]. Produce only structured text with necessary Markdown formatting, without any additional explanations, summaries, or unrelated content.",
-  "summary_prompt": "Based on the provided content (including chronological chat records and OCR-recognized content from images), organize the chat records in chronological order, preserving the original speaker and language for each entry, fully retaining all information, and using Markdown formatting when necessary for code or quoted content. The output should include four sections: 1) **Main Content**: list the key points of the current conversation; 2) **Process Description**: provide a detailed description of the problem and its reproduction steps, marking any uncertain information as \"unknown\"; 3) **Solution** (if unresolved, indicate attempted measures): if the issue is resolved, list the solution; if unresolved, list measures already taken and their results, optionally including possible causes clearly marked as (speculation); 4) **Resolution Status**: indicate whether the issue has been resolved (Yes/No). Output must be well-structured, hierarchically clear plain text, without any additional explanations, summaries, or extra content, while highlighting any normal, abnormal, or valuable information for quick reference.",
-  "summary_title_prompt": "Based on the chat records, extract a single structured title in the format: [Issue Category][Participant]Title Content; the title should use a verb-object structure, be concise, and accurately express the core problem or requirement, avoiding vague terms, with a maximum length of 300 characters; if the information is unclear, add [To Be Confirmed]; if multiple issues exist, extract only the most critical and central one, generating a single structured title."
+  "email_content_prompt": "Custom prompt text here...",
+  "ocr_prompt": "Custom OCR prompt text here...",
+  "summary_prompt": "Custom summary prompt text here...",
+  "summary_title_prompt": "Custom title prompt text here..."
 }
 ```
+
+> **Note:** Legacy format takes priority. If you want to use the new dynamic language-based prompts, remove all legacy prompt fields from your `prompt_config` and use the new format with only `language` and `scene`.
+
+#### Prompt Template Priority
+
+The system follows a priority order when loading prompt configurations. Templates with higher priority override those with lower priority:
+
+1. **User Settings (Legacy Format)** - Highest Priority
+   - If user's `prompt_config` contains legacy format (full prompt strings like `summary_prompt`, `email_content_prompt`, etc.), these are used directly
+   - System skips dynamic generation when legacy format is detected
+   - Use this when you need completely custom prompts for a specific user
+
+2. **User Settings (New Format)** - Based on User Preferences
+   - User's `prompt_config` with `language` and `scene` preferences determines which templates to load
+   - System dynamically generates prompts based on user's language and scene selection
+   - This is the recommended approach for most users
+
+3. **Scene-Specific Prompts** - Override Defaults
+   - Prompts from scene-specific YAML files (e.g., `chat.yaml`, `product_issue.yaml`)
+   - Only override prompts that are explicitly defined in the scene file's `common` section
+   - Currently, scene files are mostly placeholders and use common prompts
+
+4. **Default Common Prompts** - Base Templates
+   - Prompts from `default.yaml` `common` section serve as the base templates
+   - These are used when no scene-specific override exists
+
+**Priority Flow Example:**
+```
+User Legacy Format → (if exists, use directly, skip all below)
+        ↓
+User New Format (language: zh-CN, scene: chat)
+        ↓
+Scene: chat → prompts/chat.yaml common section (if exists)
+        ↓
+Default: prompts/default.yaml common section (always)
+```
+
+#### Prompt Template Management
+
+All prompt templates are managed in YAML files located at `conf/threadline/prompts/`:
+
+- **`default.yaml`**: Contains all common prompts in the `common` section (base templates)
+- **`chat.yaml`**: Can override common prompts for chat scenarios (currently uses common prompts)
+- **`product_issue.yaml`**: Can override common prompts for product issue tracking (currently uses common prompts)
+
+**Available Prompt Types:**
+- `email_content_prompt`: Organizes email/chat content for LLM processing
+- `ocr_prompt`: Processes OCR text from images
+- `summary_prompt`: Generates structured summaries
+- `summary_title_prompt`: Generates concise titles
+- `metadata_prompt`: Extracts metadata from conversations
+
+**Supported Languages:**
+- `zh-CN`: 简体中文 (Chinese)
+- `en-US`: English
+- `es`: Español (Spanish)
+
+The system automatically replaces `{language}` variables in prompts with the appropriate language display name at runtime.
+
+#### Initialization
+
+When you run `init_threadline_settings`, the system automatically creates a `prompt_config` with default language and scene:
+
+```json
+{
+  "language": "en-US",
+  "scene": "chat"
+}
+```
+
+You can customize this in Django Admin after initialization to match your preferences.
 
 ### Webhook Config (webhook_config)
 
