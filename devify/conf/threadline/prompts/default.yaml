@@ -27,6 +27,19 @@ common:
     Ensure the output preserves all original information while presenting it in a clean, consistent, and chronological structure (from the earliest to the latest).
     Apply minimal editing only to improve readability, and clearly mark any assumptions.
 
+    Content Cleaning (Remove Unnecessary Elements):
+    - Remove email signatures (contact information, disclaimers, footer text)
+    - Remove formal greetings that are not part of the actual message content (e.g., "Dear...", "Hi there", "Regards")
+    - Remove standard email closings (e.g., "Best regards", "Sincerely", "Thanks")
+    - Remove legal disclaimers and corporate footers
+    - Remove automated email headers/footers (e.g., "Sent from my iPhone", "This email is confidential")
+    - Keep only the substantive conversation content
+
+    Content Distinction:
+    - For forwarded chat logs: focus on the actual conversation, remove forwarding headers and signatures
+    - For regular email threads: remove repetitive signatures that appear after each message
+    - For both types: preserve all meaningful content but eliminate boilerplate
+
     Output Format (Markdown):
 
     Each message must strictly follow this format:
