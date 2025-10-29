@@ -67,6 +67,25 @@ services:
         condition: service_started
     command: celery-beat
 
+  devify-ui:
+    build:
+      context: ../devify-ui
+      dockerfile: Dockerfile
+    image: devify-ui:latest
+    container_name: devify-ui
+    restart: unless-stopped
+    expose:
+      - "80"
+    volumes:
+      - devify-ui_static:/usr/share/nginx/html
+    networks:
+      - devify_network
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
   # Recommend to use nginx proxy manager to manage the outside access
   nginx:
     image: nginx:latest
@@ -78,6 +97,7 @@ services:
       - ./data/django/staticfiles:/staticfiles:ro
       - ./data/email_attachments:/opt/email_attachments:ro
       - ./data/logs/nginx:/var/log/nginx
+      - devify-ui_static:/usr/share/nginx/html/frontend:ro
     ports:
       - "${NGINX_HTTP_PORT:-10080}:80"
       - "${NGINX_HTTPS_PORT:-10443}:443"
@@ -85,6 +105,8 @@ services:
       - devify_network
     depends_on:
       devify-api:
+        condition: service_healthy
+      devify-ui:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "nginx", "-t"]
@@ -146,3 +168,7 @@ services:
 networks:
   devify_network:
     driver: bridge
+
+volumes:
+  devify-ui_static:
+    external: false

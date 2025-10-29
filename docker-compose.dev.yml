@@ -134,6 +134,27 @@ services:
     networks:
       - devify_network
 
+  devify-ui:
+    build:
+      context: ../devify-ui
+      dockerfile: Dockerfile.dev
+    container_name: devify-ui-dev
+    restart: unless-stopped
+    volumes:
+      - ../devify-ui/src:/app/src:ro
+      - ../devify-ui/public:/app/public:ro
+      - ../devify-ui/index.html:/app/index.html:ro
+      - ../devify-ui/vite.config.js:/app/vite.config.js:ro
+      - ../devify-ui/tailwind.config.js:/app/tailwind.config.js:ro
+      - ../devify-ui/postcss.config.js:/app/postcss.config.js:ro
+      - ../devify-ui/package.json:/app/package.json:ro
+      - ../devify-ui/node_modules:/app/node_modules
+    networks:
+      - devify_network
+    depends_on:
+      devify-api:
+        condition: service_started
+
   nginx:
     image: nginx:latest
     container_name: devify-nginx-dev
@@ -150,6 +171,8 @@ services:
     depends_on:
       devify-api:
         condition: service_healthy
+      devify-ui:
+        condition: service_started
     healthcheck:
       test: ["CMD", "nginx", "-t"]
       interval: 30s
