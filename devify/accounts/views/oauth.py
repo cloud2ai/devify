@@ -28,6 +28,7 @@ from ..models import Profile
 from ..serializers import (
     CompleteGoogleSetupSerializer,
     SuccessResponseSerializer,
+    UserDetailsSerializer,
 )
 
 logger = logging.getLogger(__name__)
@@ -167,18 +168,16 @@ class CompleteGoogleSetupView(APIView):
 
             refresh = RefreshToken.for_user(user)
 
+            # Use UserDetailsSerializer to get complete user info including virtual_email
+            user_serializer = UserDetailsSerializer(user)
+
             return Response(
                 {
                     'success': True,
                     'message': _('Setup completed successfully'),
                     'access': str(refresh.access_token),
                     'refresh': str(refresh),
-                    'user': {
-                        'id': user.id,
-                        'email': user.email,
-                        'username': user.username,
-                        'registration_completed': True
-                    }
+                    'user': user_serializer.data
                 },
                 status=status.HTTP_200_OK
             )
