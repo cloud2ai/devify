@@ -259,7 +259,7 @@ class PromptConfigManager:
         Get language display name from languages.yaml
 
         Args:
-            language: Language code (e.g., 'zh-CN', 'en-US')
+            language: Language code (e.g., 'zh-CN', 'en-US', 'es')
 
         Returns:
             str: Language display name (e.g., '中文', 'English')
@@ -275,6 +275,8 @@ class PromptConfigManager:
             return '中文'
         if language.startswith('en'):
             return 'English'
+        if language.startswith('es'):
+            return 'Español'
 
         return language
 

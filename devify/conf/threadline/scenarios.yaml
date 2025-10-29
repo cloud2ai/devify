@@ -5,15 +5,19 @@ scenarios:
   chat:
     zh-CN: 日常聊天
     en-US: Daily Chat
+    es: Chat Diario
     description:
       zh-CN: 处理日常聊天记录和沟通内容
       en-US: Handle daily chat records and communication content
+      es: Manejar registros de chat diario y contenido de comunicación
     prompt_file: prompts/chat.yaml
 
   product_issue:
     zh-CN: 产品问题跟踪
     en-US: Product Issue Tracking
+    es: Seguimiento de Problemas del Producto
     description:
       zh-CN: 跟踪和管理产品相关问题和反馈
       en-US: Track and manage product-related issues and feedback
+      es: Rastrear y gestionar problemas relacionados con el producto y comentarios
     prompt_file: prompts/product_issue.yaml

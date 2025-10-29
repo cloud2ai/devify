@@ -221,7 +221,7 @@ class CompleteRegistrationSerializer(serializers.Serializer):
 
     language = serializers.CharField(
         required=True,
-        help_text=_("User's preferred language (e.g., 'en-US', 'zh-CN')")
+        help_text=_("Specifies the language used by AI when generating summaries, titles, and metadata.")
     )
 
     timezone = serializers.CharField(
@@ -278,7 +278,7 @@ class CompleteRegistrationSerializer(serializers.Serializer):
         """
         Validate language is supported.
         """
-        supported_languages = ['en-US', 'zh-CN']
+        supported_languages = ['en-US', 'zh-CN', 'es']
 
         if value not in supported_languages:
             raise serializers.ValidationError(
@@ -314,7 +314,7 @@ class CompleteGoogleSetupSerializer(serializers.Serializer):
 
     language = serializers.CharField(
         required=True,
-        help_text=_("User's preferred language")
+        help_text=_("Specifies the language used by AI when generating summaries, titles, and metadata.")
     )
 
     timezone = serializers.CharField(
@@ -354,7 +354,7 @@ class CompleteGoogleSetupSerializer(serializers.Serializer):
         """
         Validate language is supported.
         """
-        supported_languages = ['en-US', 'zh-CN']
+        supported_languages = ['en-US', 'zh-CN', 'es']
 
         if value not in supported_languages:
             raise serializers.ValidationError(

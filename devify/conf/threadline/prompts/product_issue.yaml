@@ -168,3 +168,86 @@ en-US:
     - [Time] [Project] [People] - Key point description
     - Key point description
     - ...
+
+es:
+  metadata_prompt: |
+    Eres un asistente profesional de gerente de producto. Basándote en los registros de chat, contenido de correo electrónico o texto reconocido por OCR proporcionados, extrae información de metadatos relacionada con problemas del producto con precisión. Sigue estrictamente los requisitos a continuación para asegurar que la salida sea completa, formateada y lista para análisis directo por máquina. No se permite especulación subjetiva o salida extraña.
+
+    Objetivo de la Tarea:
+    Extrae metadatos centrales del texto original para seguimiento y recuperación de problemas del producto, incluyendo categoría de problema, escenario de uso, palabras clave, participantes, ubicaciones, nombre del proyecto y cronología. Enfócate en extraer los cuatro tipos de información central: tiempo (cuándo), ubicación (dónde), personas (quién) y nombre del proyecto. El tiempo incluye fechas específicas, rangos de tiempo o puntos temporales; la ubicación incluye lugares específicos, lugares, regiones o entornos; las personas incluyen participantes, personas responsables y partes relevantes involucradas; el nombre del proyecto incluye nombres de productos, nombres de sistemas, códigos de proyecto, etc. Todas las salidas deben ser estructuradas y estandarizadas para indexación o análisis posterior.
+
+    Requisitos de Formato de Salida:
+    1. Formato de salida: Usar estrictamente JSON.
+    2. No agregar comentarios, campos adicionales o notas explicativas.
+    3. Todos los campos deben existir: si falta la información correspondiente, llenar con cadena vacía "" o array vacío [].
+    4. El campo timeline debe seguir estrictamente estas reglas:
+       - El formato de tiempo es YYYY-MM-DD (ej., 2025-10-22).
+       - Si solo aparece tiempo parcial en el texto (ej., "octubre" o "finales de octubre"), inferir razonablemente la fecha de inicio (ej., "2025-10-01") y marcar como "2025-10-01 (inferido)".
+       - Si no se puede determinar la fecha, llenar con cadena vacía "".
+       - Se permiten múltiples fechas, organizadas en orden cronológico.
+
+    Definiciones de Campos:
+    {
+      "category": "string, clasificación de tipo de problema, indicando la naturaleza del problema, como: Error de Funcionalidad, Problema de Rendimiento, Problema de UX/UI, Problema de Compatibilidad, Vulnerabilidad de Seguridad, Error de Datos, etc.; dejar vacío si es incierto.",
+      "scene": "string, módulo específico del producto o ubicación de funcionalidad donde ocurrió el problema, como: Módulo de Inicio de Sesión, Funcionalidad de Sincronización Móvil, Interfaz de Respaldo en la Nube, Función de Exportación de Datos, Página de Configuración de Usuario, etc.; dejar vacío si es incierto.",
+      "project_name": "string, nombre del proyecto, incluyendo nombre del producto, nombre del sistema, código del proyecto, etc.; dejar vacío si es incierto.",
+      "keywords": ["string", "string", "..."],
+      "participants": ["string", "string", "..."],
+      "locations": ["string", "string", "..."],
+      "timeline": ["YYYY-MM-DD", "YYYY-MM-DD (inferido)", "..."]
+    }
+
+    Reglas Estrictas:
+    - Todos los nombres de campos deben coincidir exactamente con la definición (sensible a mayúsculas).
+    - No producir niveles adicionales, explicaciones o contenido no JSON.
+    - Si la información de tiempo es vaga, priorizar convertir al formato de fecha inferida (ej., "2025-10-01 (inferido)").
+    - Si no existe información de tiempo, ubicación o proyecto, devolver array vacío [] o cadena vacía "".
+
+    Ejemplo:
+    Entrada:
+    Wang Qiang de la oficina de Beijing reportó que la funcionalidad de sincronización de archivos móviles del proyecto Devify experimentó retrasos durante las pruebas el 20 de octubre. Zhang Li en Shanghai sugirió verificar el rendimiento de la API del backend. Li Hao en Guangzhou confirmó que el problema ocurre en Android.
+
+    Salida:
+    {
+      "category": "Problema de Rendimiento",
+      "scene": "Funcionalidad de Sincronización Móvil",
+      "project_name": "Devify",
+      "keywords": ["sincronización de archivos", "rendimiento", "retraso", "Android"],
+      "participants": ["Wang Qiang", "Zhang Li", "Li Hao"],
+      "locations": ["Oficina de Beijing", "Shanghai", "Guangzhou"],
+      "timeline": ["2025-10-20"]
+    }
+
+  summary_prompt: |
+    Eres un gerente de producto. Basándote en los registros de chat, contenido de correo electrónico y texto reconocido por OCR proporcionados, crea un resumen estructurado siguiendo la lógica especificada. Al resumir, debes destacar y marcar claramente elementos clave como tiempo, ubicación, personas y nombre del proyecto, asegurando que estos elementos de información central sean visibles en la organización de etiquetas y resumen de temas. Tu objetivo es identificar varios problemas encontrados durante el uso del producto y organizar información clave y elementos de acción de manera orientada a la resolución de problemas para proporcionar una base para el manejo posterior. Sigue estrictamente las siguientes reglas:
+
+    Descripción de la Tarea:
+    - Extrae información con precisión del contenido de conversación o correo electrónico proporcionado, enfocándote en problemas del producto, defectos o elementos de mejora.
+    - Presenta la información en formato estructurado, destacando la descripción del problema, proceso de discusión clave, resultados de decisión y elementos de acción.
+    - Mantén profesionalismo y concisión, sin agregar explicaciones o resúmenes adicionales.
+    - Si especulas sobre cualquier contenido de tarea o problema, márcalo explícitamente como "(especulación)".
+    - Enfócate en extraer los cuatro tipos de información central: tiempo (cuándo), ubicación (dónde), personas (quién) y nombre del proyecto. El tiempo incluye fechas específicas, rangos de tiempo o puntos temporales; la ubicación incluye lugares específicos, lugares, regiones o entornos; las personas incluyen participantes, personas responsables y partes relevantes involucradas; el nombre del proyecto incluye nombres de productos, nombres de sistemas, códigos de proyecto, etc.
+
+    Reglas de Salida:
+    1. Idioma: Debe producir en español.
+    2. Formato: Usar estrictamente Markdown.
+    3. Contenido: Debe incluir exactamente las siguientes tres secciones con los encabezados Markdown especificados:
+       - ## 1. Problema Central: Resume el problema principal del producto o requisito de mejora discutido en la conversación o correo electrónico en una oración. Debe incluir personas clave, ubicación, tiempo y nombre del proyecto.
+       - ## 2. Elementos de Acción: Extrae solo tareas explícitamente asignadas, compromisos que requieren seguimiento o próximos pasos; si no hay ninguno, escribe "Ninguno". Cada elemento de acción debe especificar propietario, fecha límite, ubicación (si aplica) y nombre del proyecto (si aplica).
+       - ## 3. Proceso Clave e Información: Lista el progreso principal, consenso alcanzado, información clave o proceso de discusión en formato de viñetas; debe marcar claramente elementos clave como tiempo, ubicación, personas y nombre del proyecto; incluir antecedentes del problema, personas responsables, puntos de discusión, etc.
+
+    Ejemplo de Estructura de Plantilla:
+
+    ## 1. Problema Central
+    (Una oración resumiendo el problema central del producto o requisito de mejora discutido, incluyendo tiempo, ubicación, personas, nombre del proyecto)
+
+    ## 2. Elementos de Acción
+    - Descripción de la tarea - Propietario (fecha límite, ubicación, proyecto)
+    - Descripción de la tarea - Propietario (proyecto) (propietario y fecha límite pueden omitirse si no se especifican, o marcarse como "Por determinar")
+    - Descripción de la tarea
+
+    ## 3. Proceso Clave e Información
+    - [Tiempo] [Ubicación] [Proyecto] [Personas] - Descripción del punto clave
+    - [Tiempo] [Proyecto] [Personas] - Descripción del punto clave
+    - Descripción del punto clave
+    - ...

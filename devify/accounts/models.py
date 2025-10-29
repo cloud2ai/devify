@@ -96,10 +96,12 @@ class Profile(models.Model):
         choices=[
             ('en-US', 'English'),
             ('zh-CN', '简体中文'),
+            ('es', 'Español'),
         ],
         help_text=(
-            "User's preferred language for UI and notifications. "
-            "This is a global setting shared across all applications."
+            "Specifies the language used by AI when generating summaries, "
+            "titles, and metadata. This is a global setting shared across "
+            "all applications."
         )
     )
 

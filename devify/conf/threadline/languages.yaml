@@ -6,3 +6,6 @@ languages:
   - code: en-US
     name: English
     native_name: English
+  - code: es
+    name: Español
+    native_name: Español

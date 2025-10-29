@@ -142,7 +142,7 @@ class RegistrationService:
             password: User's password
             username: Custom username for virtual email
             scene: User's selected scene (chat, product_issue, etc.)
-            language: User's preferred language (zh-CN, en-US)
+            language: AI output language for summaries, titles, and metadata (zh-CN, en-US, es)
             timezone_str: User's timezone
 
         Returns:

@@ -32,7 +32,7 @@ class RegistrationEmailService:
         Args:
             email: Recipient email address
             token: Registration verification token
-            language: Language code ('en-US', 'zh-CN')
+            language: Language code ('en-US', 'zh-CN', 'es')
 
         Returns:
             bool: True if email sent successfully, False otherwise
@@ -124,7 +124,7 @@ class PasswordResetEmailService:
             email: Recipient email address
             uid: User ID encoded in base64
             token: Password reset token from Django's token generator
-            language: Language code from user profile ('en-US', 'zh-CN')
+            language: Language code from user profile ('en-US', 'zh-CN', 'es')
 
         Returns:
             bool: True if email sent successfully, False otherwise
