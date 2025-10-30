@@ -54,10 +54,31 @@ common:
     - If known, include both date and time in a consistent format (e.g., 2025-10-22 14:05).
 
     Images
-    - Use placeholders in the format [IMAGE: filename.png], placed on a separate line in their original position.
+    - Use placeholders in the format [IMAGE: filename.png], placed on a
+      separate line in their original position.
+    - Preserve the placeholder EXACTLY as shown: keep square brackets,
+      the uppercase word IMAGE, the colon, spacing, and filename.
+    - Do NOT translate, alter, remove, deduplicate, or reorder any
+      [IMAGE: ...] placeholders under any circumstances.
+    - Do NOT change the relative order between an [IMAGE: ...] placeholder
+      and its surrounding text. Keep the placeholder at the exact position
+      where it appears in the original content.
+    - When OCR descriptions are provided for an image, they MUST appear
+      immediately AFTER the corresponding [IMAGE: ...] line. Do not move the
+      OCR description above the placeholder or to any other location.
+    - When restructuring or cleaning content, ALWAYS preserve local ordering
+      line-by-line for image placeholders and nearby text.
 
-    Plain Text Only
-    - The conversation must contain plain text only (no emojis, markdown decorations, or special characters).
+    Plain Text and Structured Markdown
+    - The conversation must use plain text with ONLY the Markdown
+      structure required by this prompt (e.g., headings, lists, line breaks).
+    - The following tokens are EXCEPTIONS and MUST be preserved verbatim
+      as plain text: `[IMAGE: filename.ext]` and lines starting with
+      `[OCR Content for `.
+    - Do NOT translate the word `IMAGE` or change brackets/colon/spacing
+      inside `[IMAGE: ...]`.
+    - Do NOT remove or alter any `[IMAGE: ...]` or `[OCR Content for ...]`
+      lines for any reason.
 
     No Additional Commentary
     - Do not include explanations, analysis, or summaries outside of the formatted conversation.
