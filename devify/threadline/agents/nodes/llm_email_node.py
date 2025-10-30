@@ -216,12 +216,14 @@ class LLMEmailNode(BaseLangGraphNode):
                 placeholder = f"[IMAGE: {filename}]"
                 ocr_content = ocr_content_map[filename_stripped]
 
-                # Add OCR content AFTER the placeholder
+                # Add OCR content AFTER the placeholder with clear delimiters
                 # This keeps the placeholder for Jira processing
                 content = content.replace(
                     placeholder,
-                    f"{placeholder}\n[OCR Content for {filename_stripped}]:\n"
+                    f"{placeholder}\n"
+                    f"--- OCR Content for {filename_stripped} ---\n"
                     f"{ocr_content}\n"
+                    f"--- End of OCR Content ---\n"
                 )
                 replaced_count += 1
                 logger.debug(

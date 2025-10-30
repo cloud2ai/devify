@@ -20,17 +20,16 @@ class SummaryNode(BaseLangGraphNode):
     Summary generation node.
 
     This node generates summary content and title for the email
-    by combining email LLM content with attachment OCR content.
+    based on the LLM-processed email content.
 
     State Input Requirements:
-    - llm_content: Email content processed by LLM
+    - llm_content: Email content processed by LLM (includes OCR context)
     - prompt_config: User's prompt configuration (from workflow_prepare)
-    - attachments: List of attachment data with OCR content
+    - subject: Email subject
 
     Responsibilities:
     - Check for email LLM content in State
     - Read prompt configuration from State (no database access)
-    - Combine email content with attachment OCR content
     - Execute LLM processing to generate summary content and title
     - Update State with summary_content and summary_title
     - Skip if summary already exists (unless force mode)
@@ -73,8 +72,8 @@ class SummaryNode(BaseLangGraphNode):
         """
         Execute summary generation.
 
-        Combines email LLM content with attachment OCR content,
-        generates summary content and title using LLM.
+        Generates summary content and title based on LLM-processed email
+        content (which already includes OCR context from attachments).
 
         Args:
             state (EmailState): Current email state
@@ -100,40 +99,14 @@ class SummaryNode(BaseLangGraphNode):
             logger.error(error_message)
             return add_node_error(state, self.node_name, error_message)
 
+        # Build content with subject and LLM-processed email content
+        # Note: llm_content already includes OCR context from attachments
         content = (
             f"Subject: {state.get('subject', '')}\n"
             f"Text Content: {state.get('llm_content', '')}\n"
         )
 
-        ocr_contents = []
-        attachments = state.get('attachments', [])
-
-        for att in attachments:
-            # Only process image attachments
-            if not att.get('is_image'):
-                continue
-
-            # Get llm_content and check if it exists
-            llm_content_raw = att.get('llm_content')
-            if not llm_content_raw:
-                continue
-
-            llm_content = llm_content_raw.strip()
-            if llm_content:
-                safe_filename = att.get('safe_filename', att.get('filename'))
-                ocr_contents.append(
-                    f"[Attachment: {safe_filename}]\n{llm_content}"
-                )
-
-        combined_content = content
-        if ocr_contents:
-            combined_content += "\n\n--- ATTACHMENT OCR CONTENT ---\n\n"
-            combined_content += "\n\n".join(ocr_contents)
-            logger.info(
-                f"Included {len(ocr_contents)} OCR contents in summary"
-            )
-        else:
-            logger.info("No attachment OCR content available for summary")
+        logger.info("Using LLM-processed content for summary generation")
 
         summary_content = state.get('summary_content', '')
         summary_title = state.get('summary_title', '')
@@ -143,7 +116,7 @@ class SummaryNode(BaseLangGraphNode):
                 logger.info("Generating summary content")
                 summary_content_raw = call_llm(
                     summary_prompt,
-                    combined_content
+                    content
                 )
                 if summary_content_raw:
                     summary_content = summary_content_raw.strip()
@@ -158,7 +131,7 @@ class SummaryNode(BaseLangGraphNode):
                 logger.info("Generating summary title")
                 summary_title_raw = call_llm(
                     summary_title_prompt,
-                    combined_content
+                    content
                 )
                 if summary_title_raw:
                     summary_title = summary_title_raw.strip()

@@ -17,7 +17,11 @@ Internal Views (not exposed in public API):
 
 from .base import BaseAPIView
 from .settings import SettingsAPIView, SettingsDetailAPIView
-from .email_message import EmailMessageAPIView, EmailMessageDetailAPIView
+from .email_message import (
+    EmailMessageAPIView,
+    EmailMessageDetailAPIView,
+    EmailMessageMetadataAPIView,
+)
 
 # Internal views (not exposed in public API)
 from .email_task import EmailTaskAPIView, EmailTaskDetailAPIView
@@ -31,6 +35,7 @@ __all__ = [
     'SettingsDetailAPIView',
     'EmailMessageAPIView',
     'EmailMessageDetailAPIView',
+    'EmailMessageMetadataAPIView',
 
     # Internal views (not exposed in public API)
     'EmailTaskAPIView',

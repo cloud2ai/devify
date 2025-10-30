@@ -16,7 +16,8 @@ from .views import (
     SettingsAPIView,
     SettingsDetailAPIView,
     EmailMessageAPIView,
-    EmailMessageDetailAPIView
+    EmailMessageDetailAPIView,
+    EmailMessageMetadataAPIView
 )
 from .views.email_alias import (
     EmailAliasAPIView,
@@ -56,6 +57,9 @@ urlpatterns = [
          name='threadlines-list'),
     path('threadlines/<uuid:uuid>', EmailMessageDetailAPIView.as_view(),
          name='threadlines-detail'),
+    path('threadlines/<uuid:uuid>/metadata',
+         EmailMessageMetadataAPIView.as_view(),
+         name='threadlines-metadata'),
 
     # Monitoring endpoints
     # API endpoints (require authentication)

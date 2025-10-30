@@ -17,6 +17,7 @@ from .base import BaseAPIView
 from ..models import EmailMessage
 from ..serializers import (
     EmailMessageSerializer,
+    EmailMessageListSerializer,
     EmailMessageCreateSerializer,
     EmailMessageUpdateSerializer
 )
@@ -60,7 +61,7 @@ class EmailMessageAPIView(BaseAPIView):
             )
         ],
         responses={
-            200: pagination_response(EmailMessageSerializer),
+            200: pagination_response(EmailMessageListSerializer),
             401: error_response()
         }
     )
@@ -120,7 +121,8 @@ class EmailMessageAPIView(BaseAPIView):
             total = queryset.count()
             items = queryset[start:end]
 
-            serializer = EmailMessageSerializer(items, many=True, context={'request': request})
+            serializer = EmailMessageListSerializer(
+                items, many=True, context={'request': request})
 
             response_data = {
                 'code': 200,
@@ -131,8 +133,14 @@ class EmailMessageAPIView(BaseAPIView):
                         'total': total,
                         'page': page,
                         'pageSize': page_size,
-                        'next': f"?page={page + 1}&page_size={page_size}" if end < total else None,
-                        'previous': f"?page={page - 1}&page_size={page_size}" if page > 1 else None
+                        'next': (
+                            f"?page={page + 1}&page_size={page_size}"
+                            if end < total else None
+                        ),
+                        'previous': (
+                            f"?page={page - 1}&page_size={page_size}"
+                            if page > 1 else None
+                        )
                     }
                 }
             }
@@ -172,7 +180,8 @@ class EmailMessageAPIView(BaseAPIView):
 
             if serializer.is_valid(raise_exception=True):
                 message = serializer.save()
-                response_serializer = EmailMessageSerializer(message, context={'request': request})
+                response_serializer = EmailMessageSerializer(
+                    message, context={'request': request})
 
                 return Response({
                     'code': 201,
@@ -311,7 +320,8 @@ class EmailMessageDetailAPIView(BaseAPIView):
 
             if serializer.is_valid(raise_exception=True):
                 updated_message = serializer.save()
-                response_serializer = EmailMessageSerializer(updated_message, context={'request': request})
+                response_serializer = EmailMessageSerializer(
+                    updated_message, context={'request': request})
 
                 return Response({
                     'code': 200,
@@ -358,3 +368,81 @@ class EmailMessageDetailAPIView(BaseAPIView):
                 'message': 'Email message not found',
                 'data': None
             }, status=status.HTTP_404_NOT_FOUND)
+
+
+class EmailMessageMetadataAPIView(BaseAPIView):
+    """
+    APIView for partial updates to EmailMessage.metadata field only.
+
+    This view supports merge-patch-like semantics for updating or creating
+    metadata keys. Passing null can be used to remove a key if needed.
+    """
+
+    lookup_field = 'uuid'
+
+    def get_object(self, uuid):
+        """Get email message by UUID with user ownership validation."""
+        return EmailMessage.objects.get(uuid=uuid, user=self.request.user)
+
+    @extend_schema(
+        operation_id='threadlines_update_metadata',
+        summary='Partially update threadline metadata',
+        description=(
+            'Update one or more metadata keys for a specific threadline by '
+            'UUID. Only provided keys will be updated. '
+            'Use null to delete a key if supported.'
+        ),
+        request=OpenApiTypes.OBJECT,
+        responses={
+            200: response(EmailMessageSerializer),
+            400: error_response(),
+            404: error_response(),
+            401: error_response()
+        }
+    )
+    def patch(self, request, uuid):
+        """Partially update metadata dictionary for the given threadline."""
+        try:
+            message = self.get_object(uuid)
+
+            if not isinstance(request.data, dict):
+                return Response({
+                    'code': 400,
+                    'message': 'Payload must be a JSON object',
+                    'data': None
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            current = message.metadata or {}
+
+            for key, value in request.data.items():
+                if value is None:
+                    if key in current:
+                        current.pop(key)
+                else:
+                    current[key] = value
+
+            message.metadata = current
+            message.save(update_fields=['metadata', 'updated_at'])
+
+            return Response({
+                'code': 200,
+                'message': 'Metadata updated successfully',
+                'data': {
+                    'uuid': str(message.uuid),
+                    'metadata': message.metadata,
+                }
+            }, status=status.HTTP_200_OK)
+
+        except EmailMessage.DoesNotExist:
+            return Response({
+                'code': 404,
+                'message': 'Threadline not found',
+                'data': None
+            }, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            logger.error(f"Error updating metadata for {uuid}: {str(e)}")
+            return Response({
+                'code': 400,
+                'message': str(e),
+                'data': None
+            }, status=status.HTTP_400_BAD_REQUEST)

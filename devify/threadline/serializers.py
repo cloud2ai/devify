@@ -446,6 +446,66 @@ class EmailMessageSerializer(serializers.ModelSerializer):
         return data
 
 
+class EmailAttachmentMinimalSerializer(serializers.ModelSerializer):
+    """
+    Minimal attachment serializer for list views - only metadata
+    """
+
+    class Meta:
+        model = EmailAttachment
+        fields = ['id', 'filename', 'content_type',
+                  'file_size', 'is_image', 'safe_filename']
+        read_only_fields = ['id']
+
+
+class EmailMessageListSerializer(serializers.ModelSerializer):
+    """
+    Lightweight serializer for list views - only essential fields
+    """
+
+    status_display = serializers.CharField(
+        source='get_status_display', read_only=True)
+    attachments_count = serializers.SerializerMethodField()
+    attachments = serializers.SerializerMethodField()
+
+    class Meta:
+        model = EmailMessage
+        fields = [
+            'id', 'uuid', 'message_id',
+            'subject', 'sender', 'recipients', 'received_at',
+            'summary_title', 'summary_content', 'summary_priority',
+            'status', 'status_display',
+            'attachments_count', 'attachments',
+            'metadata', 'created_at'
+        ]
+        read_only_fields = [
+            'id', 'uuid', 'status', 'created_at'
+        ]
+
+    def get_attachments_count(self, obj):
+        """Return count of attachments"""
+        return obj.attachments.count()
+
+    def get_attachments(self, obj):
+        """Return minimal attachment info"""
+        attachments = obj.attachments.all()
+        return EmailAttachmentMinimalSerializer(attachments, many=True).data
+
+    def to_representation(self, instance):
+        """Limit summary_content length for list views"""
+        data = super().to_representation(instance)
+
+        # Limit summary_content for preview
+        if data.get('summary_content'):
+            max_length = 500
+            if len(data['summary_content']) > max_length:
+                data['summary_content'] = (
+                    data['summary_content'][:max_length] + '...'
+                )
+
+        return data
+
+
 class EmailMessageCreateSerializer(serializers.ModelSerializer):
     """
     Create serializer for EmailMessage model
@@ -515,7 +575,8 @@ class EmailAttachmentSerializer(serializers.ModelSerializer):
 
     email_message = EmailMessageSerializer(read_only=True)
     email_message_id = serializers.IntegerField(write_only=True)
-    status_display = serializers.CharField(source='get_status_display', read_only=True)
+    status_display = serializers.CharField(
+        source='get_status_display', read_only=True)
 
     class Meta:
         model = EmailAttachment

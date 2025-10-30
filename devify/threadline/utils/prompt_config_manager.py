@@ -168,8 +168,11 @@ class PromptConfigManager:
         )
 
         # Prepare shared snippets with language variable
-        # Use DEFAULT_LANGUAGE or first available language
+        # Currently only {language} variable is used in prompts
+        # The 'shared' section is kept for backward compatibility but is empty
         shared_snippets_all = self.default_prompts.get('shared', {})
+
+        # Get shared snippets for default language (fallback to empty dict)
         default_shared_lang = (
             settings.DEFAULT_LANGUAGE
             if settings.DEFAULT_LANGUAGE in shared_snippets_all
@@ -180,11 +183,13 @@ class PromptConfigManager:
         shared_snippets = shared_snippets_all.get(
             default_shared_lang, {}
         ).copy()
+
+        # Add language variable for prompt rendering
         shared_snippets['language'] = lang_display
 
         logger.info(
             f"Using language for prompts: {lang_display} "
-            f"(code={language}, shared_snippets_lang={default_shared_lang})"
+            f"(code={language})"
         )
 
         # Load default common prompts
@@ -319,7 +324,9 @@ class PromptConfigManager:
 
         languages = self.languages_config.get('languages', [])
         language_lower = language.lower().strip()
-        available_codes = [lang.get('code') for lang in languages if lang.get('code')]
+        available_codes = [
+            lang.get('code') for lang in languages if lang.get('code')
+        ]
 
         logger.debug(
             f"_find_language_config: input={language}, "
@@ -480,11 +487,15 @@ class PromptConfigManager:
 
             if has_full_prompts:
                 # Legacy format: return as-is
-                # User has custom prompts, prioritize them over dynamic generation
+                # User has custom prompts, prioritize them over dynamic
+                # generation
+                custom_prompts = [
+                    k for k in legacy_prompt_fields
+                    if k in prompt_config_raw
+                ]
                 logger.info(
                     f"Using legacy prompt_config for user {user.id} "
-                    f"(custom prompts found: "
-                    f"{[k for k in legacy_prompt_fields if k in prompt_config_raw]}). "
+                    f"(custom prompts found: {custom_prompts}). "
                     f"Language field (if present) will be ignored."
                 )
                 if 'language' in prompt_config_raw:
