@@ -187,7 +187,7 @@ def build_markdown_payload(status, email, old_status=None,
     )
     template_color = STATUS_COLORS.get(status.upper(), "blue")
     timestamp = timezone.now().strftime('%Y-%m-%d %H:%M:%S')
-    title = _("[AI] Email Processing: {status}").format(status=status)
+    title = _("[AImyChats] Email Processing: {status}").format(status=status)
     details = base_payload.get('details', _('No details available'))
     markdown_content = (
         f"**{_('Time')}:** {timestamp}\n"

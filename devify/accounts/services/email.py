@@ -68,8 +68,8 @@ class RegistrationEmailService:
             })
 
             subject_map = {
-                'zh-CN': _('Complete Your AimyChats Registration'),
-                'en-US': _('Complete Your AimyChats Registration'),
+                'zh-CN': _('Complete Your AImyChats Registration'),
+                'en-US': _('Complete Your AImyChats Registration'),
             }
             subject = str(subject_map.get(language, subject_map['en-US']))
 
@@ -162,8 +162,8 @@ class PasswordResetEmailService:
             })
 
             subject_map = {
-                'zh-CN': _('Reset Your AimyChats Password'),
-                'en-US': _('Reset Your AimyChats Password'),
+                'zh-CN': _('Reset Your AImyChats Password'),
+                'en-US': _('Reset Your AImyChats Password'),
             }
             subject = str(subject_map.get(language, subject_map['en-US']))
 

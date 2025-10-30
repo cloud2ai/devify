@@ -420,8 +420,8 @@ from .cache import *
 
 # DRF Spectacular settings for API documentation
 SPECTACULAR_SETTINGS = {
-    'TITLE': 'Devify API',
-    'DESCRIPTION': 'API documentation for Devify project',
+    'TITLE': 'AImyChats API',
+    'DESCRIPTION': 'API documentation for AImyChats project',
     'VERSION': '1.0.0',
     'SERVE_INCLUDE_SCHEMA': True,
     'COMPONENT_SPLIT_REQUEST': True,
