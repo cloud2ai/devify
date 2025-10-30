@@ -373,6 +373,14 @@ class UserDetailsSerializer(serializers.ModelSerializer):
     Includes virtual email address from EmailAlias and profile information.
     Also includes authentication method information and password change capability.
     """
+    display_name = serializers.SerializerMethodField(
+        read_only=True,
+        help_text=_(
+            "User-friendly display name, prioritizing first_name + last_name "
+            "from OAuth providers, falling back to username"
+        )
+    )
+
     virtual_email = serializers.SerializerMethodField(
         read_only=True,
         help_text=_(
@@ -398,6 +406,7 @@ class UserDetailsSerializer(serializers.ModelSerializer):
             'email',
             'first_name',
             'last_name',
+            'display_name',
             'virtual_email',
             'profile',
             'auth_info'
@@ -408,8 +417,28 @@ class UserDetailsSerializer(serializers.ModelSerializer):
             'email',
             'virtual_email',
             'profile',
-            'auth_info'
+            'auth_info',
+            'display_name'
         ]
+
+    def get_display_name(self, obj):
+        """
+        Get user-friendly display name.
+
+        Priority order:
+        1. first_name + last_name (from OAuth providers like Google)
+        2. first_name only (if last_name is empty)
+        3. username (fallback)
+
+        This provides a more friendly name display for OAuth users
+        who typically have proper first_name and last_name from their provider.
+        """
+        if obj.first_name and obj.last_name:
+            return f"{obj.first_name} {obj.last_name}".strip()
+        elif obj.first_name:
+            return obj.first_name.strip()
+        else:
+            return obj.username
 
     def get_virtual_email(self, obj):
         """

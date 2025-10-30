@@ -21,7 +21,9 @@ Redirects to frontend with tokens in URL parameters
 import logging
 import uuid
 
-from allauth.socialaccount.adapter import DefaultSocialAccountAdapter
+from allauth.socialaccount.adapter import (
+    DefaultSocialAccountAdapter
+)
 from django.conf import settings
 
 from .models import Profile
@@ -64,8 +66,62 @@ class CustomSocialAccountAdapter(DefaultSocialAccountAdapter):
         """
         Populate user with OAuth data.
         Generate a unique username if not provided.
+
+        Also syncs first_name and last_name for existing users
+        to keep data up-to-date from OAuth provider.
+
+        OAuth providers like Google typically provide:
+        - given_name (mapped to first_name)
+        - family_name (mapped to last_name)
+        - email
+        These are automatically mapped by django-allauth via
+        super().populate_user()
         """
         user = super().populate_user(request, sociallogin, data)
+
+        # Log OAuth data for debugging
+        # (first_name and last_name extraction)
+        if sociallogin.account.provider == 'google':
+            logger.info(
+                f"Google OAuth user data: "
+                f"given_name={data.get('given_name', 'N/A')}, "
+                f"family_name={data.get('family_name', 'N/A')}, "
+                f"email={data.get('email', 'N/A')}"
+            )
+
+            # Sync first_name and last_name for existing users
+            # This ensures names stay updated if changed in Google
+            if user.pk:
+                given_name = data.get('given_name', '')
+                family_name = data.get('family_name', '')
+
+                updated = False
+                first_name_changed = (
+                    given_name and
+                    (not user.first_name or user.first_name != given_name)
+                )
+                if first_name_changed:
+                    user.first_name = given_name
+                    updated = True
+                    logger.info(
+                        f"Synced first_name for existing user "
+                        f"{user.email}: {given_name}"
+                    )
+
+                last_name_changed = (
+                    family_name and
+                    (not user.last_name or user.last_name != family_name)
+                )
+                if last_name_changed:
+                    user.last_name = family_name
+                    updated = True
+                    logger.info(
+                        f"Synced last_name for existing user "
+                        f"{user.email}: {family_name}"
+                    )
+
+                if updated:
+                    user.save(update_fields=['first_name', 'last_name'])
 
         if not user.username or user.username == '':
             email = data.get('email', '')
@@ -103,7 +159,9 @@ class CustomSocialAccountAdapter(DefaultSocialAccountAdapter):
                     user=user,
                     registration_completed=False
                 )
-                logger.info(f"Created profile for existing user: {user.email}")
+                logger.info(
+                    f"Created profile for existing user: {user.email}"
+                )
 
     def save_user(self, request, sociallogin, form=None):
         """
