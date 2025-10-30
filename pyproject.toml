@@ -11,10 +11,11 @@ packages = ["devify"]
 [project]
 name = "devify"
 version = "0.1.0"
-description = "Django starter template"
+description = "Devify is an AI Agent-powered personal productivity platform that leverages intelligent automation to enhance daily work efficiency."
 authors = [{name = "Ray Sun", email = "xiaoquqi@gmail.com"}]
 readme = "README.md"
 requires-python = ">=3.11"
+license = { file = "LICENSE" }
 dependencies = [
     "django==5.1.4",
     "djangorestframework==3.15.2",
