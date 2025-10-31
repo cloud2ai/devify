@@ -35,7 +35,9 @@ logger = logging.getLogger(__name__)
 )
 def process_email_workflow(
     email_id: str,
-    force: bool = False
+    force: bool = False,
+    language: str = None,
+    scene: str = None
 ) -> str:
     """
     Execute LangGraph-based email processing workflow.
@@ -63,6 +65,14 @@ def process_email_workflow(
         force (bool): Whether to force processing regardless of current
                      status. When True, bypasses status checks and allows
                      reprocessing even if content already exists.
+        language (str, optional): Language override for this processing
+                                 (e.g., 'zh-CN', 'en-US'). If provided,
+                                 will override user's default language
+                                 for this retry only.
+        scene (str, optional): Scene override for this processing
+                              (e.g., 'chat', 'product_issue'). If provided,
+                              will override user's default scene for this
+                              retry only.
 
     Returns:
         str: The email_id (for Celery chain compatibility)
@@ -79,12 +89,15 @@ def process_email_workflow(
         user_info = f"{email.user.username}({email.user_id})"
         logger.info(
             f"[Workflow] Starting for email {email_id}, user {user_info}, "
-            f"status: {email.status}, force: {force}"
+            f"status: {email.status}, force: {force}, "
+            f"language: {language}, scene: {scene}"
         )
 
         result = execute_email_processing_workflow(
             email=email,
-            force=force
+            force=force,
+            language=language,
+            scene=scene
         )
 
         if result['success']:

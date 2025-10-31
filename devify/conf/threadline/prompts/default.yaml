@@ -236,11 +236,12 @@ common:
     3) Every field must exist. If unknown, use "" (for string) or [] (for array).
     4) Proper nouns (names, places, product/tech terms) MUST be preserved
        in their original form. Do not translate proper nouns.
-    5) Timeline MUST use strict 24-hour formats only:
-       - "YYYY-MM-DD" (date only), or
-       - "YYYY-MM-DD HH:mm" (date + time, 24-hour)
-       No fuzzy words like "yesterday", "tomorrow", "last week".
-       If no date can be determined, use [].
+    5) Timeline MUST use strict 24-hour format: "YYYY-MM-DD HH:mm"
+       - Must include both date AND time (to the minute)
+       - Use 24-hour format (00:00 to 23:59)
+       - Example: "2025-10-30 14:30" (not "2025-10-30" or "2025-10-30 2:30 PM")
+       - No fuzzy words like "yesterday", "tomorrow", "last week"
+       - If no date/time can be determined, use []
     6) Keywords must be strictly relevant to the core problem/issue in the
        conversation. Avoid generic or unrelated terms; keep tags concise.
     7) Category should be a SHORT, GENERAL classification (1-3 words max).

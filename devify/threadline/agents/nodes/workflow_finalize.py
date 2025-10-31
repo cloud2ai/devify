@@ -127,19 +127,17 @@ class WorkflowFinalizeNode(BaseLangGraphNode):
             )
             self._sync_data_to_database(state)
 
-            if not force:
-                self.email.set_status(
-                    EmailStatus.FAILED.value,
-                    error_message=error_summary
-                )
-                logger.info(
-                    f"EmailMessage {self.email.id} status set to FAILED"
-                )
-            else:
-                logger.info(
-                    f"Force mode: skipping status update to FAILED, "
-                    f"current status remains {self.email.status}"
-                )
+            # Always set status to FAILED, regardless of force mode
+            # Force mode only controls whether to re-process OCR/LLM,
+            # not status updates
+            self.email.set_status(
+                EmailStatus.FAILED.value,
+                error_message=error_summary
+            )
+            logger.info(
+                f"EmailMessage {self.email.id} status set to FAILED, "
+                f"force={force}"
+            )
         else:
             email_id = state.get('id')
             user_id = state.get('user_id')
@@ -150,18 +148,14 @@ class WorkflowFinalizeNode(BaseLangGraphNode):
 
             self._sync_data_to_database(state)
 
-            if not force:
-                self.email.set_status(EmailStatus.SUCCESS.value)
-                logger.info(
-                    f"[{self.node_name}] Status set to SUCCESS for "
-                    f"email {self.email.id}, user {user_id}"
-                )
-            else:
-                logger.info(
-                    f"Force mode: skipping status update for "
-                    f"email {self.email.id}, status remains "
-                    f"{self.email.status}"
-                )
+            # Always set status to SUCCESS, regardless of force mode
+            # Force mode only controls whether to re-process OCR/LLM, not
+            # status updates
+            self.email.set_status(EmailStatus.SUCCESS.value)
+            logger.info(
+                f"[{self.node_name}] Status set to SUCCESS for "
+                f"email {self.email.id}, user {user_id}, force={force}"
+            )
 
         email_id = state.get('id')
         user_id = state.get('user_id')
@@ -376,31 +370,39 @@ class WorkflowFinalizeNode(BaseLangGraphNode):
         """
         state = super()._handle_error(error, state)
 
+        # Try to update status to FAILED if email object is available
+        # This is best-effort: if email is not available or update fails,
+        # we log the error but don't fail the entire error handling
         force = state.get('force', False)
-        if force:
-            logger.info(
-                "Force mode: skipping status update after "
-                "finalization error"
-            )
-            return state
 
-        try:
-            node_errors = state.get('node_errors', {})
-            error_summary = _format_node_errors(node_errors)
-            error_message = f"Finalization failed - {error_summary}"
+        # Only attempt status update if we have email object
+        # If before_processing failed (self.email is None), we can't reliably
+        # update status, so skip it
+        if self.email:
+            try:
+                node_errors = state.get('node_errors', {})
+                error_summary = _format_node_errors(node_errors)
+                error_message = f"Finalization failed - {error_summary}"
 
-            self.email.set_status(
-                EmailStatus.FAILED.value,
-                error_message=error_message
-            )
-            logger.info(
-                f"EmailMessage {self.email.id} status set to FAILED "
-                f"due to finalization error"
-            )
-        except Exception as status_error:
-            logger.error(
-                f"Failed to update status after finalization error: "
-                f"{status_error}"
+                self.email.set_status(
+                    EmailStatus.FAILED.value,
+                    error_message=error_message
+                )
+                logger.info(
+                    f"EmailMessage {self.email.id} status set to FAILED "
+                    f"due to finalization error, force={force}"
+                )
+            except Exception as status_error:
+                logger.error(
+                    f"Failed to update status after finalization error: "
+                    f"{status_error}"
+                )
+        else:
+            # If self.email is None, before_processing likely failed
+            # In this case, we can't update status reliably
+            logger.warning(
+                f"Cannot update status: email object not available "
+                f"(before_processing may have failed)"
             )
 
         return state

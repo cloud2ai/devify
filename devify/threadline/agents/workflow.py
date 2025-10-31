@@ -49,20 +49,13 @@ def _update_email_status_on_fatal_error(
     try:
         email = EmailMessage.objects.get(id=email_id)
 
-        if email.status == EmailStatus.FETCHED.value:
-            email.status = EmailStatus.PROCESSING.value
-            email.save(update_fields=['status'])
-            logger.info(
-                f"Updated email status to PROCESSING for "
-                f"email_id: {email_id}"
-            )
-            email.refresh_from_db()
-
-        email.status = EmailStatus.FAILED.value
-        email.error_message = error_message
-        email.save(update_fields=['status', 'error_message'])
+        # Directly set status to FAILED regardless of current status
+        # State machine allows FETCHED → FAILED and PROCESSING → FAILED
+        # No need to set PROCESSING first as this is a fatal error
+        email.set_status(EmailStatus.FAILED.value, error_message=error_message)
         logger.info(
-            f"Updated email status to FAILED for email_id: {email_id}"
+            f"Updated email status to FAILED for email_id: {email_id} "
+            f"(fatal workflow error, previous status: {email.status})"
         )
     except Exception as update_error:
         logger.error(
@@ -121,7 +114,9 @@ def create_email_processing_graph():
 
 def execute_email_processing_workflow(
     email: EmailMessage,
-    force: bool = False
+    force: bool = False,
+    language: str = None,
+    scene: str = None
 ) -> Dict[str, Any]:
     """
     Execute the email processing workflow for an email.
@@ -134,6 +129,8 @@ def execute_email_processing_workflow(
     Args:
         email: EmailMessage object to process
         force: Whether to force execution even if already completed
+        language: Optional language override for this retry
+        scene: Optional scene override for this retry
 
     Returns:
         Dict with success status and result/error
@@ -143,7 +140,8 @@ def execute_email_processing_workflow(
 
     logger.info(
         f"Starting workflow for email {email_id}, user {user_id}, "
-        f"status: {email.status}, force: {force}"
+        f"status: {email.status}, force: {force}, "
+        f"language: {language}, scene: {scene}"
     )
 
     try:
@@ -152,6 +150,11 @@ def execute_email_processing_workflow(
             str(email.user_id),
             force
         )
+
+        if language:
+            initial_state['retry_language'] = language
+        if scene:
+            initial_state['retry_scene'] = scene
 
         graph = create_email_processing_graph()
 

@@ -32,7 +32,7 @@ class WorkflowPrepareNode(BaseLangGraphNode):
     - Load all attachments information
     - Load user Settings configurations (prompt_config, issue_config)
     - Initialize EmailState with all necessary data
-    - Set database status to PROCESSING (skip in force mode)
+    - Set database status to PROCESSING (always, regardless of force mode)
     - Provide comprehensive validation for the entire workflow
     """
 
@@ -97,8 +97,8 @@ class WorkflowPrepareNode(BaseLangGraphNode):
         Execute the workflow preparation logic.
 
         Populate the EmailState with all data from the database
-        EmailMessage and user Settings. Optionally set database status
-        to PROCESSING based on force parameter.
+        EmailMessage and user Settings. Always set database status
+        to PROCESSING (force mode does not affect status updates).
 
         Args:
             state: Current email state
@@ -106,28 +106,76 @@ class WorkflowPrepareNode(BaseLangGraphNode):
         Returns:
             EmailState: Updated state with all email data and configurations
         """
+        # Always set status to PROCESSING, regardless of force mode
+        # Force mode only controls whether to re-process OCR/LLM, not status
+        # updates
+        self.email.set_status(EmailStatus.PROCESSING.value)
         force = state.get('force', False)
-
-        if not force:
-            self.email.set_status(EmailStatus.PROCESSING.value)
-            logger.info(
-                f"[{self.node_name}] Status set to PROCESSING for "
-                f"email {self.email.id}, user {self.email.user_id}"
-            )
-        else:
-            logger.info(
-                f"Force mode: skipping status update for "
-                f"email {self.email.id}, status remains {self.email.status}"
-            )
+        logger.info(
+            f"[{self.node_name}] Status set to PROCESSING for "
+            f"email {self.email.id}, user {self.email.user_id}, force={force}"
+        )
 
         prompt_config = None
         issue_config = None
 
         # Load prompt_config using PromptConfigManager
-        # This handles backward compatibility and dynamic generation internally
+        # Check if retry_language and retry_scene are provided in state
+        # If so, use them instead of user's default settings
+        retry_language = state.get('retry_language')
+        retry_scene = state.get('retry_scene')
+
         try:
             prompt_manager = PromptConfigManager()
-            prompt_config = prompt_manager.load_prompt_config(self.email.user)
+
+            if retry_language or retry_scene:
+                # Use retry configuration for this processing
+                # If only one parameter is provided, load user defaults for
+                # the other
+                if retry_language and retry_scene:
+                    # Both provided, use them directly
+                    scene = retry_scene
+                    language = retry_language
+                else:
+                    # Only one provided, need to get user defaults for the
+                    # other
+                    from django.conf import settings as django_settings
+                    try:
+                        user_config = Settings.get_user_prompt_config(
+                            self.email.user)
+                    except ValueError:
+                        # No user config found, use defaults
+                        user_config = {}
+
+                    # Get user's default scene
+                    if retry_scene:
+                        scene = retry_scene
+                    else:
+                        scene = user_config.get(
+                            'scene', django_settings.DEFAULT_SCENE)
+
+                    # Get user's default language
+                    if retry_language:
+                        language = retry_language
+                    else:
+                        language = user_config.get(
+                            'language', django_settings.DEFAULT_LANGUAGE)
+
+                logger.info(
+                    f"Using retry configuration for email {self.email.id}, "
+                    f"user {self.email.user_id}: "
+                    f"language={language}, scene={scene} "
+                    f"(retry_language={retry_language}, retry_scene={retry_scene})"
+                )
+                prompt_config = prompt_manager.get_prompt_config(
+                    scene,
+                    language
+                )
+            else:
+                # Use user's default settings
+                prompt_config = prompt_manager.load_prompt_config(
+                    self.email.user)
+
             logger.info(
                 f"Loaded prompt_config for user {self.email.user_id}"
             )

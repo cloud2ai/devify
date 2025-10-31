@@ -83,6 +83,10 @@ class EmailState(TypedDict, total=False):
     node_errors: Dict[str, List[NodeError]] | None
     force: bool | None
 
+    # Retry configuration (temporary override)
+    retry_language: str | None
+    retry_scene: str | None
+
     # Timestamps
     created_at: str | None
     updated_at: str | None
@@ -131,6 +135,8 @@ def create_email_state(
         "error_message": None,
         "node_errors": {},
         "force": force,
+        "retry_language": None,
+        "retry_scene": None,
         "created_at": current_time,
         "updated_at": current_time,
     }

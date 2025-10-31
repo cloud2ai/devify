@@ -1289,3 +1289,14 @@ flowchart TD
 - **Atomic Database Operations**: All database writes happen in a single transaction for data consistency
 - **Error Resilience**: Node-level error tracking allows the workflow to continue despite non-critical failures
 - **Force Mode**: Reprocess emails regardless of current status for debugging and manual intervention
+- **Email Retry Feature**: Supports retrying email processing for all statuses (SUCCESS, FAILED, etc.)
+  - **Retry API Endpoint**: `POST /v1/threadlines/<uuid>/retry`
+  - **Parameters**:
+    - `language` (optional): Override processing language (e.g., 'zh-CN', 'en-US')
+    - `scene` (optional): Override processing scene (e.g., 'chat', 'product_issue')
+    - `force` (optional, default false): Force retry mode - re-processes OCR and LLM even if results exist
+  - **State Transitions**:
+    - All statuses (including SUCCESS) can transition to PROCESSING during retry
+    - State machine allows: `SUCCESS → PROCESSING`, `FAILED → PROCESSING`
+  - **Temporary Configuration Override**: Retry parameters only affect the current retry, don't update user Settings
+  - **Status Updates**: Email status automatically changes to PROCESSING when retry starts, then to SUCCESS or FAILED when complete

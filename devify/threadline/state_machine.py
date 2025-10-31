@@ -23,6 +23,7 @@ FETCHED → FAILED (stuck or unable to start processing)
 PROCESSING → SUCCESS (all tasks succeed)
 PROCESSING → FAILED (any task fails)
 FAILED → PROCESSING (retry)
+SUCCESS → PROCESSING (retry from success state)
 
 Key Design Principles:
 ---------------------
@@ -118,9 +119,12 @@ EMAIL_STATE_MACHINE = {
     },
 
     EmailStatus.SUCCESS: {
-        'next': [],
+        'next': [
+            EmailStatus.PROCESSING,
+        ],
         'description': (
-            'Email processing completed successfully (terminal state)'
+            'Email processing completed successfully. '
+            'Can be retried to PROCESSING state.'
         )
     },
 }

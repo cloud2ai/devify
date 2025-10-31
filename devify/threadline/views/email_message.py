@@ -14,7 +14,7 @@ from drf_spectacular.types import OpenApiTypes
 from core.swagger import response, error_response, pagination_response
 
 from .base import BaseAPIView
-from ..models import EmailMessage
+from ..models import EmailMessage, EmailStatus
 from ..serializers import (
     EmailMessageSerializer,
     EmailMessageListSerializer,
@@ -368,6 +368,241 @@ class EmailMessageDetailAPIView(BaseAPIView):
                 'message': 'Email message not found',
                 'data': None
             }, status=status.HTTP_404_NOT_FOUND)
+
+    @extend_schema(
+        operation_id='threadlines_retry',
+        summary='Retry email processing',
+        description='Retry processing an email with optional language and scene override',
+        request=serializers.Serializer,
+        parameters=[
+            OpenApiParameter(
+                name='language',
+                type=OpenApiTypes.STR,
+                location=OpenApiParameter.QUERY,
+                description='Processing language (e.g., zh-CN, en-US)',
+                required=False
+            ),
+            OpenApiParameter(
+                name='scene',
+                type=OpenApiTypes.STR,
+                location=OpenApiParameter.QUERY,
+                description='Processing scene (e.g., chat, product_issue)',
+                required=False
+            ),
+            OpenApiParameter(
+                name='force',
+                type=OpenApiTypes.BOOL,
+                location=OpenApiParameter.QUERY,
+                description='Force retry (re-process OCR and LLM even if already done)',
+                required=False
+            )
+        ],
+        responses={
+            200: response(serializers.DictField),
+            400: error_response(),
+            404: error_response(),
+            401: error_response()
+        }
+    )
+    def post(self, request, uuid):
+        """
+        Retry processing an email message with optional language and scene override
+
+        This endpoint allows retrying email processing with different
+        language and scene settings. The force parameter determines
+        whether to re-process OCR and LLM even if results already exist.
+        """
+        from ..tasks.email_workflow import process_email_workflow
+
+        try:
+            message = self.get_object(uuid)
+
+            language = request.data.get('language') or request.query_params.get('language')
+            scene = request.data.get('scene') or request.query_params.get('scene')
+            force = request.data.get('force', False)
+            if isinstance(force, str):
+                force = force.lower() in ('true', '1', 'yes')
+
+            logger.info(
+                f"Retry requested for email {uuid}, "
+                f"language={language}, scene={scene}, force={force}"
+            )
+
+            # Immediately set status to PROCESSING to provide instant feedback
+            # This ensures the UI shows processing state right away
+            try:
+                message.set_status(EmailStatus.PROCESSING.value)
+                logger.info(
+                    f"Status set to PROCESSING for email {uuid} "
+                    f"before starting retry workflow"
+                )
+            except Exception as status_error:
+                logger.warning(
+                    f"Failed to set status to PROCESSING for email {uuid}: "
+                    f"{status_error}. Workflow will handle status update."
+                )
+
+            process_email_workflow.delay(
+                str(message.id),
+                force=force,
+                language=language,
+                scene=scene
+            )
+
+            return Response({
+                'code': 200,
+                'message': 'Retry task triggered successfully',
+                'data': {
+                    'email_id': str(message.id),
+                    'uuid': str(message.uuid),
+                    'language': language,
+                    'scene': scene,
+                    'force': force
+                }
+            }, status=status.HTTP_200_OK)
+
+        except EmailMessage.DoesNotExist:
+            logger.error(f"EmailMessage {uuid} not found for retry")
+            return Response({
+                'code': 404,
+                'message': 'Threadline not found',
+                'data': None
+            }, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            logger.error(f"Error triggering retry for {uuid}: {str(e)}")
+            return Response({
+                'code': 400,
+                'message': str(e),
+                'data': None
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+
+class EmailMessageRetryAPIView(BaseAPIView):
+    """
+    APIView for retrying email processing with custom language and scene
+    """
+
+    lookup_field = 'uuid'
+
+    def get_queryset(self):
+        """
+        Get EmailMessage queryset with related objects
+        """
+        return EmailMessage.objects.select_related('user').all()
+
+    def get_object(self, uuid):
+        """
+        Get email message by UUID with user ownership validation
+        """
+        return EmailMessage.objects.get(uuid=uuid, user=self.request.user)
+
+    @extend_schema(
+        operation_id='threadlines_retry',
+        summary='Retry email processing',
+        description='Retry processing an email with optional language and scene override',
+        request=serializers.Serializer,
+        parameters=[
+            OpenApiParameter(
+                name='language',
+                type=OpenApiTypes.STR,
+                location=OpenApiParameter.QUERY,
+                description='Processing language (e.g., zh-CN, en-US)',
+                required=False
+            ),
+            OpenApiParameter(
+                name='scene',
+                type=OpenApiTypes.STR,
+                location=OpenApiParameter.QUERY,
+                description='Processing scene (e.g., chat, product_issue)',
+                required=False
+            ),
+            OpenApiParameter(
+                name='force',
+                type=OpenApiTypes.BOOL,
+                location=OpenApiParameter.QUERY,
+                description='Force retry (re-process OCR and LLM even if already done)',
+                required=False
+            )
+        ],
+        responses={
+            200: response(serializers.DictField),
+            400: error_response(),
+            404: error_response(),
+            401: error_response()
+        }
+    )
+    def post(self, request, uuid):
+        """
+        Retry processing an email message with optional language and scene override
+
+        This endpoint allows retrying email processing with different
+        language and scene settings. The force parameter determines
+        whether to re-process OCR and LLM even if results already exist.
+        """
+        from ..tasks.email_workflow import process_email_workflow
+
+        try:
+            message = self.get_object(uuid)
+
+            language = request.data.get('language') or request.query_params.get('language')
+            scene = request.data.get('scene') or request.query_params.get('scene')
+            force = request.data.get('force', False)
+            if isinstance(force, str):
+                force = force.lower() in ('true', '1', 'yes')
+
+            logger.info(
+                f"Retry requested for email {uuid}, "
+                f"language={language}, scene={scene}, force={force}"
+            )
+
+            # Immediately set status to PROCESSING to provide instant feedback
+            # This ensures the UI shows processing state right away
+            from ..models import EmailStatus
+            try:
+                message.set_status(EmailStatus.PROCESSING.value)
+                logger.info(
+                    f"Status set to PROCESSING for email {uuid} "
+                    f"before starting retry workflow"
+                )
+            except Exception as status_error:
+                logger.warning(
+                    f"Failed to set status to PROCESSING for email {uuid}: "
+                    f"{status_error}. Workflow will handle status update."
+                )
+
+            process_email_workflow.delay(
+                str(message.id),
+                force=force,
+                language=language,
+                scene=scene
+            )
+
+            return Response({
+                'code': 200,
+                'message': 'Retry task triggered successfully',
+                'data': {
+                    'email_id': str(message.id),
+                    'uuid': str(message.uuid),
+                    'language': language,
+                    'scene': scene,
+                    'force': force
+                }
+            }, status=status.HTTP_200_OK)
+
+        except EmailMessage.DoesNotExist:
+            logger.error(f"EmailMessage {uuid} not found for retry")
+            return Response({
+                'code': 404,
+                'message': 'Threadline not found',
+                'data': None
+            }, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            logger.error(f"Error triggering retry for {uuid}: {str(e)}")
+            return Response({
+                'code': 400,
+                'message': str(e),
+                'data': None
+            }, status=status.HTTP_400_BAD_REQUEST)
 
 
 class EmailMessageMetadataAPIView(BaseAPIView):
