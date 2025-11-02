@@ -2,8 +2,10 @@
 # Only accept emails for these domains
 
 # Main production domain
-devify.com
+aimychats.com
 
-# Alternative production domains
-mail.devify.com
+# Mail server hostname
+mail.aimychats.com
+
+# Legacy/development domain (if needed)
 devify.local
