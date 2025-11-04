@@ -8,18 +8,21 @@ results to the database and sets the final processing status.
 import logging
 from typing import Dict, Any
 
+from django.conf import settings
 from django.db import transaction
 
-logger = logging.getLogger(__name__)
-
-from threadline.agents.nodes.base_node import BaseLangGraphNode
+from billing.models import EmailCreditsTransaction, EmailWorkflowUsage
 from threadline.agents.email_state import (
     EmailState,
+    get_all_node_names_with_errors,
     has_node_errors,
-    get_all_node_names_with_errors
 )
-from threadline.models import EmailMessage, EmailAttachment, Issue
+from threadline.agents.nodes.base_node import BaseLangGraphNode
+from threadline.models import EmailAttachment, EmailMessage, Issue
 from threadline.state_machine import EmailStatus
+
+
+logger = logging.getLogger(__name__)
 
 
 def _format_node_errors(node_errors: Dict[str, Any]) -> str:
@@ -186,6 +189,9 @@ class WorkflowFinalizeNode(BaseLangGraphNode):
             # Sync attachments
             self._sync_email_attachments(state)
 
+            # Record usage metrics
+            self._record_usage_metrics(email, state)
+
             # Create issue if exists
             issue_result = state.get('issue_result_data')
             if issue_result:
@@ -351,6 +357,92 @@ class WorkflowFinalizeNode(BaseLangGraphNode):
             }
         )
         return issue
+
+    def _record_usage_metrics(
+        self, email: EmailMessage, state: EmailState
+    ) -> None:
+        """
+        Record Email Workflow usage metrics for cost tracking
+
+        Args:
+            email: EmailMessage object
+            state: Current email state
+        """
+        if not settings.ENABLE_COST_TRACKING:
+            logger.info("Cost tracking is disabled, skipping usage metrics")
+            return
+
+        if not state.get('credits_consumed'):
+            logger.info(
+                "No credits consumed, skipping usage metrics "
+                "(billing disabled or insufficient credits)"
+            )
+            return
+
+        credits_transaction_id = state.get('credits_transaction_id')
+        if not credits_transaction_id:
+            logger.warning(
+                "Credits consumed but no transaction ID found, "
+                "cannot record usage metrics"
+            )
+            return
+
+        llm_calls = state.get('llm_calls', [])
+        ocr_calls = state.get('ocr_calls', [])
+
+        if not llm_calls and not ocr_calls:
+            logger.info(
+                f"No API calls to record for email {email.id}, "
+                f"skipping usage metrics"
+            )
+            return
+
+        try:
+            llm_total_input = sum(
+                c.get('input_tokens', 0) for c in llm_calls
+            )
+            llm_total_output = sum(
+                c.get('output_tokens', 0) for c in llm_calls
+            )
+            llm_success = sum(1 for c in llm_calls if c.get('success'))
+
+            ocr_success = sum(1 for c in ocr_calls if c.get('success'))
+            ocr_total = sum(
+                c.get('pages', 1) for c in ocr_calls if c.get('success')
+            )
+
+            usage, created = EmailWorkflowUsage.objects.get_or_create(
+                credits_transaction_id=int(credits_transaction_id),
+                defaults={
+                    'llm_call_count': len(llm_calls),
+                    'llm_success_count': llm_success,
+                    'llm_total_input_tokens': llm_total_input,
+                    'llm_total_output_tokens': llm_total_output,
+                    'llm_total_tokens': llm_total_input + llm_total_output,
+                    'ocr_call_count': len(ocr_calls),
+                    'ocr_success_count': ocr_success,
+                    'ocr_total_images': ocr_total,
+                    'llm_calls_detail': llm_calls,
+                    'ocr_calls_detail': ocr_calls
+                }
+            )
+
+            if created:
+                logger.info(
+                    f"Recorded usage metrics for "
+                    f"transaction {credits_transaction_id}: "
+                    f"LLM {len(llm_calls)} calls "
+                    f"({llm_total_input + llm_total_output} tokens), "
+                    f"OCR {len(ocr_calls)} calls ({ocr_total} pages)"
+                )
+            else:
+                logger.info(
+                    f"Usage metrics already exist for "
+                    f"transaction {credits_transaction_id}"
+                )
+
+        except Exception as e:
+            logger.error(f"Failed to record usage metrics: {e}")
 
     def _handle_error(
         self, error: Exception, state: EmailState

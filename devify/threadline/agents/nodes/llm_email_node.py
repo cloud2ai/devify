@@ -9,9 +9,9 @@ import logging
 import re
 from typing import Dict, Any
 
-from threadline.agents.nodes.base_node import BaseLangGraphNode
+from core.tracking import LLMTracker
 from threadline.agents.email_state import EmailState, add_node_error
-from threadline.utils.llm import call_llm
+from threadline.agents.nodes.base_node import BaseLangGraphNode
 
 logger = logging.getLogger(__name__)
 
@@ -112,9 +112,12 @@ class LLMEmailNode(BaseLangGraphNode):
             logger.info("Processing email content with LLM")
 
             logger.debug(f"Before LLM call: {content_with_ocr}")
-            llm_result = call_llm(
-                email_content_prompt,
-                content_with_ocr
+            llm_result, usage = LLMTracker.call_and_track(
+                prompt=email_content_prompt,
+                content=content_with_ocr,
+                json_mode=False,
+                state=state,
+                node_name=self.node_name
             )
             logger.debug(f"After LLM call: {llm_result}")
             llm_content = llm_result.strip() if llm_result else ''

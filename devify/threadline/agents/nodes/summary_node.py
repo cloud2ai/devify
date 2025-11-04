@@ -6,11 +6,11 @@ It operates purely on State without database access.
 """
 
 import logging
-from typing import Dict, Any
+from typing import Any, Dict
 
-from threadline.agents.nodes.base_node import BaseLangGraphNode
+from core.tracking import LLMTracker
 from threadline.agents.email_state import EmailState, add_node_error
-from threadline.utils.llm import call_llm
+from threadline.agents.nodes.base_node import BaseLangGraphNode
 
 logger = logging.getLogger(__name__)
 
@@ -114,9 +114,12 @@ class SummaryNode(BaseLangGraphNode):
         try:
             if not summary_content or force:
                 logger.info("Generating summary content")
-                summary_content_raw = call_llm(
-                    summary_prompt,
-                    content
+                summary_content_raw, usage = LLMTracker.call_and_track(
+                    prompt=summary_prompt,
+                    content=content,
+                    json_mode=False,
+                    state=state,
+                    node_name=self.node_name
                 )
                 if summary_content_raw:
                     summary_content = summary_content_raw.strip()
@@ -129,9 +132,12 @@ class SummaryNode(BaseLangGraphNode):
 
             if not summary_title or force:
                 logger.info("Generating summary title")
-                summary_title_raw = call_llm(
-                    summary_title_prompt,
-                    content
+                summary_title_raw, usage = LLMTracker.call_and_track(
+                    prompt=summary_title_prompt,
+                    content=content,
+                    json_mode=False,
+                    state=state,
+                    node_name=self.node_name
                 )
                 if summary_title_raw:
                     summary_title = summary_title_raw.strip()

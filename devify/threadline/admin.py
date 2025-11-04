@@ -242,7 +242,7 @@ class EmailMessageAdmin(admin.ModelAdmin):
         'text_content_preview', 'summary_content_preview',
         'llm_content_preview', 'metadata_preview'
     ]
-    actions = ['trigger_processing', 'trigger_processing_force']
+    actions = ['trigger_process', 'force_reprocess']
 
     fieldsets = (
         (_('Email Information'), {
@@ -441,13 +441,19 @@ class EmailMessageAdmin(admin.ModelAdmin):
         obj._from_admin = True
         super().save_model(request, obj, form, change)
 
-    @admin.action(description=_('Trigger processing for selected emails'))
-    def trigger_processing(self, request, queryset):
+    @admin.action(description=_('Trigger process (for FETCHED emails)'))
+    def trigger_process(self, request, queryset):
         """
         Trigger email processing workflow for selected emails.
 
         This action schedules the email processing task for selected
-        email messages. Will skip already processed emails.
+        email messages in FETCHED status. Suitable for first-time
+        processing or retrying emails that failed during initial fetch.
+
+        Use case:
+        - Process emails that are stuck in FETCHED status
+        - Initial processing of newly fetched emails
+        - Does not consume additional credits if already processed
         """
         count = 0
         for email in queryset:
@@ -468,15 +474,31 @@ class EmailMessageAdmin(admin.ModelAdmin):
         )
 
     @admin.action(
-        description=_('Force reprocess selected emails')
+        description=_('Force reprocess (charges credits again)')
     )
-    def trigger_processing_force(self, request, queryset):
+    def force_reprocess(self, request, queryset):
         """
         Force reprocess selected emails regardless of current status.
 
+        ⚠️  IMPORTANT: This action will charge credits again!
+
         This action triggers reprocessing even if the email has already
-        been processed. Use this to regenerate summaries, metadata,
-        or issue records.
+        been processed successfully. Use this when you need to regenerate
+        results with updated configurations or fix processing errors.
+
+        Use cases:
+        - User manually requested reprocessing (via UI retry button)
+        - Need to regenerate summaries, metadata, or issue records
+        - Fix processing errors after configuration changes
+        - Test workflow with specific emails
+
+        Billing behavior:
+        - Creates a NEW credits transaction with timestamp-based idempotency key
+        - Will consume credits even if previously processed
+        - Suitable for user-initiated retries where charging is expected
+
+        ⚠️  Only use this for intentional retries, not for system errors!
+        For system errors, credits are automatically refunded.
         """
         count = 0
         for email in queryset:
@@ -492,8 +514,9 @@ class EmailMessageAdmin(admin.ModelAdmin):
 
         self.message_user(
             request,
-            f"Successfully triggered force reprocessing for {count} email(s)",
-            level=messages.SUCCESS
+            f"⚠️  Successfully triggered force reprocessing for {count} "
+            f"email(s). Credits will be charged again.",
+            level=messages.WARNING
         )
 
 

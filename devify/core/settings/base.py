@@ -18,7 +18,12 @@ from django.utils.translation import gettext_lazy as _
 from dotenv import load_dotenv
 
 from .database import *
-from .globals import *
+
+# Import module-specific configurations
+from .ai_services import *
+from .billing import *
+from .email_system import *
+
 from .logging_config import configure_logging
 
 # Suppress specific warnings
@@ -144,10 +149,16 @@ INSTALLED_APPS = [
     # A Django app that provides a JSON editor widget for Django admin,
     # allowing users to edit JSON data in a more user-friendly way.
     'django_json_widget',
+
+    # A Django app that provides a Stripe integration for Django,
+    # allowing you to easily add Stripe payment processing to your
+    # Django applications.
+    'djstripe'
 ]
 
 # Project-Specific Apps
 INSTALLED_APPS += [
+    'billing',
     'accounts',
     'threadline',
 ]
@@ -413,6 +424,7 @@ from .celery import *
 from .rest import *
 from .swagger import *
 from .cache import *
+from .billing import *
 
 # ============================
 # DRF Spectacular Configuration

@@ -87,6 +87,18 @@ class EmailState(TypedDict, total=False):
     retry_language: str | None
     retry_scene: str | None
 
+    # Credits-related fields
+    credits_consumed: bool | None
+    credits_transaction_id: str | None
+    credits_refunded: bool | None
+
+    # Usage tracking (for cost analysis)
+    llm_calls: List[Dict[str, Any]] | None
+    ocr_calls: List[Dict[str, Any]] | None
+
+    # Email message UUID (for idempotency)
+    email_uuid: str | None
+
     # Timestamps
     created_at: str | None
     updated_at: str | None
@@ -139,6 +151,12 @@ def create_email_state(
         "retry_scene": None,
         "created_at": current_time,
         "updated_at": current_time,
+        "llm_calls": [],
+        "ocr_calls": [],
+        "credits_consumed": None,
+        "credits_transaction_id": None,
+        "credits_refunded": None,
+        "email_uuid": None,
     }
 
 

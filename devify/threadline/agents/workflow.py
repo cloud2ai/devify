@@ -16,6 +16,8 @@ from threadline.models import EmailMessage, EmailStatus
 from threadline.agents.checkpoint_manager import create_checkpointer
 from threadline.agents.nodes.workflow_prepare import WorkflowPrepareNode
 from threadline.agents.nodes.workflow_finalize import WorkflowFinalizeNode
+from threadline.agents.nodes.credits_check_node import CreditsCheckNode
+from threadline.agents.nodes.error_handler_node import ErrorHandlerNode
 from threadline.agents.nodes.ocr_node import OCRNode
 from threadline.agents.nodes.llm_attachment_node import LLMAttachmentNode
 from threadline.agents.nodes.llm_email_node import LLMEmailNode
@@ -64,6 +66,39 @@ def _update_email_status_on_fatal_error(
         )
 
 
+def should_handle_error(state: EmailState) -> str:
+    """
+    Conditional routing function for error handling.
+
+    This function is called AFTER all business nodes have executed.
+    It checks if ANY node produced errors during execution.
+
+    Design Pattern: "Collect & Handle" (not "Fail-Fast")
+    - Nodes don't immediately abort on error
+    - Errors are accumulated in state['node_errors']
+    - All nodes execute (may skip processing if errors exist)
+    - This function checks accumulated errors and decides routing
+
+    Routing Logic:
+    - If has_node_errors(state) → "error_handler"
+      → ErrorHandler will analyze errors and decide refund
+    - If no errors → "workflow_finalize"
+      → Directly finalize without error handling
+
+    Note: This means ErrorHandler only executes when workflow has errors,
+    not immediately when a single node fails.
+
+    Args:
+        state: EmailState containing node_errors from all executed nodes
+
+    Returns:
+        str: Next node name ("error_handler" or "workflow_finalize")
+    """
+    if has_node_errors(state):
+        return "error_handler"
+    return "workflow_finalize"
+
+
 @lru_cache(maxsize=1)
 def create_email_processing_graph():
     """
@@ -71,13 +106,15 @@ def create_email_processing_graph():
 
     Workflow sequence:
     1. WorkflowPrepareNode - Load email data and validate
-    2. OCRNode - Process image attachments with OCR
-    3. LLMAttachmentNode - Process OCR content with LLM
-    4. LLMEmailNode - Process email content with LLM
-    5. SummaryNode - Generate email summary
-    6. MetadataNode - Extract structured metadata from summary
-    7. IssueNode - Validate and prepare issue creation
-    8. WorkflowFinalizeNode - Sync all results to database
+    2. CreditsCheckNode - Check and consume credits
+    3. OCRNode - Process image attachments with OCR
+    4. LLMAttachmentNode - Process OCR content with LLM
+    5. LLMEmailNode - Process email content with LLM
+    6. SummaryNode - Generate email summary
+    7. MetadataNode - Extract structured metadata from summary
+    8. IssueNode - Validate and prepare issue creation
+    9. ErrorHandlerNode - Handle errors and refund credits (conditional)
+    10. WorkflowFinalizeNode - Sync all results to database
 
     Returns:
         Compiled LangGraph workflow
@@ -87,23 +124,52 @@ def create_email_processing_graph():
     workflow = StateGraph(EmailState)
 
     workflow.add_node("workflow_prepare", WorkflowPrepareNode())
+    workflow.add_node("credits_check", CreditsCheckNode())
     workflow.add_node("ocr", OCRNode())
     workflow.add_node("llm_attachment", LLMAttachmentNode())
     workflow.add_node("llm_email", LLMEmailNode())
     workflow.add_node("summary", SummaryNode())
     workflow.add_node("metadata", MetadataNode())
     workflow.add_node("issue", IssueNode())
+    workflow.add_node("error_handler", ErrorHandlerNode())
     workflow.add_node("workflow_finalize", WorkflowFinalizeNode())
 
     workflow.add_edge(START, "workflow_prepare")
-
-    workflow.add_edge("workflow_prepare", "ocr")
+    workflow.add_edge("workflow_prepare", "credits_check")
+    workflow.add_edge("credits_check", "ocr")
     workflow.add_edge("ocr", "llm_attachment")
     workflow.add_edge("llm_attachment", "llm_email")
     workflow.add_edge("llm_email", "summary")
     workflow.add_edge("summary", "metadata")
     workflow.add_edge("metadata", "issue")
-    workflow.add_edge("issue", "workflow_finalize")
+
+    # CRITICAL: Conditional routing for error handling
+    # This is where we decide whether to handle errors or finalize directly
+    # Position: After all business nodes (issue is the last one)
+    # Logic:
+    #   - If ANY node had errors → Route to error_handler
+    #     → ErrorHandler analyzes errors and refunds if system error
+    #   - If NO errors → Route directly to workflow_finalize
+    #     → Skip error handling, go straight to success finalization
+    #
+    # Design Note: This is NOT fail-fast! All nodes execute first,
+    # then we check accumulated errors. This allows:
+    # - Collecting partial results even if some nodes fail
+    # - Unified error analysis (not per-node)
+    # - Flexible refund decisions based on all errors
+    workflow.add_conditional_edges(
+        "issue",
+        should_handle_error,
+        {
+            "error_handler": "error_handler",
+            "workflow_finalize": "workflow_finalize"
+        }
+    )
+
+    # ErrorHandler always goes to finalize (after refund decision)
+    workflow.add_edge("error_handler", "workflow_finalize")
+
+    # WorkflowFinalize is the single exit point (always executes)
     workflow.add_edge("workflow_finalize", END)
 
     graph = workflow.compile(checkpointer=create_checkpointer())
@@ -158,12 +224,24 @@ def execute_email_processing_workflow(
 
         graph = create_email_processing_graph()
 
+        if force:
+            from django.utils import timezone
+            timestamp = int(timezone.now().timestamp())
+            thread_id = f"email_workflow_{email_id}_force_{timestamp}"
+        else:
+            thread_id = f"email_workflow_{email_id}"
+
         config = {
             "configurable": {
-                "thread_id": f"email_workflow_{email_id}",
+                "thread_id": thread_id,
                 "checkpoint_ns": "email_processing"
             }
         }
+
+        logger.info(
+            f"Using thread_id: {thread_id} (force={force})"
+        )
+
         result = graph.invoke(initial_state, config=config)
 
         success = not has_node_errors(result)

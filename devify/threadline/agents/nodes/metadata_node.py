@@ -5,12 +5,13 @@ This node generates structured metadata for emails using LLM.
 It operates purely on State without database access.
 """
 
+import json
 import logging
-from typing import Dict, Any
+from typing import Any, Dict
 
-from threadline.agents.nodes.base_node import BaseLangGraphNode
+from core.tracking import LLMTracker
 from threadline.agents.email_state import EmailState, add_node_error
-from threadline.utils.llm import call_llm
+from threadline.agents.nodes.base_node import BaseLangGraphNode
 
 logger = logging.getLogger(__name__)
 
@@ -119,13 +120,27 @@ class MetadataNode(BaseLangGraphNode):
             if not existing_metadata or force:
                 logger.info("Generating metadata from summary")
 
-                # Call LLM with JSON response format and retry logic
-                metadata = call_llm(
-                    metadata_prompt,
-                    content,
+                metadata_json, usage = LLMTracker.call_and_track(
+                    prompt=metadata_prompt,
+                    content=content,
                     json_mode=True,
-                    max_retries=3
+                    state=state,
+                    node_name=self.node_name
                 )
+
+                try:
+                    metadata = (
+                        json.loads(metadata_json)
+                        if isinstance(metadata_json, str)
+                        else metadata_json
+                    )
+                except json.JSONDecodeError as e:
+                    logger.error(f"Failed to parse metadata JSON: {e}")
+                    raise ValueError(f"Invalid JSON response: {e}")
+
+                if not isinstance(metadata, dict):
+                    logger.error(f"Metadata is not a dict: {type(metadata)}")
+                    raise ValueError("Metadata must be a dictionary")
 
                 # Validate and normalize metadata (type checking only, no field requirement)
                 # Ensure common list fields are actually lists

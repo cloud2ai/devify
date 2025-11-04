@@ -6,11 +6,11 @@ It operates purely on State without database access.
 """
 
 import logging
-from typing import List, Dict, Any
+from typing import Any, Dict, List
 
-from threadline.agents.nodes.base_node import BaseLangGraphNode
+from core.tracking import OCRTracker
 from threadline.agents.email_state import EmailState, add_node_error
-from threadline.utils.ocr_handler import OCRHandler
+from threadline.agents.nodes.base_node import BaseLangGraphNode
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +32,6 @@ class OCRNode(BaseLangGraphNode):
 
     def __init__(self):
         super().__init__("ocr_node")
-        self.ocr_handler = OCRHandler()
 
     def can_enter_node(self, state: EmailState) -> bool:
         """
@@ -114,7 +113,11 @@ class OCRNode(BaseLangGraphNode):
                     f"({file_path})"
                 )
 
-                text = self.ocr_handler.recognize(file_path)
+                text = OCRTracker.recognize_and_track(
+                    image_path=file_path,
+                    state=state,
+                    filename=attachment.get('filename', '')
+                )
 
                 if text and text.strip():
                     attachment['ocr_content'] = text.strip()

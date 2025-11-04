@@ -6,11 +6,11 @@ It operates purely on State without database access.
 """
 
 import logging
-from typing import List, Dict, Any
+from typing import Dict, Any, List
 
-from threadline.agents.nodes.base_node import BaseLangGraphNode
+from core.tracking import LLMTracker
 from threadline.agents.email_state import EmailState, add_node_error
-from threadline.utils.llm import call_llm
+from threadline.agents.nodes.base_node import BaseLangGraphNode
 
 logger = logging.getLogger(__name__)
 
@@ -140,9 +140,12 @@ class LLMAttachmentNode(BaseLangGraphNode):
                     f"with LLM"
                 )
 
-                llm_result = call_llm(
-                    ocr_prompt,
-                    ocr_content
+                llm_result, usage = LLMTracker.call_and_track(
+                    prompt=ocr_prompt,
+                    content=ocr_content,
+                    json_mode=False,
+                    state=state,
+                    node_name=self.node_name
                 )
                 llm_content = llm_result.strip() if llm_result else ''
 

@@ -55,4 +55,8 @@ urlpatterns = [
     # Threadline API routes
     # Email processing and threadline management endpoints
     path('api/v1/', include('threadline.urls')),
+
+    # Billing API routes
+    # Subscription and credits management endpoints
+    path('api/billing/', include('billing.urls')),
 ]

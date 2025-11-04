@@ -50,6 +50,8 @@ dependencies = [
     "requests>=2.31.0",
     "devtoolbox[llm,ocr] @ git+https://github.com/cloud2ai/devtoolbox.git",
     "json-repair>=0.25.0",
+    "dj-stripe>=2.8.0",
+    "stripe>=8.0.0",
 ]
 
 [project.optional-dependencies]
