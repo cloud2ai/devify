@@ -7,10 +7,14 @@ from billing.viewsets import (
     SubscriptionViewSet
 )
 
-router = DefaultRouter()
+router = DefaultRouter(trailing_slash=False)
 router.register(r'plans', PlanViewSet, basename='plan')
 router.register(r'credits', UserCreditsViewSet, basename='credits')
-router.register(r'subscriptions', SubscriptionViewSet, basename='subscription')
+router.register(
+    r'subscriptions',
+    SubscriptionViewSet,
+    basename='subscription'
+)
 
 urlpatterns = [
     path('', include(router.urls)),

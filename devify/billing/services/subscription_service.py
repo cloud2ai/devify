@@ -23,12 +23,29 @@ logger = logging.getLogger(__name__)
 class SubscriptionService:
     """
     Subscription management service
+
+    Handles all subscription-related operations including:
+    - Creating and syncing subscriptions
+    - Canceling and resuming subscriptions
+    - Processing Stripe webhook events
+    - Ensuring subscription uniqueness per user
+
+    All payment operations are handled through Stripe API.
     """
 
     @staticmethod
     def get_active_subscription(user_id: int):
         """
         Get user's active subscription
+
+        Returns the most recent active subscription for a user.
+        Returns None if no active subscription exists.
+
+        Args:
+            user_id: User's database ID
+
+        Returns:
+            Subscription object or None
         """
         return Subscription.objects.filter(
             user_id=user_id,
@@ -43,7 +60,18 @@ class SubscriptionService:
         provider: str = 'stripe'
     ):
         """
-        Create a new subscription
+        Create a new subscription for a user
+
+        Creates a local subscription record and initializes
+        user credits based on the selected plan.
+
+        Args:
+            user_id: User's database ID
+            plan_id: Plan's database ID
+            provider: Payment provider name (default: 'stripe')
+
+        Returns:
+            Created Subscription object
         """
         user = User.objects.get(id=user_id)
         plan = Plan.objects.get(id=plan_id)
@@ -63,11 +91,11 @@ class SubscriptionService:
             auto_renew=True
         )
 
-        CreditsService.reset_period_credits(user_id)
-
         user_credits = UserCredits.objects.get(user_id=user_id)
         user_credits.subscription = subscription
         user_credits.save()
+
+        CreditsService.reset_period_credits(user_id)
 
         logger.info(
             f"Created subscription for user {user_id}: "
@@ -80,7 +108,17 @@ class SubscriptionService:
     @transaction.atomic
     def sync_from_djstripe(djstripe_subscription):
         """
-        Sync subscription from dj-stripe
+        Sync subscription from dj-stripe to local database
+
+        Creates or updates local Subscription record based on
+        Stripe subscription data. Ensures only one active
+        subscription exists per user by canceling previous ones.
+
+        Args:
+            djstripe_subscription: djstripe Subscription model instance
+
+        Returns:
+            Synced Subscription object
         """
         customer = djstripe_subscription.customer
         user = customer.subscriber
@@ -148,6 +186,11 @@ class SubscriptionService:
             period_start_dt = timezone.now()
             period_end_dt = period_start_dt + timedelta(days=30)
 
+        will_cancel = (
+            djstripe_subscription.cancel_at_period_end or
+            djstripe_subscription.cancel_at is not None
+        )
+
         subscription, created = Subscription.objects.update_or_create(
             djstripe_subscription=djstripe_subscription,
             defaults={
@@ -157,19 +200,33 @@ class SubscriptionService:
                 'status': djstripe_subscription.status,
                 'current_period_start': period_start_dt,
                 'current_period_end': period_end_dt,
-                'auto_renew': (
-                    not djstripe_subscription.cancel_at_period_end
-                )
+                'auto_renew': not will_cancel
             }
         )
 
-        if subscription.status == 'active':
-            CreditsService.reset_period_credits(user.id)
+        if created and subscription.status == 'active':
+            old_active_subs = Subscription.objects.filter(
+                user=user,
+                status='active'
+            ).exclude(id=subscription.id)
 
+            if old_active_subs.exists():
+                logger.info(
+                    f"Canceling {old_active_subs.count()} old active "
+                    f"subscriptions for user {user.id}"
+                )
+                old_active_subs.update(
+                    status='canceled',
+                    auto_renew=False
+                )
+
+        if subscription.status == 'active':
             user_credits = UserCredits.objects.get(user_id=user.id)
             user_credits.subscription = subscription
             user_credits.djstripe_customer = customer
             user_credits.save()
+
+            CreditsService.reset_period_credits(user.id)
 
         logger.info(
             f"Synced subscription from Stripe for user {user.id}"
@@ -181,19 +238,80 @@ class SubscriptionService:
     @transaction.atomic
     def cancel_subscription(subscription_id: int):
         """
-        Cancel subscription
+        Cancel subscription at period end
+
+        Sets cancel_at_period_end=True in Stripe and updates
+        local auto_renew to False. Subscription remains active
+        until the end of the current billing period.
+
+        Args:
+            subscription_id: Local subscription database ID
+
+        Note:
+            - Does NOT immediately delete the subscription
+            - User can continue using until period_end
+            - User can resume before period ends
         """
         subscription = Subscription.objects.get(id=subscription_id)
 
         if subscription.djstripe_subscription:
-            subscription.djstripe_subscription.cancel()
+            stripe.api_key = (
+                settings.STRIPE_LIVE_SECRET_KEY
+                if settings.STRIPE_LIVE_MODE
+                else settings.STRIPE_TEST_SECRET_KEY
+            )
 
-        subscription.status = 'canceled'
+            stripe.Subscription.modify(
+                subscription.djstripe_subscription.id,
+                cancel_at_period_end=True
+            )
+
         subscription.auto_renew = False
         subscription.save()
 
         logger.info(
-            f"Canceled subscription {subscription_id} "
+            f"Scheduled cancellation for subscription "
+            f"{subscription_id} for user {subscription.user_id} "
+            f"at period end"
+        )
+
+    @staticmethod
+    @transaction.atomic
+    def resume_subscription(subscription_id: int):
+        """
+        Resume a cancelled subscription
+
+        Sets cancel_at_period_end=False in Stripe to restore
+        automatic renewal. User will be charged at the end of
+        current period. No immediate payment required.
+
+        Args:
+            subscription_id: Local subscription database ID
+
+        Note:
+            - Only works for active subscriptions with auto_renew=False
+            - No payment charged immediately
+            - Next billing at current_period_end
+        """
+        subscription = Subscription.objects.get(id=subscription_id)
+
+        if subscription.djstripe_subscription:
+            stripe.api_key = (
+                settings.STRIPE_LIVE_SECRET_KEY
+                if settings.STRIPE_LIVE_MODE
+                else settings.STRIPE_TEST_SECRET_KEY
+            )
+
+            stripe.Subscription.modify(
+                subscription.djstripe_subscription.id,
+                cancel_at_period_end=False
+            )
+
+        subscription.auto_renew = True
+        subscription.save()
+
+        logger.info(
+            f"Resumed subscription {subscription_id} "
             f"for user {subscription.user_id}"
         )
 
@@ -201,7 +319,14 @@ class SubscriptionService:
     @transaction.atomic
     def handle_cancellation(subscription_id: str):
         """
-        Handle subscription cancellation from Stripe
+        Handle subscription cancellation from Stripe webhook
+
+        Called when customer.subscription.deleted webhook is
+        received. Sets subscription status to canceled and
+        disables auto-renewal.
+
+        Args:
+            subscription_id: Stripe subscription ID
         """
         try:
             subscription = Subscription.objects.get(
@@ -225,7 +350,14 @@ class SubscriptionService:
     @transaction.atomic
     def handle_payment_success(customer_id: str):
         """
-        Handle successful payment from Stripe
+        Handle successful payment from Stripe webhook
+
+        Called when invoice.payment_succeeded webhook is received.
+        Resets period credits for all active subscriptions of the
+        customer.
+
+        Args:
+            customer_id: Stripe customer ID
         """
         try:
             customer = Customer.objects.get(id=customer_id)

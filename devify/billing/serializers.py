@@ -46,6 +46,7 @@ class PlanSerializer(serializers.ModelSerializer):
 class UserCreditsSerializer(serializers.ModelSerializer):
     """
     User credits serializer
+    Updated to reflect new credit limits
     """
     available_credits = serializers.IntegerField(read_only=True)
     total_credits = serializers.IntegerField(read_only=True)
@@ -53,6 +54,7 @@ class UserCreditsSerializer(serializers.ModelSerializer):
         source='user.username',
         read_only=True
     )
+    plan_metadata = serializers.SerializerMethodField()
 
     class Meta:
         model = UserCredits
@@ -66,7 +68,8 @@ class UserCreditsSerializer(serializers.ModelSerializer):
             'total_credits',
             'period_start',
             'period_end',
-            'is_active'
+            'is_active',
+            'plan_metadata'
         ]
         read_only_fields = [
             'user',
@@ -75,6 +78,15 @@ class UserCreditsSerializer(serializers.ModelSerializer):
             'period_end'
         ]
 
+    def get_plan_metadata(self, obj):
+        subscription = Subscription.objects.filter(
+            user=obj.user,
+            status='active'
+        ).select_related('plan').first()
+        if subscription and subscription.plan:
+            return subscription.plan.metadata
+        return None
+
 
 class SubscriptionSerializer(serializers.ModelSerializer):
     """
@@ -82,6 +94,7 @@ class SubscriptionSerializer(serializers.ModelSerializer):
     """
     plan_name = serializers.CharField(source='plan.name', read_only=True)
     plan_slug = serializers.CharField(source='plan.slug', read_only=True)
+    plan_metadata = serializers.SerializerMethodField()
     provider_name = serializers.CharField(
         source='provider.display_name',
         read_only=True
@@ -100,6 +113,7 @@ class SubscriptionSerializer(serializers.ModelSerializer):
             'plan',
             'plan_name',
             'plan_slug',
+            'plan_metadata',
             'provider',
             'provider_name',
             'status',
@@ -115,6 +129,11 @@ class SubscriptionSerializer(serializers.ModelSerializer):
             'created_at',
             'updated_at'
         ]
+
+    def get_plan_metadata(self, obj):
+        if obj.plan:
+            return obj.plan.metadata
+        return None
 
 
 class CreditsTransactionSerializer(serializers.ModelSerializer):

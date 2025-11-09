@@ -101,9 +101,11 @@ SIMPLE_JWT = {
 #
 # - USE_JWT: Enables JWT for authentication.
 # - JWT_AUTH_HTTPONLY: Determines if refresh tokens should be HTTP-only.
+# - SESSION_LOGIN: Disable session login to avoid CSRF issues with JWT.
 REST_AUTH = {
     "USE_JWT": True,
     "JWT_AUTH_HTTPONLY": False,
+    "SESSION_LOGIN": False,
     "USER_DETAILS_SERIALIZER": (
         "accounts.serializers.UserDetailsSerializer"
     ),

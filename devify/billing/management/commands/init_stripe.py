@@ -32,26 +32,43 @@ class Command(BaseCommand):
                 'description': 'Perfect for trying out the service',
                 'monthly_price_cents': 0,
                 'metadata': {
-                    'credits_per_period': 10,
+                    'credits_per_period': 5,
                     'period_days': 30,
                     'workflow_cost_credits': 1,
                     'max_email_length': 10000,
-                    'max_attachment_size_mb': 10,
-                    'storage_quota_mb': 100
+                    'max_attachment_size_mb': 5,
+                    'storage_quota_mb': 1024,
+                    'retention_days': 30
                 }
             },
             {
-                'name': 'Basic Plan',
-                'slug': 'basic',
-                'description': 'Ideal for individual users',
-                'monthly_price_cents': 999,
+                'name': 'Starter Plan',
+                'slug': 'starter',
+                'description': 'Perfect for getting started',
+                'monthly_price_cents': 499,
                 'metadata': {
                     'credits_per_period': 100,
                     'period_days': 30,
                     'workflow_cost_credits': 1,
                     'max_email_length': 50000,
-                    'max_attachment_size_mb': 25,
-                    'storage_quota_mb': 1024
+                    'max_attachment_size_mb': 10,
+                    'storage_quota_mb': 5120,
+                    'retention_days': 365
+                }
+            },
+            {
+                'name': 'Standard Plan',
+                'slug': 'standard',
+                'description': 'Ideal for regular users',
+                'monthly_price_cents': 990,
+                'metadata': {
+                    'credits_per_period': 500,
+                    'period_days': 30,
+                    'workflow_cost_credits': 1,
+                    'max_email_length': 100000,
+                    'max_attachment_size_mb': 15,
+                    'storage_quota_mb': 10240,
+                    'retention_days': 1095
                 }
             },
             {
@@ -60,12 +77,13 @@ class Command(BaseCommand):
                 'description': 'Designed for professional users',
                 'monthly_price_cents': 2999,
                 'metadata': {
-                    'credits_per_period': 500,
+                    'credits_per_period': 2000,
                     'period_days': 30,
                     'workflow_cost_credits': 1,
-                    'max_email_length': 100000,
-                    'max_attachment_size_mb': 50,
-                    'storage_quota_mb': 5120
+                    'max_email_length': 200000,
+                    'max_attachment_size_mb': 30,
+                    'storage_quota_mb': 20480,
+                    'retention_days': -1
                 }
             },
         ]

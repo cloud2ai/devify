@@ -13,7 +13,7 @@ class Command(BaseCommand):
             '--plan',
             type=str,
             help=(
-                'Plan slug (e.g., basic, pro). '
+                'Plan slug (e.g., starter, standard, pro). '
                 'If not provided, will process all plans.'
             )
         )
@@ -29,6 +29,13 @@ class Command(BaseCommand):
                 'Stripe Product ID (e.g., prod_xxxxx). '
                 'Optional, will be fetched from price if not provided.'
             )
+        )
+        parser.add_argument(
+            '--interval',
+            type=str,
+            choices=['month', 'year'],
+            default='month',
+            help='Billing interval (month or year)'
         )
 
     def handle(self, *args, **options):
@@ -56,7 +63,8 @@ class Command(BaseCommand):
                 stripe_provider,
                 plan_slug,
                 price_id,
-                options.get('product_id')
+                options.get('product_id'),
+                options.get('interval')
             )
         else:
             self.sync_all_plans(stripe_provider)
@@ -66,10 +74,11 @@ class Command(BaseCommand):
         stripe_provider,
         plan_slug,
         price_id,
-        product_id=None
+        product_id=None,
+        interval='month'
     ):
         """
-        Sync a single plan
+        Sync a single plan with specified billing interval
         """
         try:
             plan = Plan.objects.get(slug=plan_slug)
@@ -90,7 +99,7 @@ class Command(BaseCommand):
         plan_price, created = PlanPrice.objects.update_or_create(
             plan=plan,
             provider=stripe_provider,
-            interval='month',
+            interval=interval,
             defaults={
                 'provider_product_id': product_id,
                 'provider_price_id': price_id,
@@ -102,14 +111,14 @@ class Command(BaseCommand):
 
         status = '✅ Created' if created else '✅ Updated'
         self.stdout.write(
-            self.style.SUCCESS(f'{status}: {plan.name}')
+            self.style.SUCCESS(f'{status}: {plan.name} ({interval}ly)')
         )
         self.stdout.write(f'  Price ID: {price_id}')
         self.stdout.write(f'  Product ID: {product_id}')
 
         amount = stripe_price.unit_amount / 100
         currency = stripe_price.currency.upper()
-        self.stdout.write(f'  Amount: {currency} {amount:.2f}')
+        self.stdout.write(f'  Amount: {currency} {amount:.2f}/{interval}')
 
     def sync_all_plans(self, stripe_provider):
         """
@@ -157,11 +166,22 @@ class Command(BaseCommand):
         self.stdout.write('To sync a plan, use:')
         self.stdout.write(
             '  python manage.py sync_stripe_products '
-            '--plan <slug> --price-id <price_id>'
+            '--plan <slug> --price-id <price_id> [--interval month|year]'
         )
         self.stdout.write('')
-        self.stdout.write('Example:')
+        self.stdout.write('Examples:')
+        self.stdout.write(
+            '  # Sync monthly price'
+        )
         self.stdout.write(
             '  python manage.py sync_stripe_products '
-            '--plan basic --price-id price_xxxxx'
+            '--plan basic --price-id price_monthly_xxxxx'
+        )
+        self.stdout.write('')
+        self.stdout.write(
+            '  # Sync yearly price'
+        )
+        self.stdout.write(
+            '  python manage.py sync_stripe_products '
+            '--plan basic --price-id price_yearly_xxxxx --interval year'
         )

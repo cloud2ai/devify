@@ -1,0 +1,83 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) YEAR THE PACKAGE'S COPYRIGHT HOLDER
+# This file is distributed under the same license as the PACKAGE package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PACKAGE VERSION\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2025-11-06 14:26+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"Language: \n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+
+#: tasks.py:48
+msgid "⚠️ Payment Failed - Action Required"
+msgstr "⚠️ 支付失败 - 需要立即处理"
+
+#: tasks.py:51
+#, python-format
+msgid ""
+"Your subscription payment has failed %(attempt_count)s times.\n"
+"Reason: %(failure_reason)s\n"
+"\n"
+"Please update your payment method immediately to avoid service "
+"interruption.\n"
+"\n"
+"Update payment method: %(billing_url)s"
+msgstr ""
+"您的订阅支付已失败 %(attempt_count)s 次。\n"
+"原因：%(failure_reason)s\n"
+"\n"
+"请立即更新您的支付方式以避免服务中断。\n"
+"\n"
+"更新支付方式：%(billing_url)s"
+
+#: tasks.py:63
+msgid "Payment Failed - Automatic Retry Scheduled"
+msgstr "支付失败 - 已安排自动重试"
+
+#: tasks.py:66
+#, python-format
+msgid ""
+"Your subscription payment failed (Attempt %(attempt_count)s).\n"
+"Reason: %(failure_reason)s\n"
+"\n"
+"Stripe will retry automatically in the next few days.\n"
+"If the issue persists, please update your payment method.\n"
+"\n"
+"Manage subscription: %(billing_url)s"
+msgstr ""
+"您的订阅支付失败（第 %(attempt_count)s 次尝试）。\n"
+"原因：%(failure_reason)s\n"
+"\n"
+"Stripe 将在接下来几天内自动重试。\n"
+"如果问题持续存在，请更新您的支付方式。\n"
+"\n"
+"管理订阅：%(billing_url)s"
+
+#: tasks.py:139
+msgid "✅ Payment Successful"
+msgstr "✅ 支付成功"
+
+#: tasks.py:141
+#, python-format
+msgid ""
+"Your subscription payment of $%(amount).2f was successful.\n"
+"\n"
+"Thank you for your continued subscription!\n"
+"\n"
+"View subscription: %(billing_url)s"
+msgstr ""
+"您的订阅支付 $%(amount).2f 已成功。\n"
+"\n"
+"感谢您继续订阅！\n"
+"\n"
+"查看订阅：%(billing_url)s"

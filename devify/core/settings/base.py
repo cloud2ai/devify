@@ -59,8 +59,10 @@ DEBUG = os.getenv("DJANGO_DEBUG", "True").lower() in ("true", "1", "yes", "on")
 
 ALLOWED_HOSTS = ["*"]
 
-CSRF_TRUSTED_ORIGINS = os.getenv('CSRF_TRUSTED_ORIGINS',
-                                 'http://localhost').split(",")
+CSRF_TRUSTED_ORIGINS = os.getenv(
+    'CSRF_TRUSTED_ORIGINS',
+    'http://localhost:8000,http://127.0.0.1:8000'
+).split(",")
 
 # Trust proxy headers from nginx
 USE_X_FORWARDED_HOST = True
@@ -400,10 +402,10 @@ CORS_ALLOW_METHODS = [
 # Session and Cookie Configuration
 # ============================
 
-# Allow session cookies to be sent cross-origin for OAuth flow
-# SameSite=None allows cookies to be sent in cross-site requests
-# This is necessary for OAuth callbacks from different domains
-SESSION_COOKIE_SAMESITE = None
+# Session cookie configuration
+# SameSite='Lax' is secure for most cases and prevents CSRF attacks
+# while still allowing top-level navigation cookies
+SESSION_COOKIE_SAMESITE = 'Lax'
 
 # Secure=True requires HTTPS; set False for local development
 # In production, this should be True
@@ -412,9 +414,12 @@ SESSION_COOKIE_SECURE = os.getenv('DJANGO_DEBUG', 'True').lower() not in ('true'
 # Allow session cookies to be shared across subdomains (if needed)
 # SESSION_COOKIE_DOMAIN = os.getenv('SESSION_COOKIE_DOMAIN', None)
 
-# CSRF cookie configuration for cross-origin requests
-CSRF_COOKIE_SAMESITE = None
+# CSRF cookie configuration
+# SameSite='Lax' allows cookies during top-level navigation
+# (like Stripe payment redirects) while providing CSRF protection
+CSRF_COOKIE_SAMESITE = 'Lax'
 CSRF_COOKIE_SECURE = os.getenv('DJANGO_DEBUG', 'True').lower() not in ('true', '1', 'yes', 'on')
+CSRF_COOKIE_HTTPONLY = False
 
 # ============================
 # External Libraries Configuration

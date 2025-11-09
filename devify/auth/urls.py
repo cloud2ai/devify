@@ -1,4 +1,5 @@
 from django.urls import path
+from rest_framework.permissions import AllowAny
 from dj_rest_auth.views import (
     LoginView, LogoutView,
     PasswordResetView, PasswordResetConfirmView, PasswordChangeView,
@@ -20,11 +21,14 @@ from accounts.views import (
     VerifyRegistrationTokenView,
 )
 
+class CustomLoginView(LoginView):
+    permission_classes = [AllowAny]
+
 urlpatterns = [
     # Login endpoint
     path(
         'api/v1/auth/login',
-        LoginView.as_view(),
+        CustomLoginView.as_view(),
         name='rest_login'
     ),
     # Logout endpoint

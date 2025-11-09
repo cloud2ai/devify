@@ -2,11 +2,16 @@ import logging
 
 from django.contrib.auth.models import User
 from django.db import transaction
-from djstripe.event_handlers import djstripe_receiver
-from djstripe.models import Event, Subscription as DjstripeSubscription
 
+from djstripe.event_handlers import djstripe_receiver
+from djstripe.models import Event
+from djstripe.models import Subscription as DjstripeSubscription
+
+from billing.models import Subscription
 from billing.services.credits_service import CreditsService
 from billing.services.subscription_service import SubscriptionService
+from billing.tasks import send_payment_failure_notification
+from billing.tasks import send_payment_success_notification
 
 logger = logging.getLogger(__name__)
 
@@ -18,6 +23,11 @@ def handle_subscription_created(sender, **kwargs):
     """
     event: Event = kwargs.get("event")
     subscription_id = event.data["object"]["id"]
+
+    logger.info(
+        f"[WEBHOOK] Received customer.subscription.created "
+        f"for subscription {subscription_id}"
+    )
 
     try:
         with transaction.atomic():
@@ -69,6 +79,11 @@ def handle_subscription_updated(sender, **kwargs):
     event: Event = kwargs.get("event")
     subscription_id = event.data["object"]["id"]
 
+    logger.info(
+        f"[WEBHOOK] Received customer.subscription.updated "
+        f"for subscription {subscription_id}"
+    )
+
     try:
         with transaction.atomic():
             djstripe_subscription = (
@@ -117,6 +132,11 @@ def handle_subscription_deleted(sender, **kwargs):
     event: Event = kwargs.get("event")
     subscription_id = event.data["object"]["id"]
 
+    logger.info(
+        f"[WEBHOOK] Received customer.subscription.deleted "
+        f"for subscription {subscription_id}"
+    )
+
     try:
         with transaction.atomic():
             SubscriptionService.handle_cancellation(
@@ -141,25 +161,52 @@ def handle_payment_succeeded(sender, **kwargs):
     """
     Handle payment success synchronously
 
-    Note: Credit allocation is handled by subscription webhooks.
-    This handler mainly logs successful payments for monitoring.
-    If subscription is renewed, the subscription.updated webhook
-    will handle credit reset automatically.
+    Updates subscription status from 'past_due' to 'active' if payment
+    was previously failing. Credit allocation is handled by subscription
+    webhooks automatically.
     """
     event: Event = kwargs.get("event")
     invoice = event.data["object"]
     customer_id = invoice["customer"]
     subscription_id = invoice.get("subscription")
+    amount_paid = invoice.get("amount_paid", 0) / 100.0
 
     try:
         logger.info(
             f"Payment succeeded for customer {customer_id}, "
-            f"invoice {invoice['id']}, "
-            f"subscription {subscription_id}"
+            f"invoice {invoice['id']}, subscription {subscription_id}, "
+            f"amount: ${amount_paid:.2f}"
         )
 
-        # Subscription renewal credits reset is handled by
-        # subscription.updated webhook automatically
+        if subscription_id:
+            djstripe_subscription = (
+                DjstripeSubscription.objects.filter(
+                    id=subscription_id
+                ).first()
+            )
+
+            if djstripe_subscription:
+                local_subscription = (
+                    Subscription.objects.filter(
+                        djstripe_subscription=djstripe_subscription,
+                        status='past_due'
+                    ).first()
+                )
+
+                if local_subscription:
+                    local_subscription.status = 'active'
+                    local_subscription.save()
+
+                    logger.info(
+                        f"Recovered subscription "
+                        f"{local_subscription.id} "
+                        f"from past_due to active"
+                    )
+
+                    send_payment_success_notification.delay(
+                        user_id=local_subscription.user_id,
+                        amount=amount_paid
+                    )
 
     except Exception as e:
         logger.error(
@@ -173,6 +220,9 @@ def handle_payment_succeeded(sender, **kwargs):
 def handle_payment_failed(sender, **kwargs):
     """
     Handle payment failure synchronously
+
+    Updates subscription status to 'past_due' and triggers
+    user notification email.
     """
     event: Event = kwargs.get("event")
     invoice = event.data["object"]
@@ -180,9 +230,51 @@ def handle_payment_failed(sender, **kwargs):
     try:
         with transaction.atomic():
             customer_id = invoice["customer"]
+            subscription_id = invoice.get("subscription")
+            attempt_count = invoice.get("attempt_count", 1)
+            last_error = invoice.get("last_payment_error", {})
+            failure_reason = last_error.get("message", "Unknown error")
+
             logger.warning(
-                f"Payment failed for customer: {customer_id}"
+                f"Payment failed for customer {customer_id}, "
+                f"subscription {subscription_id}, "
+                f"attempt {attempt_count}, reason: {failure_reason}"
             )
+
+            if subscription_id:
+                djstripe_subscription = (
+                    DjstripeSubscription.objects.filter(
+                        id=subscription_id
+                    ).first()
+                )
+
+                if djstripe_subscription:
+                    local_subscription = (
+                        Subscription.objects.filter(
+                            djstripe_subscription=djstripe_subscription,
+                            status='active'
+                        ).first()
+                    )
+
+                    if local_subscription:
+                        local_subscription.status = 'past_due'
+                        local_subscription.save()
+
+                        logger.info(
+                            f"Updated subscription "
+                            f"{local_subscription.id} to past_due status"
+                        )
+
+                        send_payment_failure_notification.delay(
+                            user_id=local_subscription.user_id,
+                            attempt_count=attempt_count,
+                            failure_reason=failure_reason
+                        )
+
+                        logger.info(
+                            f"Scheduled payment failure notification "
+                            f"for user {local_subscription.user_id}"
+                        )
 
     except Exception as e:
         logger.error(

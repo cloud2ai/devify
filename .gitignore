@@ -231,3 +231,7 @@ data
 *.html
 
 /TODO.md
+
+# Cursor E2E Test Reports
+.cursor_tests/reports/
+!.cursor_tests/reports/.gitkeep

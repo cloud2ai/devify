@@ -12,12 +12,12 @@ msgstr ""
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
-"Language: zh_Hans\n"
+"Language: \n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"Plural-Forms: nplurals=1; plural=0;\n"
-
+"Plural-Forms: nplurals=3; plural=n == 1 ? 0 : n != 0 && n % 1000000 == 0 ? "
+"1 : 2;\n"
 #: accounts/serializers.py:35
 msgid "JWT access token"
 msgstr ""
@@ -43,21 +43,19 @@ msgid "Scene description in requested language"
 msgstr ""
 
 #: accounts/serializers.py:70
-#, fuzzy
-#| msgid "No user found with this email address"
 msgid "User's email address"
-msgstr "未找到使用此邮箱的用户"
+msgstr ""
 
 #: accounts/serializers.py:113
 #, python-format
 msgid ""
 "This email is already registered via %(providers)s. Please use %(providers)s "
 "to login instead."
-msgstr "该邮箱已通过 %(providers)s 注册，请使用 %(providers)s 登录。"
+msgstr ""
 
 #: accounts/serializers.py:122
 msgid "This email address is already registered. Please login instead."
-msgstr "该邮箱已注册，请直接登录。"
+msgstr ""
 
 #: accounts/serializers.py:144
 msgid "Virtual email username (will become username@domain)"
@@ -85,10 +83,8 @@ msgid "Registration verification token"
 msgstr ""
 
 #: accounts/serializers.py:202
-#, fuzzy
-#| msgid "Password must contain both letters and numbers"
 msgid "User password (8-32 characters, must contain letters and numbers)"
-msgstr "密码必须同时包含字母和数字"
+msgstr ""
 
 #: accounts/serializers.py:211 accounts/serializers.py:307
 msgid "Virtual email username"
@@ -110,15 +106,15 @@ msgstr ""
 
 #: accounts/serializers.py:242 accounts/views/password.py:251
 msgid "Password must be at least 8 characters long"
-msgstr "密码至少需要 8 个字符"
+msgstr ""
 
 #: accounts/serializers.py:247 accounts/views/password.py:261
 msgid "Password cannot exceed 32 characters"
-msgstr "密码不能超过 32 个字符"
+msgstr ""
 
 #: accounts/serializers.py:255 accounts/views/password.py:274
 msgid "Password must contain both letters and numbers"
-msgstr "密码必须同时包含字母和数字"
+msgstr ""
 
 #: accounts/serializers.py:286 accounts/serializers.py:362
 #, python-format
@@ -134,10 +130,8 @@ msgid "User's timezone"
 msgstr ""
 
 #: accounts/serializers.py:331
-#, fuzzy
-#| msgid "All fields are required"
 msgid "Scene is required"
-msgstr "所有字段都是必填的"
+msgstr ""
 
 #: accounts/serializers.py:379
 msgid ""
@@ -150,10 +144,8 @@ msgid "Primary virtual email address for receiving emails"
 msgstr ""
 
 #: accounts/serializers.py:393
-#, fuzzy
-#| msgid "User profile not found"
 msgid "User profile information"
-msgstr "未找到用户档案"
+msgstr ""
 
 #: accounts/serializers.py:398
 msgid "Authentication method and related information"
@@ -161,81 +153,70 @@ msgstr ""
 
 #: accounts/serializers.py:552
 msgid "No user found with this email address"
-msgstr "未找到使用此邮箱的用户"
+msgstr ""
 
 #: accounts/serializers.py:558 accounts/views/password.py:68
 msgid ""
 "OAuth users cannot reset password. Please login with your OAuth provider."
-msgstr "OAuth 用户无法重置密码，请使用您的 OAuth 提供商登录。"
+msgstr ""
 
 #: accounts/serializers.py:567
 msgid "Please complete registration first"
-msgstr "请先完成注册"
+msgstr ""
 
 #: accounts/serializers.py:571
 msgid "User profile not found"
-msgstr "未找到用户档案"
+msgstr ""
 
 #: accounts/services/email.py:71 accounts/services/email.py:72
 msgid "Complete Your AImyChats Registration"
 msgstr ""
 
 #: accounts/services/email.py:77
-#, fuzzy, python-format
-#| msgid "Please reset your password by visiting: %(url)s"
+#, python-format
 msgid "Please complete your registration by visiting: %(url)s"
-msgstr "请访问以下链接重置您的密码：%(url)s"
+msgstr ""
 
 #: accounts/services/email.py:165 accounts/services/email.py:166
-#, fuzzy
-#| msgid "Reset Your AimyChats Password"
 msgid "Reset Your AImyChats Password"
-msgstr "重置您的 AimyChats 密码"
+msgstr ""
 
 #: accounts/services/email.py:171
 #, python-format
 msgid "Please reset your password by visiting: %(url)s"
-msgstr "请访问以下链接重置您的密码：%(url)s"
+msgstr ""
 
 #: accounts/views/oauth.py:52
 msgid "Complete OAuth user setup"
 msgstr ""
 
 #: accounts/views/oauth.py:74
-#, fuzzy
-#| msgid "Please complete registration first"
 msgid "User has already completed registration"
-msgstr "请先完成注册"
+msgstr ""
 
 #: accounts/views/oauth.py:177
-#, fuzzy
-#| msgid "Password reset email sent successfully"
 msgid "Setup completed successfully"
-msgstr "密码重置邮件已成功发送"
+msgstr ""
 
 #: accounts/views/oauth.py:193
-#, fuzzy
-#| msgid "Failed to create JIRA issue"
 msgid "Failed to complete setup"
-msgstr "创建JIRA问题失败"
+msgstr ""
 
 #: accounts/views/password.py:51
-#, fuzzy
-#| msgid "Failed to send password reset email"
 msgid "Send password reset email"
-msgstr "发送密码重置邮件失败"
+msgstr ""
 
 #: accounts/views/password.py:110
 msgid "Password reset email sent successfully"
-msgstr "密码重置邮件已成功发送"
+msgstr ""
 
 #: accounts/views/password.py:120
 msgid "Failed to send password reset email"
-msgstr "发送密码重置邮件失败"
+msgstr ""
 
 #: accounts/views/password.py:135
 msgid "Failed to process password reset request"
-msgstr "处理密码重置请求失败"
+msgstr ""
 
 #: accounts/views/password.py:154
 msgid "Confirm password reset"
@@ -243,49 +224,43 @@ msgstr ""
 
 #: accounts/views/password.py:204
 msgid "All fields are required"
-msgstr "所有字段都是必填的"
+msgstr ""
 
 #: accounts/views/password.py:213
 msgid "Passwords do not match"
-msgstr "两次输入的密码不一致"
+msgstr ""
 
 #: accounts/views/password.py:230
 msgid "Invalid reset link"
-msgstr "无效的重置链接"
+msgstr ""
 
 #: accounts/views/password.py:240
 msgid "Invalid or expired reset link"
-msgstr "无效或已过期的重置链接"
+msgstr ""
 
 #: accounts/views/password.py:292
 msgid "Password has been reset successfully"
-msgstr "密码已成功重置"
+msgstr ""
 
 #: accounts/views/password.py:306
 msgid "Failed to reset password"
-msgstr "重置密码失败"
+msgstr ""
 
 #: accounts/views/registration.py:55
 msgid "Send registration email"
 msgstr ""
 
 #: accounts/views/registration.py:110
-#, fuzzy
-#| msgid "Password reset email sent successfully"
 msgid "Registration email sent successfully"
-msgstr "密码重置邮件已成功发送"
+msgstr ""
 
 #: accounts/views/registration.py:120
-#, fuzzy
-#| msgid "Failed to send password reset email"
 msgid "Failed to send registration email"
-msgstr "发送密码重置邮件失败"
+msgstr ""
 
 #: accounts/views/registration.py:134
-#, fuzzy
-#| msgid "Failed to process password reset request"
 msgid "Failed to process registration request"
-msgstr "处理密码重置请求失败"
+msgstr ""
 
 #: accounts/views/registration.py:151
 msgid "Verify registration token"
@@ -296,32 +271,24 @@ msgid "Token has expired"
 msgstr ""
 
 #: accounts/views/registration.py:197
-#, fuzzy
-#| msgid "Invalid reset link"
 msgid "Invalid token"
-msgstr "无效的重置链接"
+msgstr ""
 
 #: accounts/views/registration.py:214
-#, fuzzy
-#| msgid "Please complete registration first"
 msgid "Complete registration"
-msgstr "请先完成注册"
+msgstr ""
 
 #: accounts/views/registration.py:243
-#, fuzzy
-#| msgid "Invalid reset link"
 msgid "Invalid registration token"
-msgstr "无效的重置链接"
+msgstr ""
 
 #: accounts/views/registration.py:255
 msgid "Registration token has expired"
 msgstr ""
 
 #: accounts/views/registration.py:307
-#, fuzzy
-#| msgid "Please complete registration first"
 msgid "Failed to complete registration"
-msgstr "请先完成注册"
+msgstr ""
 
 #: accounts/views/registration.py:324
 msgid "Check username availability"
@@ -332,22 +299,16 @@ msgid "Username to check"
 msgstr ""
 
 #: accounts/views/registration.py:348
-#, fuzzy
-#| msgid "No details available"
 msgid "Username is available"
-msgstr "暂无详细信息"
+msgstr ""
 
 #: accounts/views/registration.py:355
-#, fuzzy
-#| msgid "Invalid reset link"
 msgid "Invalid username"
-msgstr "无效的重置链接"
+msgstr ""
 
 #: accounts/views/scenes.py:37
-#, fuzzy
-#| msgid "No details available"
 msgid "Get available scenes"
-msgstr "暂无详细信息"
+msgstr ""
 
 #: accounts/views/scenes.py:43
 msgid "Language code (e.g., 'zh-CN', 'en-US', 'es')"
@@ -388,7 +349,7 @@ msgstr ""
 
 #: threadline/admin.py:210
 msgid "Details"
-msgstr "详情"
+msgstr ""
 
 #: threadline/admin.py:248
 msgid "Email Information"
@@ -411,16 +372,12 @@ msgid "Summary (Full)"
 msgstr ""
 
 #: threadline/admin.py:278
-#, fuzzy
-#| msgid "LLM Processing"
 msgid "LLM Processing Preview"
-msgstr "LLM处理"
+msgstr ""
 
 #: threadline/admin.py:285
-#, fuzzy
-#| msgid "LLM Processing"
 msgid "LLM Processing (Full)"
-msgstr "LLM处理"
+msgstr ""
 
 #: threadline/admin.py:289
 msgid "Status"
@@ -436,17 +393,15 @@ msgstr ""
 
 #: threadline/admin.py:321 threadline/models.py:245
 msgid "Subject"
-msgstr "主题"
+msgstr ""
 
 #: threadline/admin.py:327
 msgid "Attachments"
 msgstr ""
 
 #: threadline/admin.py:333 threadline/models.py:570
-#, fuzzy
-#| msgid "JIRA Issue"
 msgid "Issues"
-msgstr "JIRA问题"
+msgstr ""
 
 #: threadline/admin.py:339
 msgid "Attachment Links"
@@ -506,10 +461,8 @@ msgid "Email Message"
 msgstr ""
 
 #: threadline/admin.py:610
-#, fuzzy
-#| msgid "Issue created"
 msgid "Issue Information"
-msgstr "问题已创建"
+msgstr ""
 
 #: threadline/admin.py:615
 msgid "Classification"
@@ -609,16 +562,12 @@ msgid "Cancelled"
 msgstr ""
 
 #: threadline/models.py:158
-#, fuzzy
-#| msgid "Email Fetching"
 msgid "IMAP Email Fetch"
-msgstr "邮件获取"
+msgstr ""
 
 #: threadline/models.py:159
-#, fuzzy
-#| msgid "Email Fetching"
 msgid "Haraka Email Fetch"
-msgstr "邮件获取"
+msgstr ""
 
 #: threadline/models.py:160
 msgid "Haraka Cleanup"
@@ -698,7 +647,7 @@ msgstr ""
 
 #: threadline/models.py:249
 msgid "Sender"
-msgstr "发件人"
+msgstr ""
 
 #: threadline/models.py:250
 msgid "Sender email address (supports RFC 5322 format)"
@@ -745,20 +694,16 @@ msgid "Structured metadata for intelligent search and filtering"
 msgstr ""
 
 #: threadline/models.py:302 threadline/models.py:476
-#, fuzzy
-#| msgid "LLM Processing"
 msgid "LLM Processed Content"
-msgstr "LLM处理"
+msgstr ""
 
 #: threadline/models.py:303
 msgid "Content organized by large language model"
 msgstr ""
 
 #: threadline/models.py:313
-#, fuzzy
-#| msgid "Processing"
 msgid "Processing Status"
-msgstr "处理中"
+msgstr ""
 
 #: threadline/models.py:321
 msgid "Fetch Retry Count"
@@ -835,34 +780,24 @@ msgid "Content organized by large language model based on OCR result"
 msgstr ""
 
 #: threadline/models.py:486
-#, fuzzy
-#| msgid "Email Fetching"
 msgid "Email Attachment"
-msgstr "邮件获取"
+msgstr ""
 
 #: threadline/models.py:487
-#, fuzzy
-#| msgid "Email Fetching"
 msgid "Email Attachments"
-msgstr "邮件获取"
+msgstr ""
 
 #: threadline/models.py:520
-#, fuzzy
-#| msgid "Issue created"
 msgid "Issue Title"
-msgstr "问题已创建"
+msgstr ""
 
 #: threadline/models.py:521
-#, fuzzy
-#| msgid "Failed to create JIRA issue"
 msgid "Title of the issue"
-msgstr "创建JIRA问题失败"
+msgstr ""
 
 #: threadline/models.py:525
-#, fuzzy
-#| msgid "Issue created"
 msgid "Issue Description"
-msgstr "问题已创建"
+msgstr ""
 
 #: threadline/models.py:526
 msgid "Description of the issue"
@@ -905,16 +840,12 @@ msgid "Engine-specific configuration and data"
 msgstr ""
 
 #: threadline/models.py:569
-#, fuzzy
-#| msgid "JIRA Issue"
 msgid "Issue"
-msgstr "JIRA问题"
+msgstr ""
 
 #: threadline/models.py:601
-#, fuzzy
-#| msgid "No user found with this email address"
 msgid "User who owns this email alias"
-msgstr "未找到使用此邮箱的用户"
+msgstr ""
 
 #: threadline/models.py:605
 msgid "Alias"
@@ -1021,10 +952,8 @@ msgid "Alias cannot be empty"
 msgstr ""
 
 #: threadline/serializers.py:829
-#, fuzzy
-#| msgid "Password cannot exceed 32 characters"
 msgid "Alias cannot be longer than 64 characters"
-msgstr "密码不能超过 32 个字符"
+msgstr ""
 
 #: threadline/serializers.py:835
 msgid "Alias cannot start or end with a dot"
@@ -1037,28 +966,25 @@ msgstr ""
 #: threadline/tasks/notifications.py:95
 #, python-brace-format
 msgid "New email received: {subject}"
-msgstr "收到新邮件：{subject}"
+msgstr ""
 
 #: threadline/tasks/notifications.py:97
-#, fuzzy
-#| msgid "Email Fetching"
 msgid "Email Fetched"
-msgstr "邮件获取"
+msgstr ""
 
 #: threadline/tasks/notifications.py:98
 #, python-brace-format
 msgid "From: {sender}"
-msgstr "发件人：{sender}"
+msgstr ""
 
 #: threadline/tasks/notifications.py:104
-#, fuzzy, python-brace-format
-#| msgid "OCR processing failed: {subject}"
+#, python-brace-format
 msgid "Processing email: {subject}"
-msgstr "OCR处理失败：{subject}"
+msgstr ""
 
 #: threadline/tasks/notifications.py:106 threadline/tasks/notifications.py:166
 msgid "Processing"
-msgstr "处理中"
+msgstr ""
 
 #: threadline/tasks/notifications.py:108
 msgid "Email is being processed through the workflow"
@@ -1066,10 +992,9 @@ msgstr ""
 
 #: threadline/tasks/notifications.py:120 threadline/tasks/notifications.py:131
 #: threadline/tasks/notifications.py:141
-#, fuzzy, python-brace-format
-#| msgid "JIRA issue created successfully: {subject}"
+#, python-brace-format
 msgid "Email processed successfully: {subject}"
-msgstr "JIRA问题创建成功：{subject}"
+msgstr ""
 
 #: threadline/tasks/notifications.py:122 threadline/tasks/notifications.py:133
 #: threadline/tasks/notifications.py:143
@@ -1077,114 +1002,42 @@ msgid "Success"
 msgstr ""
 
 #: threadline/tasks/notifications.py:125
-#, fuzzy, python-brace-format
-#| msgid "OCR processing completed: {subject}"
+#, python-brace-format
 msgid "All processing completed | Issue: {url}"
-msgstr "OCR处理完成：{subject}"
+msgstr ""
 
 #: threadline/tasks/notifications.py:135 threadline/tasks/notifications.py:145
-#, fuzzy
-#| msgid "OCR processing completed: {subject}"
 msgid "All processing stages completed successfully"
-msgstr "OCR处理完成：{subject}"
+msgstr ""
 
 #: threadline/tasks/notifications.py:152
-#, fuzzy, python-brace-format
-#| msgid "OCR processing failed: {subject}"
+#, python-brace-format
 msgid "Email processing failed: {subject}"
-msgstr "OCR处理失败：{subject}"
+msgstr ""
 
 #: threadline/tasks/notifications.py:156
-#, fuzzy
-#| msgid "OCR processing failed: {subject}"
 msgid "Processing failed, can be retried"
-msgstr "OCR处理失败：{subject}"
+msgstr ""
 
 #: threadline/tasks/notifications.py:164
 #, python-brace-format
 msgid "Status updated: {subject}"
-msgstr "状态已更新：{subject}"
+msgstr ""
 
 #: threadline/tasks/notifications.py:168
 #, python-brace-format
 msgid "Status changed from {old_status} to {new_status}"
-msgstr "状态从 {old_status} 更改为 {new_status}"
+msgstr ""
 
 #: threadline/tasks/notifications.py:172
-#, fuzzy
-#| msgid "Status updated: {subject}"
 msgid "Status updated"
-msgstr "状态已更新：{subject}"
+msgstr ""
 
 #: threadline/tasks/notifications.py:190
-#, fuzzy, python-brace-format
-#| msgid "[AI] Email Processing: {status}"
+#, python-brace-format
 msgid "[AImyChats] Email Processing: {status}"
-msgstr "[AI] 邮件处理: {status}"
+msgstr ""
 
 #: threadline/tasks/notifications.py:191
 msgid "No details available"
-msgstr "暂无详细信息"
-
-#~ msgid "OCR Processing"
-#~ msgstr "OCR处理"
-
-#~ msgid "Image text extraction successful"
-#~ msgstr "图片文字提取成功"
-
-#~ msgid "Image text extraction failed"
-#~ msgstr "图片文字提取失败"
-
-#~ msgid "LLM processing completed: {subject}"
-#~ msgstr "LLM处理完成：{subject}"
-
-#~ msgid "Content analysis and summarization completed"
-#~ msgstr "内容分析和摘要完成"
-
-#~ msgid "LLM processing failed: {subject}"
-#~ msgstr "LLM处理失败：{subject}"
-
-#~ msgid "Content analysis failed"
-#~ msgstr "内容分析失败"
-
-#~ msgid "JIRA Creation"
-#~ msgstr "JIRA创建"
-
-#~ msgid "Issue: {key} | URL: {url}"
-#~ msgstr "问题：{key} | 链接：{url}"
-
-#~ msgid "Issue created but details not available"
-#~ msgstr "问题已创建但详细信息不可用"
-
-#~ msgid "JIRA issue creation failed: {subject}"
-#~ msgstr "JIRA问题创建失败：{subject}"
-
-#~ msgid "Webhook not configured or disabled, skipping notification"
-#~ msgstr "Webhook未配置或已禁用，跳过通知"
-
-#~ msgid "No events configured for notification"
-#~ msgstr "未配置通知事件"
-
-#~ msgid "Status '{status}' not in configured events: {events}"
-#~ msgstr "状态 '{status}' 不在配置的事件中：{events}"
-
-#~ msgid "Webhook failed: {status_code}"
-#~ msgstr "Webhook失败：{status_code}"
-
-#~ msgid "Webhook notification sent successfully for status: {status}"
-#~ msgstr "Webhook通知发送成功，状态：{status}"
-
-#~ msgid "Webhook notification failed: {error}"
-#~ msgstr "Webhook通知失败：{error}"
-
-#~ msgid "Time"
-#~ msgstr "时间"
-
-#~ msgid "Stage"
-#~ msgstr "阶段"
-
-#~ msgid "Unknown"
-#~ msgstr "未知"
-
-#~ msgid "JIRA URL"
-#~ msgstr "JIRA链接"
+msgstr ""

@@ -35,6 +35,7 @@ RUN set -eux; \
 
 # Install Python 3.12, pip and system dependencies in one step
 # libmagic is for python-magic which is a library for file type detection
+# gettext is for Django i18n (makemessages, compilemessages)
 RUN apt-get install -y --no-install-recommends \
     python3.12 \
     python3.12-dev \
@@ -51,6 +52,7 @@ RUN apt-get install -y --no-install-recommends \
     libpng-dev \
     libmagic1 \
     libmagic-dev \
+    gettext \
     procps \
     htop \
     net-tools \
