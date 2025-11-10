@@ -1,9 +1,0 @@
-# List of domains/hosts that this server will accept mail for
-# Add your domains here, one per line
-
-localhost
-devify.local
-devify.com
-mail.devify.com
-example.com
-devify.local

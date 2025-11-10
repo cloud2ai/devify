@@ -1,8 +1,0 @@
-# Simplified Haraka Configuration for Development
-# Port 25 without authentication - pure relay mode
-
-# Accept recipients from our host list
-rcpt_to.in_host_list
-
-# Raw email storage plugin for testing
-raw_email_saver

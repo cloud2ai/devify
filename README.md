@@ -40,6 +40,51 @@ This project is a robust AI workflow and agent system, architected with Django a
 
 The AI workflow in this project is powered by **LangGraph**, a framework for building stateful, multi-actor applications with LLMs. The workflow architecture uses a StateGraph pattern with atomic database operations in prepare/finalize nodes, ensuring data consistency and enabling built-in checkpointing for error recovery. This approach provides better observability, maintainability, and resilience compared to traditional orchestration methods.
 
+## Open Source & Commercial Editions
+
+This repository contains the **open source self-hosted edition** of Devify (commercial name: **AImyChats**).
+
+### Features Comparison
+
+| Feature | Open Source (Self-Hosted) | Commercial (SaaS) |
+|---------|---------------------------|-------------------|
+| IMAP Email Integration | ✅ | ✅ |
+| AI Email Processing | ✅ | ✅ |
+| OCR Support | ✅ | ✅ |
+| Unlimited Usage | ✅ Free | ❌ Subscription |
+| Dedicated Email (@aimychats.com) | ❌ | ✅ |
+| Real-time SMTP (Haraka) | ❌ | ✅ |
+| Payment Integration | ❌ | ✅ (Stripe) |
+| Team Collaboration | ❌ | ✅ |
+| Priority Support | ❌ | ✅ |
+
+**For commercial SaaS version:** Visit [aimychats.com](https://aimychats.com)
+
+### Email Collection Methods
+
+**Open Source Edition** uses IMAP polling:
+- Users connect their existing email accounts (Gmail, Outlook, any IMAP server)
+- System periodically polls for new emails
+- Full AI processing capabilities included
+- Perfect for self-hosted deployments
+
+**Commercial Edition** adds real-time SMTP:
+- Dedicated email addresses (@aimychats.com)
+- Real-time email receiving via Haraka mail server
+- Instant processing (no polling delays)
+- Managed hosting with enterprise features
+
+### Self-Hosting Requirements
+
+**Minimum:** 2 CPU cores, 4GB RAM, 20GB storage, Docker & Docker Compose
+
+**External Services Required:**
+- Azure OpenAI API (for LLM)
+- Azure Document Intelligence (for OCR)
+- SMTP server (for notifications, e.g., Gmail)
+
+**SSL/HTTPS:** Use reverse proxy (Nginx Proxy Manager, Traefik, or Caddy) for HTTPS support.
+
 ## Development
 
 ### Testing with Nox
@@ -273,46 +318,25 @@ volumes:
   - ./data/logs:/var/log
 ```
 
-This environment values should be provided:
+Key environment variables (see `env.sample` for complete list):
 
-```
-# Docker Build Configuration
-USE_MIRROR=true
-
-# Database Configuration
+```bash
+# Database
 DB_ENGINE=mysql
-MYSQL_ROOT_PASSWORD=root_password
-MYSQL_PORT=3306
-MYSQL_USER=devify
-MYSQL_PASSWORD=devifyPass
-MYSQL_DATABASE=devify
+MYSQL_PASSWORD=your_password
 
-# Celery Configuration
-CELERY_BROKER_URL=redis://redis:6379
-CELERY_RESULT_BACKEND=redis://redis:6379
-CELERY_CONCURRENCY=4
-CELERY_MAX_TASKS_PER_CHILD=1000
-CELERY_MAX_MEMORY_PER_CHILD=256000
-CELERY_LOG_LEVEL=INFO
+# Azure OpenAI
+AZURE_OPENAI_API_KEY=your_api_key
+AZURE_OPENAI_API_BASE=https://your-endpoint.openai.azure.com/
 
-# Server Configuration (Production)
-WORKERS=1
-THREADS=1
-NGINX_HTTP_PORT=10080
-NGINX_HTTPS_PORT=10443
+# Azure OCR
+AZURE_DOCUMENT_INTELLIGENCE_KEY=your_key
+AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT=https://your-endpoint.cognitiveservices.azure.com/
 
-AZURE_OPENAI_API_BASE=https://your-azure-openai-endpoint.openai.azure.com/
-AZURE_OPENAI_API_KEY=your-azure-openai-api-key
-AZURE_OPENAI_DEPLOYMENT=your-azure-openai-deployment
-AZURE_OPENAI_API_VERSION=your-azure-openai-api-version
-
-# OCR
-AZURE_DOCUMENT_INTELLIGENCE_KEY="your-azure-document-intelligence-key"
-AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT="https://your-azure-document-intelligence-endpoint.cognitiveservices.azure.com/"
-
-# Email Collection (Haraka auto_assign mode)
-AUTO_ASSIGN_EMAIL_DOMAIN=devify.local
-HARAKA_EMAIL_BASE_DIR=/opt/haraka/emails
+# Email for notifications
+EMAIL_HOST=smtp.gmail.com
+EMAIL_HOST_USER=your-email@gmail.com
+EMAIL_HOST_PASSWORD=your_app_password
 ```
 
 ### Run in Development Mode
@@ -1300,3 +1324,174 @@ flowchart TD
     - State machine allows: `SUCCESS → PROCESSING`, `FAILED → PROCESSING`
   - **Temporary Configuration Override**: Retry parameters only affect the current retry, don't update user Settings
   - **Status Updates**: Email status automatically changes to PROCESSING when retry starts, then to SUCCESS or FAILED when complete
+
+---
+
+# License
+
+## Open Source Code
+
+- **Backend (this repository)**: AGPLv3
+- Full source code available on GitHub
+- Modifications must remain open source under AGPLv3
+- SaaS usage is permitted
+
+## Commercial Frontend
+
+- **Frontend UI**: Proprietary license
+- Distributed as Docker image
+- Free for self-hosted use
+- Source code not available
+
+## Commercial Features
+
+- Haraka mail server integration: Available in commercial edition only
+- Payment features: Commercial license only
+- Team collaboration features: Commercial license only
+
+---
+
+# Contributing
+
+We welcome contributions to the open source edition!
+
+## How to Contribute
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Make your changes
+4. Commit your changes (`git commit -m 'Add amazing feature'`)
+5. Push to the branch (`git push origin feature/amazing-feature`)
+6. Open a Pull Request
+
+## Contribution Guidelines
+
+- Follow existing code style (PEP 8 for Python)
+- Add tests for new features
+- Update documentation as needed
+- Sign the Contributor License Agreement (CLA)
+
+## What to Contribute
+
+**Welcome contributions:**
+- Bug fixes
+- Performance improvements
+- Documentation improvements
+- Test coverage enhancements
+- IMAP integration enhancements
+- AI workflow improvements
+- Translation and localization
+
+**Please discuss first (via GitHub Issues):**
+- Major architectural changes
+- New external dependencies
+- Breaking changes
+- New commercial features
+
+---
+
+# Support
+
+## Open Source Edition
+
+- **GitHub Issues**: [Bug reports and feature requests](https://github.com/your-org/devify/issues)
+- **GitHub Discussions**: [Community support and questions](https://github.com/your-org/devify/discussions)
+- **Documentation**: This README and inline code documentation
+
+## Commercial Edition
+
+- **Priority Email Support**: support@aimychats.com
+- **Live Chat Support**: Available on [aimychats.com](https://aimychats.com)
+- **Phone Support**: Available for enterprise plans
+- **Dedicated Account Manager**: Available for enterprise plans
+
+## Commercial Support for Open Source
+
+Need professional support for your self-hosted deployment? Contact us for support contracts: support@aimychats.com
+
+---
+
+# Roadmap
+
+## Open Source Edition
+
+- [ ] Improved IMAP performance and reliability
+- [ ] Additional AI models support (OpenAI, Anthropic, local models)
+- [ ] Better documentation and tutorials
+- [ ] More language support for email processing
+- [ ] Enhanced customization options
+- [ ] Plugin system for extensibility
+- [ ] Improved error handling and recovery
+
+## Commercial Edition
+
+- [ ] Advanced team collaboration features
+- [ ] API rate limiting and quotas
+- [ ] Webhook integrations
+- [ ] Advanced reporting and analytics
+- [ ] Mobile applications (iOS/Android)
+- [ ] Third-party integrations (Slack, Teams, etc.)
+
+---
+
+# FAQ
+
+## General Questions
+
+### Can I use the open source edition commercially?
+
+Yes! The AGPLv3 license permits commercial use, including running as a SaaS service.
+
+### Can I modify the code?
+
+Yes, but modifications must also be released under AGPLv3 if you distribute the software or provide it as a service.
+
+### Do I need to open source my customizations?
+
+Only if you distribute the software or provide it as a service (SaaS). Internal use doesn't require disclosure.
+
+## Technical Questions
+
+### What's the difference in AI capabilities?
+
+The AI processing engine is identical in both editions. The difference is in deployment features (Haraka, billing, etc.).
+
+### Can I add Haraka to the open source edition?
+
+The Haraka integration code is available in the commercial edition repository. However, setting up Haraka requires significant infrastructure (domain, DNS MX records, SSL certificates, DKIM/SPF/DMARC). We recommend using IMAP for simplicity.
+
+### Which AI models are supported?
+
+Currently Azure OpenAI. Support for OpenAI API, Anthropic Claude, and local models (Ollama) is planned.
+
+### Can I use my own AI API keys?
+
+Yes! Configure your own Azure OpenAI and Document Intelligence keys in the `.env` file.
+
+## Commercial Questions
+
+### Is there a free trial of commercial edition?
+
+Yes, visit [aimychats.com](https://aimychats.com) to start your free trial.
+
+### What's included in commercial support?
+
+Priority email support, live chat, phone support (enterprise), dedicated account manager (enterprise), and SLA guarantees.
+
+### Can I get commercial features with self-hosting?
+
+Yes, we offer enterprise self-hosted deployments with all commercial features. Contact: sales@aimychats.com
+
+---
+
+# Contact
+
+- **Open Source Support**: [GitHub Issues](https://github.com/your-org/devify/issues)
+- **Commercial Inquiries**: sales@aimychats.com
+- **Enterprise Solutions**: enterprise@aimychats.com
+- **General Questions**: support@aimychats.com
+- **Website**: [aimychats.com](https://aimychats.com)
+
+---
+
+Thank you for choosing Devify! Whether you're using the open source edition or considering our commercial SaaS, we're excited to help you build better email workflows with AI. 🚀

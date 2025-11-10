@@ -1,6 +1,6 @@
 services:
   devify-api:
-    image: registry.cn-beijing.aliyuncs.com/cloud2ai/devify:latest
+    image: devify:latest
     container_name: devify-api
     restart: unless-stopped
     build:
@@ -14,7 +14,7 @@ services:
       - ./data/django/staticfiles:/opt/devify/core/staticfiles
       - ./cache:/opt/cache
       - ./data/logs/api:/var/log/gunicorn
-      - ./data/haraka/email_attachments:/opt/haraka/email_attachments
+      - ./data/email_attachments:/opt/email_attachments
     networks:
       - devify_network
     depends_on:
@@ -28,7 +28,7 @@ services:
       start_period: 60s
 
   devify-worker:
-    image: registry.cn-beijing.aliyuncs.com/cloud2ai/devify:latest
+    image: devify:latest
     container_name: devify-worker
     restart: unless-stopped
     env_file:
@@ -36,7 +36,7 @@ services:
     volumes:
       - ./cache:/opt/cache
       - ./data/logs/worker:/var/log/celery
-      - ./data/haraka/email_attachments:/opt/haraka/email_attachments
+      - ./data/email_attachments:/opt/email_attachments
     networks:
       - devify_network
     depends_on:
@@ -49,7 +49,7 @@ services:
     command: celery
 
   devify-scheduler:
-    image: registry.cn-beijing.aliyuncs.com/cloud2ai/devify:latest
+    image: devify:latest
     container_name: devify-scheduler
     restart: unless-stopped
     env_file:
@@ -71,7 +71,6 @@ services:
     build:
       context: ../devify-ui
       dockerfile: Dockerfile
-    image: devify-ui:latest
     container_name: devify-ui
     restart: unless-stopped
     expose:
@@ -93,14 +92,12 @@ services:
     restart: unless-stopped
     volumes:
       - ./docker/nginx/default.conf:/etc/nginx/conf.d/default.conf
-      - ./docker/nginx/certs:/certs
       - ./data/django/staticfiles:/staticfiles:ro
       - ./data/email_attachments:/opt/email_attachments:ro
       - ./data/logs/nginx:/var/log/nginx
       - devify-ui_static:/usr/share/nginx/html/frontend:ro
     ports:
       - "${NGINX_HTTP_PORT:-10080}:80"
-      - "${NGINX_HTTPS_PORT:-10443}:443"
     networks:
       - devify_network
     depends_on:
@@ -138,32 +135,6 @@ services:
       - ./data/logs/redis:/var/log/redis
     networks:
       - devify_network
-
-  haraka:
-    image: instrumentisto/haraka:latest
-    container_name: devify-haraka
-    restart: unless-stopped
-    env_file:
-      - ./.env
-    environment:
-      - APK_INSTALL_PACKAGES=openssl
-    ports:
-      - "${HARAKA_SMTP_PORT:-25}:25"
-    volumes:
-      - ./docker/haraka/config/plugins.prod:/etc/haraka/config/plugins:ro
-      - ./docker/haraka/config/redis.ini:/etc/haraka/config/redis.ini:ro
-      - ./docker/haraka/config/host_list.prod:/etc/haraka/config/host_list:ro
-      - ./docker/haraka/config/tls.ini:/etc/haraka/config/tls.ini:ro
-      - ./docker/haraka/plugins/raw_email_saver.js:/etc/haraka/plugins/raw_email_saver.js:ro
-      - ./data/haraka/logs:/var/log/haraka
-      - ./data/haraka/emails:/opt/haraka/emails
-      - ./data/haraka/debug:/tmp/haraka_debug
-      - ./data/haraka/email_attachments:/opt/haraka/email_attachments
-      - ./data/certs/haraka:/etc/haraka/certs:ro
-    networks:
-      - devify_network
-    depends_on:
-      - redis
 
 networks:
   devify_network:

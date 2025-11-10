@@ -1,5 +1,0 @@
-# Accept all domains and routes
-# Format: domain:action
-# Use * to match all domains
-
-*:continue
