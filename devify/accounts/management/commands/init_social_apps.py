@@ -9,14 +9,19 @@ from allauth.socialaccount.models import SocialApp
 
 class Command(BaseCommand):
     """
-    Initialize or update Social Apps for OAuth providers
+    Initialize Django Site and OAuth providers
+
+    This command handles:
+    - Django Site configuration (domain and name)
+    - OAuth providers (Google, WeChat, etc.)
 
     Usage:
         python manage.py init_social_apps
+        python manage.py init_social_apps --site-domain=example.com --site-name="My Site"
         python manage.py init_social_apps --google-client-id=xxx --google-secret=yyy
         python manage.py init_social_apps --list
     """
-    help = 'Initialize SocialApp records for OAuth providers'
+    help = 'Initialize Django Site and OAuth providers'
 
     def add_arguments(self, parser):
         parser.add_argument(
@@ -34,17 +39,32 @@ class Command(BaseCommand):
             action='store_true',
             help='List existing SocialApp configurations'
         )
+        parser.add_argument(
+            '--site-domain',
+            type=str,
+            help='Override SITE_DOMAIN from environment'
+        )
+        parser.add_argument(
+            '--site-name',
+            type=str,
+            help='Override SITE_NAME from environment'
+        )
 
     def handle(self, *args, **options):
+        self.options = options
+
         if options['list']:
             self.list_social_apps()
             return
 
         self.stdout.write('=' * 70)
         self.stdout.write(
-            self.style.SUCCESS('Initializing Social Apps...')
+            self.style.SUCCESS('Initializing Site & Social Apps...')
         )
         self.stdout.write('=' * 70)
+        self.stdout.write('')
+
+        self.init_site_config()
         self.stdout.write('')
 
         site = Site.objects.get_current()
@@ -116,6 +136,41 @@ class Command(BaseCommand):
             self.style.SUCCESS('Social Apps initialization completed!')
         )
         self.stdout.write('=' * 70)
+
+    def init_site_config(self):
+        """
+        Initialize Django Site configuration from environment variables
+        """
+        site_domain = (
+            self.options.get('site_domain') or
+            os.getenv('SITE_DOMAIN', 'localhost:8000')
+        )
+        site_name = (
+            self.options.get('site_name') or
+            os.getenv('SITE_NAME', 'Devify')
+        )
+
+        try:
+            site = Site.objects.get(pk=settings.SITE_ID)
+            site.domain = site_domain
+            site.name = site_name
+            site.save()
+
+            self.stdout.write(
+                self.style.SUCCESS(
+                    f'✓ Site configured: {site.domain} ({site.name})'
+                )
+            )
+        except Site.DoesNotExist:
+            self.stdout.write(
+                self.style.ERROR(
+                    f'✗ Site with ID {settings.SITE_ID} not found'
+                )
+            )
+        except Exception as e:
+            self.stdout.write(
+                self.style.ERROR(f'✗ Failed to configure Site: {e}')
+            )
 
     def list_social_apps(self):
         """

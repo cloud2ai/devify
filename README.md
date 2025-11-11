@@ -220,31 +220,33 @@ Visit [Google Cloud Console](https://console.cloud.google.com/):
 **2. Configure in `.env`:**
 
 ```bash
-# Accounts & Authentication Configuration
+# Django Site Configuration (Required for OAuth)
+# This will be automatically configured on container startup
+SITE_DOMAIN=localhost:8000
+SITE_NAME=Devify Development
+
+# Google OAuth Configuration
 GOOGLE_OAUTH_CLIENT_ID=your_client_id_from_google
 GOOGLE_OAUTH_CLIENT_SECRET=your_client_secret_from_google
 
 # Registration Configuration (required for all users)
 # Note: Virtual email domain uses AUTO_ASSIGN_EMAIL_DOMAIN configured above
 REGISTRATION_TOKEN_EXPIRY_HOURS=24
+
 # Frontend URL - Django will redirect here after OAuth login
 FRONTEND_URL=http://localhost:3000
+
+# Frontend API Base URL (for CORS and OAuth redirects)
+VITE_API_BASE_URL=http://localhost:8000
 ```
 
-**3. Configure Django Site (Required for OAuth):**
+**Note**:
+- `SITE_DOMAIN` and Google OAuth settings will be **automatically initialized** when the container starts
+- No need to manually configure Django Site in Admin
+- Google OAuth does not allow private IP addresses (like `192.168.x.x`), so use `localhost` for development
+- For production, use your actual domain (e.g., `app.yourdomain.com`)
 
-After running migrations, configure the Site domain in Django Admin:
-
-1. Access Django Admin: `http://localhost:8000/admin/`
-2. Go to **Sites** → **Sites** → Click on **example.com**
-3. Update:
-   - **Domain name**: `localhost:8000` (Development) or `yourdomain.com` (Production)
-   - **Display name**: `Devify Development` or your site name
-4. Click **Save**
-
-**Note**: This is required for OAuth redirect URLs to work correctly. Google OAuth does not allow private IP addresses (like `192.168.x.x`), so use `localhost` for development.
-
-**4. API Documentation:**
+**3. API Documentation:**
 
 View available authentication endpoints at `http://localhost:8000/api/schema/swagger-ui/` after starting the server.
 

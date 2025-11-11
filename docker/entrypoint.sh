@@ -85,6 +85,20 @@ collect_static() {
     python manage.py collectstatic --noinput
 }
 
+init_services() {
+    log "Initializing services..."
+
+    log "→ Initializing Site & OAuth providers..."
+    python manage.py init_social_apps || log "OAuth initialization completed with warnings"
+
+    if [ "${BILLING_ENABLED:-false}" = "true" ]; then
+        log "→ Initializing Stripe billing system..."
+        python manage.py init_billing_stripe || log "Billing initialization completed with warnings"
+    else
+        log "→ Billing disabled, skipping"
+    fi
+}
+
 # --- Process Starters ---
 start_gunicorn() {
     log "Starting Gunicorn..."
@@ -136,6 +150,7 @@ case "$1" in
     gunicorn)
         wait_for_db
         run_migrations
+        init_services
         collect_static
         start_gunicorn
         ;;
@@ -153,6 +168,7 @@ case "$1" in
     development)
         wait_for_db
         run_migrations
+        init_services
         start_development
         ;;
     *)
