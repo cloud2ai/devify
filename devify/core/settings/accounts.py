@@ -71,6 +71,14 @@ ACCOUNT_UNIQUE_EMAIL = True
 # Allow both email and username login
 ACCOUNT_LOGIN_METHODS = ['email', 'username']
 
+# Force HTTPS for OAuth callback URLs in production
+# This ensures django-allauth generates https:// URLs for OAuth providers
+# Environment variable allows flexibility for local development (http)
+ACCOUNT_DEFAULT_HTTP_PROTOCOL = os.getenv(
+    'ACCOUNT_DEFAULT_HTTP_PROTOCOL',
+    'http'
+)
+
 # Email-based authentication for social accounts
 # If OAuth email matches existing user, auto-connect instead of creating
 # new user
