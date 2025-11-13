@@ -24,15 +24,9 @@ EMAIL_HOST = os.getenv('EMAIL_HOST', 'smtp.gmail.com')
 
 EMAIL_PORT = int(os.getenv('EMAIL_PORT', '587'))
 
-EMAIL_USE_TLS = (
-    os.getenv('EMAIL_USE_TLS', 'True').lower()
-    in ('true', '1', 'yes', 'on')
-)
+EMAIL_USE_TLS = os.getenv('EMAIL_USE_TLS', 'false').lower() == "true"
 
-EMAIL_USE_SSL = (
-    os.getenv('EMAIL_USE_SSL', 'False').lower()
-    in ('true', '1', 'yes', 'on')
-)
+EMAIL_USE_SSL = os.getenv('EMAIL_USE_SSL', 'false').lower() == "true"
 
 EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER', '')
 
@@ -78,7 +72,8 @@ ACCOUNT_UNIQUE_EMAIL = True
 ACCOUNT_LOGIN_METHODS = ['email', 'username']
 
 # Email-based authentication for social accounts
-# If OAuth email matches existing user, auto-connect instead of creating new user
+# If OAuth email matches existing user, auto-connect instead of creating
+# new user
 SOCIALACCOUNT_EMAIL_AUTHENTICATION = True
 SOCIALACCOUNT_EMAIL_AUTHENTICATION_AUTO_CONNECT = True
 

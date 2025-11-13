@@ -34,6 +34,76 @@ class SubscriptionService:
     """
 
     @staticmethod
+    @transaction.atomic
+    def assign_free_plan_to_user(user):
+        """
+        Assign Free plan to a user
+
+        Creates a Free plan subscription with initial credits.
+        This is typically called during user registration when
+        BILLING_ENABLED=True.
+
+        Args:
+            user: Django User instance
+
+        Returns:
+            Subscription object
+
+        Raises:
+            BillingPlan.DoesNotExist: If Free plan not found
+            PaymentProvider.DoesNotExist: If Stripe provider not found
+        """
+        # Check if user already has a subscription
+        existing_subscription = Subscription.objects.filter(
+            user=user
+        ).first()
+        if existing_subscription:
+            logger.warning(
+                f"User {user.id} already has subscription, "
+                f"skipping Free plan assignment"
+            )
+            return existing_subscription
+
+        # Get Free plan and payment provider
+        free_plan = Plan.objects.get(slug='free')
+        payment_provider = PaymentProvider.objects.get(name='stripe')
+
+        current_time = timezone.now()
+        period_days = free_plan.metadata.get('period_days', 30)
+        period_end = current_time + timedelta(days=period_days)
+        base_credits = free_plan.metadata.get('credits_per_period', 10)
+
+        # Create Free plan subscription
+        subscription = Subscription.objects.create(
+            user=user,
+            plan=free_plan,
+            provider=payment_provider,
+            status='active',
+            current_period_start=current_time,
+            current_period_end=period_end,
+            auto_renew=True
+        )
+
+        # Initialize user credits
+        UserCredits.objects.create(
+            user=user,
+            subscription=subscription,
+            base_credits=base_credits,
+            bonus_credits=0,
+            consumed_credits=0,
+            period_start=current_time,
+            period_end=period_end,
+            is_active=True
+        )
+
+        logger.info(
+            f"Assigned Free plan to user {user.id}: "
+            f"{base_credits} credits, {period_days} days period"
+        )
+
+        return subscription
+
+    @staticmethod
     def get_active_subscription(user_id: int):
         """
         Get user's active subscription

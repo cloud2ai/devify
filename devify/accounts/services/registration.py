@@ -119,6 +119,79 @@ class RegistrationService:
         return True, ''
 
     @staticmethod
+    def _initialize_free_plan(user):
+        """
+        Initialize Free Plan subscription and credits for new user.
+
+        Creates a Free Plan subscription with initial credits.
+        This runs automatically during registration when billing
+        is enabled.
+
+        Args:
+            user: Django User instance
+
+        Raises:
+            Exception: If billing initialization fails
+
+        Note:
+            Imports billing models locally to avoid import errors
+            when BILLING_ENABLED=False or billing app not installed.
+        """
+        # Local import to avoid circular dependency and conditional loading
+        from billing.models import (
+            Plan,
+            UserCredits,
+            Subscription,
+            PaymentProvider
+        )
+
+        try:
+            free_plan = Plan.objects.get(slug='free')
+            payment_provider = PaymentProvider.objects.get(name='stripe')
+
+            current_time = timezone.now()
+            period_days = free_plan.metadata.get('period_days', 30)
+            period_end = current_time + timedelta(days=period_days)
+            base_credits = free_plan.metadata.get(
+                'credits_per_period', 10
+            )
+
+            # Create Free Plan subscription
+            subscription = Subscription.objects.create(
+                user=user,
+                plan=free_plan,
+                provider=payment_provider,
+                status='active',
+                current_period_start=current_time,
+                current_period_end=period_end,
+                auto_renew=False
+            )
+
+            # Initialize user credits
+            UserCredits.objects.create(
+                user=user,
+                subscription=subscription,
+                base_credits=base_credits,
+                bonus_credits=0,
+                consumed_credits=0,
+                period_start=current_time,
+                period_end=period_end,
+                is_active=True
+            )
+
+            logger.info(
+                f"Initialized Free Plan for user {user.username}: "
+                f"{base_credits} credits, {period_days} days period"
+            )
+
+        except Exception as e:
+            logger.warning(
+                f"Failed to initialize Free Plan for user "
+                f"{user.username}: {e}"
+            )
+            raise
+
+    @staticmethod
     @transaction.atomic
     def create_user_with_config(
         email: str,
@@ -142,7 +215,8 @@ class RegistrationService:
             password: User's password
             username: Custom username for virtual email
             scene: User's selected scene (chat, product_issue, etc.)
-            language: AI output language for summaries, titles, and metadata (zh-CN, en-US, es)
+            language: AI output language for summaries, titles,
+                      and metadata (zh-CN, en-US, es)
             timezone_str: User's timezone
 
         Returns:
@@ -171,7 +245,7 @@ class RegistrationService:
             )
             logger.info(f"Created user: {username}")
 
-            profile = Profile.objects.create(
+            Profile.objects.create(
                 user=user,
                 registration_completed=True,
                 language=language,
@@ -179,7 +253,7 @@ class RegistrationService:
             )
             logger.info(f"Created profile for user: {username}")
 
-            email_alias = EmailAlias.objects.create(
+            EmailAlias.objects.create(
                 user=user,
                 alias=username,
                 is_active=True
@@ -223,6 +297,10 @@ class RegistrationService:
                 f"Created email_config for user: {username} "
                 f"(mode: auto_assign)"
             )
+
+            # Initialize Free Plan subscription and credits
+            if settings.BILLING_ENABLED:
+                RegistrationService._initialize_free_plan(user)
 
             return user
 
@@ -345,8 +423,10 @@ class RegistrationService:
                 registration_completed=False
             )
 
-            if (profile.registration_token_expires and
-                profile.registration_token_expires < timezone.now()):
+            if (
+                profile.registration_token_expires and
+                profile.registration_token_expires < timezone.now()
+            ):
                 logger.warning(
                     f"Registration token expired for user: "
                     f"{profile.user.username}"

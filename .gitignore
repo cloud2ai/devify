@@ -234,4 +234,10 @@ data
 
 # Cursor E2E Test Reports
 .cursor_tests/reports/
-!.cursor_tests/reports/.gitkeep
+!.cursor_tests/reports/.gitkeepcache/
+
+# SSL Certificates
+docker/nginx/certs/
+*.crt
+*.key
+*.pem

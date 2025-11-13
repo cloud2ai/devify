@@ -249,9 +249,8 @@ class Command(BaseCommand):
         if config_path:
             config_file = Path(config_path)
         else:
-            config_file = (
-                Path(settings.BASE_DIR) / 'conf' / 'billing' / 'plans.yaml'
-            )
+            base_path = Path(settings.BASE_DIR).parent
+            config_file = base_path / 'conf' / 'billing' / 'plans.yaml'
 
         if not config_file.exists():
             self.stdout.write(

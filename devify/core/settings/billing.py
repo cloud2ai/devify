@@ -19,7 +19,7 @@ import os
 # - When True: Billing system is active, subscriptions are enforced
 # - Use Case: Set to False during development/testing to avoid charges
 # - Default: False (safe mode)
-BILLING_ENABLED = os.getenv("BILLING_ENABLED", "False").lower() == "true"
+BILLING_ENABLED = os.getenv("BILLING_ENABLED", "false").lower() == "true"
 
 # CREDITS_CHECK_ENABLED: Controls credits balance checking and consumption
 # - When False: Workflows execute without checking/consuming credits
@@ -29,7 +29,7 @@ BILLING_ENABLED = os.getenv("BILLING_ENABLED", "False").lower() == "true"
 # - Default: False (safe mode)
 # - Note: Only takes effect when BILLING_ENABLED=True
 CREDITS_CHECK_ENABLED = (
-    os.getenv("CREDITS_CHECK_ENABLED", "False").lower() == "true"
+    os.getenv("CREDITS_CHECK_ENABLED", "false").lower() == "true"
 )
 
 # ============================
@@ -54,7 +54,7 @@ STRIPE_TEST_SECRET_KEY = os.getenv("STRIPE_TEST_SECRET_KEY", "")
 # - When True: Uses STRIPE_LIVE_SECRET_KEY (real payments)
 # - Use Case: Set to True only in production
 # - Default: False (test mode)
-STRIPE_LIVE_MODE = os.getenv("STRIPE_LIVE_MODE", "False").lower() == "true"
+STRIPE_LIVE_MODE = os.getenv("STRIPE_LIVE_MODE", "false").lower() == "true"
 
 # STRIPE_PUBLISHABLE_KEY: Stripe publishable key for frontend integration
 # - Use Case: Client-side Stripe.js integration (future)
@@ -121,7 +121,7 @@ WORKFLOW_COST_CREDITS = int(os.getenv("WORKFLOW_COST_CREDITS", "1"))
 # - Data Collected: Token counts, call counts, success/failure status
 # - Default: True (recommended for analytics)
 ENABLE_COST_TRACKING = (
-    os.getenv("ENABLE_COST_TRACKING", "True").lower() == "true"
+    os.getenv("ENABLE_COST_TRACKING", "true").lower() == "true"
 )
 
 # ============================
@@ -138,5 +138,5 @@ ENABLE_COST_TRACKING = (
 #   - User errors (invalid format, too large) → No refund
 # - Default: True (user-friendly)
 AUTO_REFUND_SYSTEM_ERRORS = (
-    os.getenv("AUTO_REFUND_SYSTEM_ERRORS", "True").lower() == "true"
+    os.getenv("AUTO_REFUND_SYSTEM_ERRORS", "true").lower() == "true"
 )

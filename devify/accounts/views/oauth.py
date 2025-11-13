@@ -162,6 +162,13 @@ class CompleteGoogleSetupView(APIView):
                     is_active=True
                 )
 
+                # Initialize Free Plan subscription and credits
+                if settings.BILLING_ENABLED:
+                    from accounts.services.registration import (
+                        RegistrationService
+                    )
+                    RegistrationService._initialize_free_plan(user)
+
                 logger.info(
                     f"Google user {user.username} completed setup"
                 )

@@ -87,7 +87,8 @@ test = [
 
 
 [tool.pytest.ini_options]
-testpaths = ["devify/threadline/tests"]
+DJANGO_SETTINGS_MODULE = "core.settings"
+testpaths = ["devify/threadline/tests", "devify/billing/tests"]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]

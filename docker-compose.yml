@@ -12,9 +12,9 @@ services:
       - ./.env
     volumes:
       - ./data/django/staticfiles:/opt/devify/core/staticfiles
-      - ./cache:/opt/cache
       - ./data/logs/api:/var/log/gunicorn
       - ./data/email_attachments:/opt/email_attachments
+      - ./docker/nginx/certs:/opt/devify/docker/nginx/certs
     networks:
       - devify_network
     depends_on:
@@ -23,9 +23,9 @@ services:
     healthcheck:
       test: ["CMD", "curl", "-f", "http://127.0.0.1:8000/health"]
       interval: 30s
-      timeout: 5s
+      timeout: 10s
       retries: 3
-      start_period: 60s
+      start_period: 120s
 
   devify-worker:
     image: devify:latest
@@ -34,7 +34,6 @@ services:
     env_file:
       - ./.env
     volumes:
-      - ./cache:/opt/cache
       - ./data/logs/worker:/var/log/celery
       - ./data/email_attachments:/opt/email_attachments
     networks:
@@ -68,6 +67,7 @@ services:
     command: celery-beat
 
   devify-ui:
+    image: devify-ui:latest
     build:
       context: ../devify-ui
       dockerfile: Dockerfile
@@ -75,15 +75,14 @@ services:
     restart: unless-stopped
     expose:
       - "80"
-    volumes:
-      - devify-ui_static:/usr/share/nginx/html
     networks:
       - devify_network
     healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost"]
+      test: ["CMD", "sh", "-c", "wget -Y off --quiet --tries=1 --spider http://127.0.0.1 || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
+      start_period: 60s
 
   # Recommend to use nginx proxy manager to manage the outside access
   nginx:
@@ -92,24 +91,26 @@ services:
     restart: unless-stopped
     volumes:
       - ./docker/nginx/default.conf:/etc/nginx/conf.d/default.conf
+      - ./docker/nginx/certs:/etc/nginx/certs:ro
       - ./data/django/staticfiles:/staticfiles:ro
       - ./data/email_attachments:/opt/email_attachments:ro
       - ./data/logs/nginx:/var/log/nginx
-      - devify-ui_static:/usr/share/nginx/html/frontend:ro
     ports:
       - "${NGINX_HTTP_PORT:-10080}:80"
+      - "${NGINX_HTTPS_PORT:-10443}:443"
     networks:
       - devify_network
     depends_on:
       devify-api:
         condition: service_healthy
       devify-ui:
-        condition: service_healthy
+        condition: service_started
     healthcheck:
       test: ["CMD", "nginx", "-t"]
       interval: 30s
       timeout: 10s
       retries: 3
+      start_period: 30s
 
   mysql:
     image: mariadb:11.6
@@ -139,7 +140,3 @@ services:
 networks:
   devify_network:
     driver: bridge
-
-volumes:
-  devify-ui_static:
-    external: false

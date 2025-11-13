@@ -15,6 +15,7 @@ services:
       - ./data/logs/api:/var/log/gunicorn
       - ./devify:/opt/devify
       - ./data/email_attachments:/opt/email_attachments
+      - ./docker/nginx/certs:/opt/devify/docker/nginx/certs
     networks:
       - devify_network
     depends_on:
@@ -23,9 +24,9 @@ services:
     healthcheck:
       test: ["CMD", "curl", "-f", "http://127.0.0.1:8000/health"]
       interval: 30s
-      timeout: 5s
+      timeout: 10s
       retries: 3
-      start_period: 60s
+      start_period: 120s
 
   devify-worker:
     image: devify:latest
@@ -113,6 +114,7 @@ services:
       - devify_network
 
   devify-ui:
+    image: devify-ui:dev
     build:
       context: ../devify-ui
       dockerfile: Dockerfile.dev
@@ -156,6 +158,7 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
+      start_period: 30s
 
 networks:
   devify_network:

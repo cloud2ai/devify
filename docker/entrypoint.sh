@@ -30,6 +30,88 @@ chmod -R 755 $LOG_BASE_DIR /var/log/celery
 # --- Logging Helper ---
 log() { echo -e "\033[1;36m[entrypoint]\033[0m $*"; }
 
+# --- SSL Certificate Auto-Generation ---
+generate_ssl_certs_if_missing() {
+    local cert_dir="/opt/devify/docker/nginx/certs"
+    local domain="${AUTO_ASSIGN_EMAIL_DOMAIN:-devify.local}"
+
+    mkdir -p "$cert_dir"
+
+    if [ "$domain" = "devify.local" ]; then
+        # Open-source version: single certificate for localhost
+        local cert_file="${cert_dir}/nginx-selfsigned.crt"
+        local key_file="${cert_dir}/nginx-selfsigned.key"
+
+        if [ -f "$cert_file" ] && [ -f "$key_file" ]; then
+            log "SSL certificates already exist, skipping generation"
+            return 0
+        fi
+
+        log "Generating self-signed SSL certificate for localhost..."
+        openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+            -keyout "$key_file" \
+            -out "$cert_file" \
+            -subj "/C=CN/ST=Province/L=City/O=Devify/CN=localhost" \
+            -addext "subjectAltName=DNS:localhost,DNS:*.localhost,IP:127.0.0.1" \
+            2>/dev/null
+
+        if [ -f "$cert_file" ] && [ -f "$key_file" ]; then
+            chmod 644 "$cert_file"
+            chmod 600 "$key_file"
+            log "✓ SSL certificate generated: $cert_file"
+        fi
+    else
+        # SaaS version: separate certificates for main and app subdomain
+        local main_cert="${cert_dir}/${domain}.crt"
+        local main_key="${cert_dir}/${domain}.key"
+        local app_cert="${cert_dir}/app.${domain}.crt"
+        local app_key="${cert_dir}/app.${domain}.key"
+
+        local needs_generation=false
+        [ ! -f "$main_cert" ] || [ ! -f "$main_key" ] && needs_generation=true
+        [ ! -f "$app_cert" ] || [ ! -f "$app_key" ] && needs_generation=true
+
+        if [ "$needs_generation" = false ]; then
+            log "SSL certificates already exist for $domain, skipping"
+            return 0
+        fi
+
+        log "Generating self-signed SSL certificates for $domain..."
+
+        # Generate main domain certificate
+        if [ ! -f "$main_cert" ] || [ ! -f "$main_key" ]; then
+            openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+                -keyout "$main_key" \
+                -out "$main_cert" \
+                -subj "/C=CN/ST=Province/L=City/O=Devify/CN=${domain}" \
+                -addext "subjectAltName=DNS:${domain},DNS:*.${domain}" \
+                2>/dev/null
+
+            if [ -f "$main_cert" ] && [ -f "$main_key" ]; then
+                chmod 644 "$main_cert"
+                chmod 600 "$main_key"
+                log "✓ Main domain certificate: $main_cert"
+            fi
+        fi
+
+        # Generate app subdomain certificate
+        if [ ! -f "$app_cert" ] || [ ! -f "$app_key" ]; then
+            openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+                -keyout "$app_key" \
+                -out "$app_cert" \
+                -subj "/C=CN/ST=Province/L=City/O=Devify/CN=app.${domain}" \
+                -addext "subjectAltName=DNS:app.${domain}" \
+                2>/dev/null
+
+            if [ -f "$app_cert" ] && [ -f "$app_key" ]; then
+                chmod 644 "$app_cert"
+                chmod 600 "$app_key"
+                log "✓ App subdomain certificate: $app_cert"
+            fi
+        fi
+    fi
+}
+
 # --- Database Health Check ---
 wait_for_db() {
     log "Waiting for database engine: $DB_ENGINE"
@@ -148,6 +230,7 @@ start_development() {
 # --- Main Entrypoint ---
 case "$1" in
     gunicorn)
+        generate_ssl_certs_if_missing
         wait_for_db
         run_migrations
         init_services
@@ -166,6 +249,7 @@ case "$1" in
         start_flower
         ;;
     development)
+        generate_ssl_certs_if_missing
         wait_for_db
         run_migrations
         init_services

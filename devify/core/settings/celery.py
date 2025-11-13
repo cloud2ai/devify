@@ -86,4 +86,20 @@ CELERY_BEAT_SCHEDULE = {
         'args': (),
         'kwargs': {},
     },
+
+    # Renew expired credits (Free Plan & Paid Plan) - runs daily at 4 AM
+    'renew_expired_credits': {
+        'task': 'billing.tasks.renew_expired_credits',
+        'schedule': crontab(hour=4, minute=0),
+        'args': (),
+        'kwargs': {},
+    },
+
+    # Downgrade failed paid subscriptions to Free Plan - runs daily at 5 AM
+    'downgrade_failed_paid_subscriptions': {
+        'task': 'billing.tasks.downgrade_failed_paid_subscriptions',
+        'schedule': crontab(hour=5, minute=0),
+        'args': (),
+        'kwargs': {},
+    },
 }

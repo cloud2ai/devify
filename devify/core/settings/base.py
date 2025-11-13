@@ -55,7 +55,7 @@ SECRET_KEY = os.getenv(
     'django-insecure-$k0f0!qp@0k%1xa_)zy!+xvwpv)+&$q&!d69ma@l615bdc2ytd')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = os.getenv("DJANGO_DEBUG", "True").lower() in ("true", "1", "yes", "on")
+DEBUG = os.getenv("DJANGO_DEBUG", "false").lower() == "true"
 
 ALLOWED_HOSTS = ["*"]
 
@@ -361,8 +361,7 @@ APPEND_SLASH = False
 # Allow all origins configuration from environment variable
 # Set to 'true' for development convenience, 'false' for production security
 CORS_ALLOW_ALL_ORIGINS = (
-    os.getenv('CORS_ALLOW_ALL_ORIGINS', 'false').lower()
-    in ('true', '1', 'yes', 'on')
+    os.getenv('CORS_ALLOW_ALL_ORIGINS', 'false').lower() == "true"
 )
 
 # Specific allowed origins from environment variable
@@ -409,7 +408,7 @@ SESSION_COOKIE_SAMESITE = 'Lax'
 
 # Secure=True requires HTTPS; set False for local development
 # In production, this should be True
-SESSION_COOKIE_SECURE = os.getenv('DJANGO_DEBUG', 'True').lower() not in ('true', '1', 'yes', 'on')
+SESSION_COOKIE_SECURE = os.getenv('DJANGO_DEBUG', 'false').lower() != "true"
 
 # Allow session cookies to be shared across subdomains (if needed)
 # SESSION_COOKIE_DOMAIN = os.getenv('SESSION_COOKIE_DOMAIN', None)
@@ -418,7 +417,7 @@ SESSION_COOKIE_SECURE = os.getenv('DJANGO_DEBUG', 'True').lower() not in ('true'
 # SameSite='Lax' allows cookies during top-level navigation
 # (like Stripe payment redirects) while providing CSRF protection
 CSRF_COOKIE_SAMESITE = 'Lax'
-CSRF_COOKIE_SECURE = os.getenv('DJANGO_DEBUG', 'True').lower() not in ('true', '1', 'yes', 'on')
+CSRF_COOKIE_SECURE = os.getenv('DJANGO_DEBUG', 'false').lower() != "true"
 CSRF_COOKIE_HTTPONLY = False
 
 # ============================

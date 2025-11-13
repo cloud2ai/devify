@@ -192,9 +192,49 @@ Both modes include the following services:
 
 This step is required for both development and production environments.
 
-```
+```bash
 cp env.sample .env
 ```
+
+### HTTPS Configuration (Production)
+
+For production deployment with HTTPS support:
+
+**1. Generate SSL Certificate:**
+
+```bash
+# Option A: Self-signed certificate (for testing)
+./scripts/generate-ssl-cert.sh aimychats.com
+
+# Option B: Let's Encrypt (recommended for production)
+sudo certbot certonly --standalone -d aimychats.com
+sudo cp /etc/letsencrypt/live/aimychats.com/fullchain.pem docker/nginx/certs/nginx-selfsigned.crt
+sudo cp /etc/letsencrypt/live/aimychats.com/privkey.pem docker/nginx/certs/nginx-selfsigned.key
+
+# Option C: Use your own certificates
+# Place your certificate files in docker/nginx/certs/
+# - nginx-selfsigned.crt (certificate)
+# - nginx-selfsigned.key (private key)
+```
+
+**2. Configure Ports (in `.env`):**
+
+```bash
+# HTTP port (external)
+NGINX_HTTP_PORT=80
+
+# HTTPS port (external)
+NGINX_HTTPS_PORT=443
+```
+
+**3. The nginx configuration will:**
+- Listen on both HTTP (80) and HTTPS (443)
+- Automatically redirect HTTP → HTTPS
+- Serve all traffic over secure connections
+
+**Note:** For details on certificate management, see `docker/nginx/certs/README.md`
+
+**Alternative:** Use external Nginx Proxy Manager to handle HTTPS, and configure internal nginx for HTTP only.
 
 ## User Authentication
 
