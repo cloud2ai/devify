@@ -66,6 +66,7 @@ CSRF_TRUSTED_ORIGINS = os.getenv(
 
 # Trust proxy headers from nginx
 USE_X_FORWARDED_HOST = True
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 
 # ============================
 # Logging Configuration
