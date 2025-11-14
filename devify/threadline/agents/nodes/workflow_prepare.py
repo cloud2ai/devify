@@ -7,10 +7,12 @@ the single entry point for all database validations and initializations.
 """
 
 import logging
-from typing import Dict, Any
 
+from django.conf import settings as django_settings
+
+from billing.services.subscription_service import SubscriptionService
 from threadline.agents.nodes.base_node import BaseLangGraphNode
-from threadline.agents.email_state import EmailState, add_node_error
+from threadline.agents.email_state import EmailState
 from threadline.models import EmailMessage, Issue, Settings
 from threadline.state_machine import EmailStatus
 from threadline.utils.prompt_config_manager import PromptConfigManager
@@ -139,7 +141,6 @@ class WorkflowPrepareNode(BaseLangGraphNode):
                 else:
                     # Only one provided, need to get user defaults for the
                     # other
-                    from django.conf import settings as django_settings
                     try:
                         user_config = Settings.get_user_prompt_config(
                             self.email.user)
@@ -162,10 +163,11 @@ class WorkflowPrepareNode(BaseLangGraphNode):
                             'language', django_settings.DEFAULT_LANGUAGE)
 
                 logger.info(
-                    f"Using retry configuration for email {self.email.id}, "
-                    f"user {self.email.user_id}: "
+                    f"Using retry configuration for email "
+                    f"{self.email.id}, user {self.email.user_id}: "
                     f"language={language}, scene={scene} "
-                    f"(retry_language={retry_language}, retry_scene={retry_scene})"
+                    f"(retry_language={retry_language}, "
+                    f"retry_scene={retry_scene})"
                 )
                 prompt_config = prompt_manager.get_prompt_config(
                     scene,
@@ -197,6 +199,28 @@ class WorkflowPrepareNode(BaseLangGraphNode):
                 f"Failed to load issue_config for user "
                 f"{self.email.user_id}: {e}"
             )
+
+        # Get user's attachment count limit from subscription plan
+        max_attachments = None
+        if django_settings.BILLING_ENABLED:
+            try:
+                subscription = SubscriptionService.get_active_subscription(
+                    self.email.user_id
+                )
+                if subscription and subscription.plan:
+                    max_attachments = subscription.plan.metadata.get(
+                        'max_attachment_count'
+                    )
+                    logger.info(
+                        f"User {self.email.user_id} subscription plan: "
+                        f"{subscription.plan.slug}, "
+                        f"max attachments count: {max_attachments}"
+                    )
+            except Exception as e:
+                logger.warning(
+                    f"Failed to get subscription for user "
+                    f"{self.email.user_id}: {e}"
+                )
 
         attachments_data = []
         for att in self.email.attachments.all():
@@ -251,6 +275,7 @@ class WorkflowPrepareNode(BaseLangGraphNode):
             'html_content': self.email.html_content,
             'text_content': self.email.text_content,
             'attachments': attachments_data,
+            'max_attachments': max_attachments,
             'summary_title': self.email.summary_title or None,
             'summary_content': self.email.summary_content or None,
             'llm_content': self.email.llm_content or None,

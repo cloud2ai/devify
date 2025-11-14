@@ -18,7 +18,7 @@ class Plan(models.Model):
         help_text=(
             "Flexible configuration: credits_per_period, period_days, "
             "workflow_cost_credits, max_email_length, "
-            "max_attachment_size_mb, storage_quota_mb"
+            "max_attachment_count, storage_quota_mb"
         )
     )
     is_active = models.BooleanField(default=True)

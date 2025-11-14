@@ -33,12 +33,14 @@ import os
 import re
 from email.header import decode_header
 from email.utils import parsedate_to_datetime
+from io import BytesIO
 from typing import Any, Dict, List, Optional, Tuple
 
 from bs4 import BeautifulSoup
 from django.utils import timezone
 from email_validator import EmailNotValidError, validate_email
 from flanker import mime
+from PIL import Image, UnidentifiedImageError
 
 from .image import EmailImageProcessor
 from ...file_type_detector import (
@@ -58,6 +60,27 @@ class EmailFlankerParser:
     EMAIL_ATTACHMENT_PREFIX = "email_attachment_"
     IMAGE_CONTENT_TYPE_PREFIX = "image/"
     MESSAGE_ID_HASH_LENGTH = 16
+
+    # Minimum file size for image attachments (in bytes)
+    # Small images like emojis or icons are typically less than 10KB
+    # This helps filter out decorative images that don't contain useful content
+    # Default: 10KB (10 * 1024 bytes)
+    MIN_IMAGE_ATTACHMENT_SIZE = 10 * 1024
+
+    # Minimum image dimensions (width and height in pixels)
+    # Very small images like emojis or icons are typically less than 50x50
+    # This helps filter out decorative images that don't contain useful content
+    # Aligned with Azure OCR minimum requirements (50x50 pixels)
+    # Default: 50x50 pixels
+    MIN_IMAGE_WIDTH = 50
+    MIN_IMAGE_HEIGHT = 50
+
+    # Maximum aspect ratio for image attachments
+    # Images with extreme aspect ratios (like dividers, banners) are typically
+    # decorative and don't contain useful content
+    # Examples: 1x600 divider, 16x120 banner
+    # Default: 10 (width/height or height/width)
+    MAX_IMAGE_ASPECT_RATIO = 10
 
     def __init__(self, attachment_dir: str = "/tmp/email_attachments"):
         """
@@ -140,6 +163,12 @@ class EmailFlankerParser:
 
             # Process and save email attachments
             attachments = self._process_attachments(message)
+
+            # Clean invalid image placeholders from text content
+            # (images that were filtered out during processing)
+            text_content = self._clean_invalid_image_placeholders(
+                text_content, attachments
+            )
 
             return {
                 "message_id": stable_message_id,
@@ -493,7 +522,25 @@ class EmailFlankerParser:
                                      f"MD5: {file_md5}")
                         continue
 
+                    # Validate image attachment (apply same filters as
+                    # _process_attachments)
+                    is_valid, validation_reason = (
+                        self._validate_image_attachment(
+                            body_bytes, filename
+                        )
+                    )
+
+                    # Record MD5 after validation to avoid re-processing
+                    # (whether valid or invalid)
                     processed_md5s.add(file_md5)
+
+                    if not is_valid:
+                        logger.debug(
+                            f"Skipping invalid inline image: "
+                            f"{filename or file_md5[:8]} "
+                            f"({validation_reason})"
+                        )
+                        continue
 
                     safe_filename = f"{file_md5}{file_extension}"
                     placeholder = f"[IMAGE: {safe_filename}]"
@@ -789,6 +836,168 @@ class EmailFlankerParser:
 
         return text.strip()
 
+    def _validate_image_attachment(
+        self,
+        payload: bytes,
+        filename: Optional[str] = None
+    ) -> Tuple[bool, str]:
+        """
+        Validate image attachment against filtering criteria.
+
+        This method validates image attachments to identify decorative or
+        non-essential images (like emojis, icons) that should be excluded
+        from processing.
+
+        Current validation criteria:
+        1. File size check (faster, checked first)
+        2. Image dimensions check (width and height)
+        3. Aspect ratio check (filters extreme ratios like dividers, banners)
+
+        Args:
+            payload: Image file content as bytes
+            filename: Optional filename for logging purposes
+
+        Returns:
+            Tuple of (is_valid: bool, reason: str)
+            - is_valid: True if image passes validation, False otherwise
+            - reason: Explanation of why image failed validation
+              (empty if validation passed)
+        """
+        file_size = len(payload)
+
+        # Check file size first (faster check)
+        if file_size < self.MIN_IMAGE_ATTACHMENT_SIZE:
+            return False, (
+                f"file size too small "
+                f"({file_size} bytes < "
+                f"{self.MIN_IMAGE_ATTACHMENT_SIZE} bytes)"
+            )
+
+        # Check image dimensions and aspect ratio
+        try:
+            with Image.open(BytesIO(payload)) as image_obj:
+                width, height = image_obj.size
+
+                # Validate dimensions are non-zero
+                if width == 0 or height == 0:
+                    return False, (
+                        f"image has invalid dimensions "
+                        f"({width}x{height})"
+                    )
+
+                # Check minimum dimensions
+                if (width < self.MIN_IMAGE_WIDTH or
+                        height < self.MIN_IMAGE_HEIGHT):
+                    return False, (
+                        f"image dimensions too small "
+                        f"({width}x{height} < "
+                        f"{self.MIN_IMAGE_WIDTH}x"
+                        f"{self.MIN_IMAGE_HEIGHT})"
+                    )
+
+                # Check aspect ratio (filters dividers, banners, etc.)
+                aspect_ratio = max(width / height, height / width)
+                if aspect_ratio > self.MAX_IMAGE_ASPECT_RATIO:
+                    return False, (
+                        f"image aspect ratio too extreme "
+                        f"({aspect_ratio:.2f} > "
+                        f"{self.MAX_IMAGE_ASPECT_RATIO}, "
+                        f"dimensions: {width}x{height})"
+                    )
+
+        except UnidentifiedImageError as e:
+            # If we can't identify the image format, log but consider it valid
+            # (might be a valid image in unsupported format)
+            logger.debug(
+                f"Unidentified image format for "
+                f"{filename or 'unknown'}: {e}"
+            )
+        except Exception as e:
+            # Unexpected error reading image, log but consider it valid
+            # (might be a valid image in unsupported format)
+            logger.warning(
+                f"Unexpected error reading image dimensions for "
+                f"{filename or 'unknown'}: {type(e).__name__}: {e}"
+            )
+
+        # Image passed all validation checks
+        return True, ""
+
+    def _clean_invalid_image_placeholders(
+        self,
+        text_content: str,
+        attachments: list
+    ) -> str:
+        """
+        Remove image placeholders from text content that don't have
+        corresponding attachments.
+
+        This ensures that filtered images don't leave orphaned placeholders
+        in the final text content.
+
+        Args:
+            text_content: Text content with image placeholders
+            attachments: List of processed attachment information
+
+        Returns:
+            str: Text content with invalid placeholders removed
+        """
+        # Early return for None, empty string, or text without image markers
+        if text_content is None or not text_content or '[IMAGE:' not in text_content:
+            return text_content
+
+        # Extract all image placeholders from text
+        image_placeholder_pattern = r'\[IMAGE:\s*([^\]]+)\]'
+        placeholders = re.findall(image_placeholder_pattern, text_content)
+
+        if not placeholders:
+            return text_content
+
+        # Create set of valid safe_filenames from attachments
+        valid_filenames = set()
+        for att in attachments:
+            if att.get('is_image'):
+                safe_filename = att.get('safe_filename')
+                if safe_filename:
+                    valid_filenames.add(safe_filename)
+
+        # Remove invalid placeholders using regex for precise matching
+        cleaned_content = text_content
+        removed_count = 0
+
+        for placeholder_filename in placeholders:
+            placeholder_filename = placeholder_filename.strip()
+            if placeholder_filename not in valid_filenames:
+                # Use regex to match placeholder with optional whitespace
+                # This handles variations like [IMAGE: filename] and
+                # [IMAGE:filename]
+                placeholder_pattern = (
+                    r'\[IMAGE:\s*' +
+                    re.escape(placeholder_filename) +
+                    r'\]'
+                )
+                # Check if placeholder exists before removing
+                if re.search(placeholder_pattern, cleaned_content):
+                    cleaned_content = re.sub(
+                        placeholder_pattern, "", cleaned_content
+                    )
+                    removed_count += 1
+                    logger.debug(
+                        f"Removed invalid image placeholder: "
+                        f"[IMAGE: {placeholder_filename}]"
+                    )
+
+        if removed_count > 0:
+            # Clean up extra whitespace left by removed placeholders
+            cleaned_content = re.sub(r'\n\s*\n\s*\n', '\n\n', cleaned_content)
+            cleaned_content = re.sub(r'[ \t]+\n', '\n', cleaned_content)
+            logger.info(
+                f"Cleaned {removed_count} invalid image placeholder(s) "
+                f"from text content"
+            )
+
+        return cleaned_content.strip()
+
     def _process_attachments(self, message) -> list:
         """
         Process attachments and inline files from email message.
@@ -868,6 +1077,28 @@ class EmailFlankerParser:
                         continue
 
                     processed_md5s.add(file_md5)
+
+                    # Check if this is an image attachment
+                    is_image = part.content_type.main == "image"
+
+                    # Validate image attachment for decorative/non-essential
+                    # images
+                    if is_image:
+                        is_valid, validation_reason = (
+                            self._validate_image_attachment(
+                                payload, filename
+                            )
+                        )
+
+                        if not is_valid:
+                            display_filename = (
+                                filename or f"unnamed_image_{file_md5[:8]}"
+                            )
+                            logger.info(
+                                f"Skipping invalid image attachment: "
+                                f"{display_filename} ({validation_reason})"
+                            )
+                            continue
 
                     # Generate filename if not provided
                     if not filename:

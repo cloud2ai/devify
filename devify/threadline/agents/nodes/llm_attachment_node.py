@@ -6,7 +6,6 @@ It operates purely on State without database access.
 """
 
 import logging
-from typing import Dict, Any, List
 
 from core.tracking import LLMTracker
 from threadline.agents.email_state import EmailState, add_node_error
@@ -77,6 +76,9 @@ class LLMAttachmentNode(BaseLangGraphNode):
         Reads attachments from State, performs LLM processing on OCR content,
         and updates State with LLM results.
 
+        Only processes attachments within the user's plan limit.
+        Attachments marked with skip_reason will be skipped.
+
         Args:
             state (EmailState): Current email state
 
@@ -90,6 +92,7 @@ class LLMAttachmentNode(BaseLangGraphNode):
         image_count = 0
         processed_count = 0
         skipped_count = 0
+        limit_skipped_count = 0
         failed_attachments = []
 
         prompt_config = state.get('prompt_config')
@@ -111,6 +114,17 @@ class LLMAttachmentNode(BaseLangGraphNode):
                     f"skipped LLM processing"
                 )
                 updated_attachments.append(attachment)
+                continue
+
+            # Skip attachments that exceeded plan limit
+            if attachment.get('skip_reason') == 'PLAN_LIMIT_EXCEEDED':
+                logger.info(
+                    f"Attachment {attachment.get('filename')} skipped due to "
+                    f"plan limit, will not process with LLM"
+                )
+                attachment['llm_content'] = ''
+                updated_attachments.append(attachment)
+                limit_skipped_count += 1
                 continue
 
             ocr_content = attachment.get('ocr_content', '').strip()
@@ -179,9 +193,15 @@ class LLMAttachmentNode(BaseLangGraphNode):
 
             updated_attachments.append(attachment)
 
+        if limit_skipped_count > 0:
+            logger.warning(
+                f"{limit_skipped_count} attachments skipped due to plan limit"
+            )
+
         logger.info(
             f"LLM Attachment processing completed: {image_count} images, "
-            f"{processed_count} processed, {skipped_count} skipped"
+            f"{processed_count} processed, {skipped_count} skipped, "
+            f"{limit_skipped_count} over limit"
         )
 
         updated_state = {
@@ -191,19 +211,14 @@ class LLMAttachmentNode(BaseLangGraphNode):
 
         if failed_attachments:
             failed_files = ', '.join([
-                f"attachment_{item['id']}({item['error']})"
+                f"{item['filename']}({item['error']})"
                 for item in failed_attachments
             ])
-            error_message = (
+            logger.warning(
                 f'LLM Attachment processing failed for '
                 f'{len(failed_attachments)} '
-                f'attachments: {failed_files}'
+                f'attachments: {failed_files}. These attachments will be '
+                f'skipped but workflow will continue.'
             )
-            updated_state = add_node_error(
-                updated_state,
-                self.node_name,
-                error_message
-            )
-            logger.error(error_message)
 
         return updated_state

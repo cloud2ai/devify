@@ -19,7 +19,7 @@ plans:
       period_days: 30
       workflow_cost_credits: 1
       max_email_length: 50000
-      max_attachment_size_mb: 10
+      max_attachment_count: 10
       storage_quota_mb: 5120
       retention_days: 365
 ```
@@ -37,7 +37,7 @@ plans:
 - **period_days**: Billing period length in days (usually 30)
 - **workflow_cost_credits**: Credits consumed per workflow execution
 - **max_email_length**: Maximum email content length in characters
-- **max_attachment_size_mb**: Maximum attachment size in megabytes
+- **max_attachment_count**: Maximum number of attachments per email
 - **storage_quota_mb**: Total storage quota in megabytes
 - **retention_days**: Data retention period (-1 = unlimited)
 

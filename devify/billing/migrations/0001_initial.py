@@ -40,7 +40,7 @@ class Migration(migrations.Migration):
                 ('slug', models.SlugField(unique=True)),
                 ('description', models.TextField()),
                 ('monthly_price_cents', models.IntegerField(help_text='Price in cents (e.g., 2999 for $29.99)')),
-                ('metadata', models.JSONField(default=dict, help_text='Flexible configuration: credits_per_period, period_days, workflow_cost_credits, max_email_length, max_attachment_size_mb, storage_quota_mb')),
+                ('metadata', models.JSONField(default=dict, help_text='Flexible configuration: credits_per_period, period_days, workflow_cost_credits, max_email_length, max_attachment_count, storage_quota_mb')),
                 ('is_active', models.BooleanField(default=True)),
                 ('created_at', models.DateTimeField(auto_now_add=True)),
                 ('updated_at', models.DateTimeField(auto_now=True)),
