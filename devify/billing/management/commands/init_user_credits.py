@@ -31,6 +31,7 @@ class Command(BaseCommand):
         for user in users:
             credits, created = UserCredits.objects.get_or_create(
                 user=user,
+                is_active=True,
                 defaults={
                     'base_credits': base_credits,
                     'bonus_credits': 0,
@@ -39,7 +40,6 @@ class Command(BaseCommand):
                     'period_end': (
                         timezone.now() + timedelta(days=period_days)
                     ),
-                    'is_active': True
                 }
             )
 

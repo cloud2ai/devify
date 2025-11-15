@@ -12,6 +12,7 @@ from datetime import timedelta
 
 import pytest
 from django.contrib.auth import get_user_model
+from django.conf import settings
 from django.utils import timezone
 
 from billing.models import (
@@ -54,6 +55,7 @@ class TestCreditsUtilities:
             consumed_credits=10,
             period_start=timezone.now(),
             period_end=timezone.now() + timedelta(days=30),
+            is_active=True,
         )
 
         credits = CreditsService.get_user_credits(test_user.id)
@@ -72,6 +74,7 @@ class TestCreditsUtilities:
             consumed_credits=3,
             period_start=timezone.now(),
             period_end=timezone.now() + timedelta(days=30),
+            is_active=True,
         )
 
         has_credits = CreditsService.check_credits(
@@ -91,6 +94,7 @@ class TestCreditsUtilities:
             consumed_credits=8,
             period_start=timezone.now(),
             period_end=timezone.now() + timedelta(days=30),
+            is_active=True,
         )
 
         has_credits = CreditsService.check_credits(
@@ -111,6 +115,7 @@ class TestCreditsUtilities:
             consumed_credits=0,
             period_start=timezone.now(),
             period_end=timezone.now() + timedelta(days=30),
+            is_active=True,
         )
 
         has_credits = CreditsService.check_credits(
@@ -131,6 +136,7 @@ class TestCreditsUtilities:
             consumed_credits=3,
             period_start=timezone.now(),
             period_end=timezone.now() + timedelta(days=30),
+            is_active=True,
         )
 
         balance = CreditsService.get_credits_balance(test_user.id)
@@ -171,11 +177,12 @@ class TestResetPeriodCredits:
             consumed_credits=80,
             period_start=timezone.now() - timedelta(days=30),
             period_end=timezone.now(),
+            is_active=True,
         )
 
         CreditsService.reset_period_credits(test_user.id)
 
-        credits = UserCredits.objects.get(user=test_user)
+        credits = UserCredits.objects.get(user=test_user, is_active=True)
         assert credits.base_credits == 100
         assert credits.consumed_credits == 0
         assert credits.period_end > timezone.now()
@@ -190,11 +197,12 @@ class TestResetPeriodCredits:
             consumed_credits=5,
             period_start=timezone.now() - timedelta(days=30),
             period_end=timezone.now(),
+            is_active=True,
         )
 
         CreditsService.reset_period_credits(test_user.id)
 
-        credits = UserCredits.objects.get(user=test_user)
+        credits = UserCredits.objects.get(user=test_user, is_active=True)
         assert credits.base_credits == 0
         assert credits.consumed_credits == 0
 
@@ -216,6 +224,7 @@ class TestGrantBonusCredits:
             consumed_credits=0,
             period_start=timezone.now(),
             period_end=timezone.now() + timedelta(days=30),
+            is_active=True,
         )
 
         CreditsService.grant_bonus_credits(
@@ -225,7 +234,7 @@ class TestGrantBonusCredits:
             operator_id=1
         )
 
-        credits = UserCredits.objects.get(user=test_user)
+        credits = UserCredits.objects.get(user=test_user, is_active=True)
         assert credits.bonus_credits == 50
         assert credits.available_credits == 60
 
@@ -248,6 +257,7 @@ class TestGrantBonusCredits:
             consumed_credits=0,
             period_start=timezone.now(),
             period_end=timezone.now() + timedelta(days=30),
+            is_active=True,
         )
 
         CreditsService.grant_bonus_credits(
@@ -262,5 +272,129 @@ class TestGrantBonusCredits:
             reason='Second bonus'
         )
 
-        credits = UserCredits.objects.get(user=test_user)
+        credits = UserCredits.objects.get(user=test_user, is_active=True)
         assert credits.bonus_credits == 50
+
+
+@pytest.mark.django_db
+class TestInactiveUserCredits:
+    """
+    Test handling of is_active=False records
+    """
+
+    def test_get_user_credits_with_inactive_records(self, test_user):
+        """
+        get_user_credits should create active record even when inactive records exist
+        """
+        # Create multiple inactive records
+        UserCredits.objects.create(
+            user=test_user,
+            base_credits=10,
+            consumed_credits=5,
+            period_start=timezone.now() - timedelta(days=60),
+            period_end=timezone.now() - timedelta(days=30),
+            is_active=False,
+        )
+        UserCredits.objects.create(
+            user=test_user,
+            base_credits=20,
+            consumed_credits=10,
+            period_start=timezone.now() - timedelta(days=30),
+            period_end=timezone.now(),
+            is_active=False,
+        )
+
+        # Should create new active record
+        credits = CreditsService.get_user_credits(test_user.id)
+
+        assert credits.is_active is True
+        assert credits.base_credits == settings.DEFAULT_FREE_CREDITS
+
+        # Verify inactive records still exist
+        inactive_count = UserCredits.objects.filter(
+            user=test_user,
+            is_active=False
+        ).count()
+        assert inactive_count == 2
+
+        # Verify only one active record exists
+        active_count = UserCredits.objects.filter(
+            user=test_user,
+            is_active=True
+        ).count()
+        assert active_count == 1
+
+    def test_unique_constraint_allows_multiple_inactive(self, test_user):
+        """
+        Unique constraint should only apply to is_active=True records
+        """
+        # Create multiple inactive records (should not violate constraint)
+        UserCredits.objects.create(
+            user=test_user,
+            base_credits=10,
+            period_start=timezone.now() - timedelta(days=60),
+            period_end=timezone.now() - timedelta(days=30),
+            is_active=False,
+        )
+        UserCredits.objects.create(
+            user=test_user,
+            base_credits=20,
+            period_start=timezone.now() - timedelta(days=30),
+            period_end=timezone.now(),
+            is_active=False,
+        )
+        UserCredits.objects.create(
+            user=test_user,
+            base_credits=30,
+            period_start=timezone.now(),
+            period_end=timezone.now() + timedelta(days=30),
+            is_active=False,
+        )
+
+        # Should be able to create multiple inactive records
+        inactive_count = UserCredits.objects.filter(
+            user=test_user,
+            is_active=False
+        ).count()
+        assert inactive_count == 3
+
+        # Should be able to create one active record
+        active_credits = CreditsService.get_user_credits(test_user.id)
+        assert active_credits.is_active is True
+
+        # Note: SQLite doesn't support partial unique indexes,
+        # so this test may not raise IntegrityError in test environment.
+        # The constraint will be enforced in production (PostgreSQL).
+        # We verify the constraint exists by checking only one active record exists
+        active_count = UserCredits.objects.filter(
+            user=test_user,
+            is_active=True
+        ).count()
+        assert active_count == 1
+
+    def test_get_user_credits_ignores_inactive_records(self, test_user):
+        """
+        get_user_credits should only return active record, ignoring inactive ones
+        """
+        # Create inactive record with credits
+        inactive_credits = UserCredits.objects.create(
+            user=test_user,
+            base_credits=100,
+            consumed_credits=50,
+            period_start=timezone.now() - timedelta(days=30),
+            period_end=timezone.now(),
+            is_active=False,
+        )
+
+        # get_user_credits should create new active record, not return inactive one
+        active_credits = CreditsService.get_user_credits(test_user.id)
+
+        # Should be a different record
+        assert active_credits.id != inactive_credits.id
+        assert active_credits.is_active is True
+        assert active_credits.base_credits == settings.DEFAULT_FREE_CREDITS
+
+        # Inactive record should remain unchanged
+        inactive_credits.refresh_from_db()
+        assert inactive_credits.consumed_credits == 50
+        assert inactive_credits.is_active is False

@@ -25,17 +25,22 @@ class CreditsService:
     @staticmethod
     def get_user_credits(user_id: int) -> UserCredits:
         """
-        Get or create user credits with free tier defaults
+        Get or create user credits with free tier defaults.
+
+        Note: Database constraint ensures only one active record per user.
+        If duplicate records exist (should not happen in normal operation),
+        database will raise IntegrityError. Run cleanup_duplicate_usercredits
+        command to fix any existing duplicates.
         """
         credits, created = UserCredits.objects.get_or_create(
             user_id=user_id,
+            is_active=True,
             defaults={
                 'base_credits': settings.DEFAULT_FREE_CREDITS,
                 'bonus_credits': 0,
                 'consumed_credits': 0,
                 'period_start': timezone.now(),
                 'period_end': timezone.now() + timedelta(days=30),
-                'is_active': True
             }
         )
 
@@ -87,7 +92,8 @@ class CreditsService:
                 return existing
 
         user_credits = UserCredits.objects.select_for_update().get(
-            user_id=user_id
+            user_id=user_id,
+            is_active=True
         )
 
         if user_credits.available_credits < amount:
@@ -198,7 +204,8 @@ class CreditsService:
         Reset credits for a new billing period
         """
         credits = UserCredits.objects.select_for_update().get(
-            user_id=user_id
+            user_id=user_id,
+            is_active=True
         )
 
         plan_credits = 0

@@ -115,6 +115,7 @@ def test_user_with_free_subscription(test_user, free_plan, payment_provider):
         consumed_credits=0,
         period_start=timezone.now(),
         period_end=timezone.now() + timedelta(days=30),
+        is_active=True,
     )
 
     return test_user
@@ -145,6 +146,7 @@ def test_user_with_starter_subscription(test_user, starter_plan, payment_provide
         consumed_credits=0,
         period_start=timezone.now(),
         period_end=timezone.now() + timedelta(days=30),
+        is_active=True,
     )
 
     return test_user
@@ -176,6 +178,7 @@ def expired_free_subscription(test_user, free_plan, payment_provider):
         consumed_credits=5,
         period_start=subscription.current_period_start,
         period_end=subscription.current_period_end,
+        is_active=True,
     )
 
     return test_user
@@ -212,6 +215,7 @@ def past_due_subscription(test_user, starter_plan, payment_provider):
         consumed_credits=50,
         period_start=subscription.current_period_start,
         period_end=subscription.current_period_end,
+        is_active=True,
     )
 
     return test_user

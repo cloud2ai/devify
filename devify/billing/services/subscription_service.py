@@ -85,16 +85,13 @@ class SubscriptionService:
         )
 
         # Initialize user credits
-        UserCredits.objects.create(
-            user=user,
-            subscription=subscription,
-            base_credits=base_credits,
-            bonus_credits=0,
-            consumed_credits=0,
-            period_start=current_time,
-            period_end=period_end,
-            is_active=True
-        )
+        # Use CreditsService to ensure idempotency
+        user_credits = CreditsService.get_user_credits(user.id)
+        user_credits.subscription = subscription
+        user_credits.base_credits = base_credits
+        user_credits.period_start = current_time
+        user_credits.period_end = period_end
+        user_credits.save()
 
         logger.info(
             f"Assigned Free plan to user {user.id}: "
@@ -161,7 +158,8 @@ class SubscriptionService:
             auto_renew=True
         )
 
-        user_credits = UserCredits.objects.get(user_id=user_id)
+        # Use CreditsService to handle duplicate records
+        user_credits = CreditsService.get_user_credits(user_id)
         user_credits.subscription = subscription
         user_credits.save()
 
@@ -291,7 +289,8 @@ class SubscriptionService:
                 )
 
         if subscription.status == 'active':
-            user_credits = UserCredits.objects.get(user_id=user.id)
+            # Use CreditsService to handle duplicate records
+            user_credits = CreditsService.get_user_credits(user.id)
             user_credits.subscription = subscription
             user_credits.djstripe_customer = customer
             user_credits.save()

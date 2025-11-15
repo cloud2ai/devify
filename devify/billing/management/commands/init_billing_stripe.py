@@ -292,15 +292,24 @@ class Command(BaseCommand):
 
     def create_stripe_products(self):
         """
-        Create or update Stripe Products and Prices with idempotency
-        Uses metadata to track which products belong to Devify
+        Create or update Stripe Products and Prices with idempotency.
+
+        Best Practice: One Product with multiple Prices.
+        All subscription plans share a single "aimychats.com Subscription"
+        product, with each plan as a separate price.
         """
         stripe_provider = PaymentProvider.objects.get(name='stripe')
-        plans = Plan.objects.exclude(slug='free').order_by('monthly_price_cents')
+        plans = Plan.objects.exclude(slug='free').order_by(
+            'monthly_price_cents'
+        )
 
+        # Ensure unified product exists
+        product_id = self._ensure_unified_product()
+
+        # Create or update price for each plan
         for plan in plans:
             try:
-                product_id, price_id = self._ensure_stripe_product(plan)
+                price_id = self._ensure_stripe_price(plan, product_id)
 
                 PlanPrice.objects.update_or_create(
                     plan=plan,
@@ -317,103 +326,148 @@ class Command(BaseCommand):
 
                 self.stdout.write(
                     self.style.SUCCESS(
-                        f'  ✓ {plan.name}: Product {product_id}, '
-                        f'Price {price_id}'
+                        f'  ✓ {plan.name}: Price {price_id}'
                     )
                 )
 
             except Exception as e:
                 self.stdout.write(
                     self.style.ERROR(
-                        f'  ✗ Failed to create product for {plan.name}: {e}'
+                        f'  ✗ Failed to create price for {plan.name}: {e}'
                     )
                 )
 
-    def _ensure_stripe_product(self, plan):
+    def _ensure_unified_product(self):
         """
-        Ensure Stripe Product exists (create or find existing)
-        Returns: (product_id, price_id)
+        Ensure unified Stripe Product exists (create or find existing).
+
+        Returns:
+            product_id: Stripe Product ID
         """
-        search_results = stripe.Product.search(
-            query=f'metadata["devify_plan_slug"]:"{plan.slug}"'
+        # Search for existing unified product
+        search_query = (
+            'metadata["devify_managed"]:"true" AND '
+            'metadata["devify_unified"]:"true"'
         )
+        search_results = stripe.Product.search(query=search_query)
 
         if search_results.data:
             product = search_results.data[0]
             self.stdout.write(
-                f'    → Found existing product: {product.id}'
+                f'  → Found existing unified product: {product.id}'
             )
+            return product.id
 
-            prices = stripe.Price.list(
-                product=product.id,
-                active=True,
-                limit=1
+        # Create new unified product
+        product = stripe.Product.create(
+            name='aimychats.com Subscription',
+            description='Devify subscription plans for aimychats.com',
+            metadata={
+                'devify_managed': 'true',
+                'devify_unified': 'true'
+            }
+        )
+        self.stdout.write(
+            self.style.SUCCESS(
+                f'  ✓ Created unified product: {product.id}'
             )
+        )
+        return product.id
 
-            if prices.data:
-                price = prices.data[0]
-                if price.unit_amount != plan.monthly_price_cents:
-                    stripe.Price.modify(price.id, active=False)
-                    price = stripe.Price.create(
-                        product=product.id,
-                        unit_amount=plan.monthly_price_cents,
-                        currency='usd',
-                        recurring={'interval': 'month'}
-                    )
-                    self.stdout.write(
-                        f'    → Updated price: {price.id}'
-                    )
-                else:
-                    self.stdout.write(
-                        f'    → Using existing price: {price.id}'
-                    )
-            else:
-                price = stripe.Price.create(
-                    product=product.id,
-                    unit_amount=plan.monthly_price_cents,
-                    currency='usd',
-                    recurring={'interval': 'month'}
-                )
+    def _ensure_stripe_price(self, plan, product_id):
+        """
+        Ensure Stripe Price exists for a plan (create or find existing).
+
+        Args:
+            plan: Plan model instance
+            product_id: Stripe Product ID
+
+        Returns:
+            price_id: Stripe Price ID
+        """
+        # Search for existing price by metadata
+        prices = stripe.Price.list(
+            product=product_id,
+            active=True,
+            limit=100
+        )
+
+        # Find price matching this plan
+        matching_price = self._find_matching_price(
+            prices.data,
+            plan.slug
+        )
+
+        if matching_price:
+            # Check if price amount matches
+            if matching_price.unit_amount != plan.monthly_price_cents:
+                # Deactivate old price and create new one
+                stripe.Price.modify(matching_price.id, active=False)
                 self.stdout.write(
-                    f'    → Created new price: {price.id}'
+                    f'    → Deactivated old price: {matching_price.id}'
                 )
+            else:
+                self.stdout.write(
+                    f'    → Using existing price: {matching_price.id}'
+                )
+                return matching_price.id
 
-            return product.id, price.id
+        # Create new price
+        return self._create_stripe_price(plan, product_id)
 
-        else:
-            product = stripe.Product.create(
-                name=plan.name,
-                description=plan.description,
-                metadata={
-                    'devify_plan_slug': plan.slug,
-                    'devify_managed': 'true'
-                }
-            )
-            self.stdout.write(
-                f'    → Created new product: {product.id}'
-            )
+    def _find_matching_price(self, prices, plan_slug):
+        """
+        Find price matching the plan slug in the prices list.
 
-            price = stripe.Price.create(
-                product=product.id,
-                unit_amount=plan.monthly_price_cents,
-                currency='usd',
-                recurring={'interval': 'month'},
-                metadata={
-                    'devify_plan_slug': plan.slug
-                }
-            )
-            self.stdout.write(
-                f'    → Created new price: {price.id}'
-            )
+        Args:
+            prices: List of Stripe Price objects
+            plan_slug: Plan slug to match
 
-            return product.id, price.id
+        Returns:
+            Matching price object or None
+        """
+        for price in prices:
+            if price.metadata.get('devify_plan_slug') == plan_slug:
+                return price
+        return None
+
+    def _create_stripe_price(self, plan, product_id):
+        """
+        Create a new Stripe Price for the given plan.
+
+        Args:
+            plan: Plan model instance
+            product_id: Stripe Product ID
+
+        Returns:
+            price_id: Stripe Price ID
+        """
+        price = stripe.Price.create(
+            product=product_id,
+            unit_amount=plan.monthly_price_cents,
+            currency='usd',
+            recurring={'interval': 'month'},
+            metadata={
+                'devify_plan_slug': plan.slug,
+                'devify_managed': 'true'
+            }
+        )
+        self.stdout.write(
+            f'    → Created new price: {price.id}'
+        )
+        return price.id
 
     def create_or_update_webhook(self):
         """
-        Create or update webhook endpoint with idempotency
+        Create or update webhook endpoint with idempotency.
         """
         domain = os.getenv('SITE_DOMAIN', 'localhost:8000')
-        protocol = 'https' if ':443' in domain or domain.startswith('192.168') else 'http'
+        # Determine protocol based on domain
+        is_https = (
+            ':443' in domain or
+            domain.startswith('192.168')
+        )
+        protocol = 'https' if is_https else 'http'
 
         existing_local = WebhookEndpoint.objects.filter(
             url__contains=domain

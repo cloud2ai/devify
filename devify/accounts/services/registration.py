@@ -132,18 +132,17 @@ class RegistrationService:
 
         Raises:
             Exception: If billing initialization fails
-
-        Note:
-            Imports billing models locally to avoid import errors
-            when BILLING_ENABLED=False or billing app not installed.
         """
-        # Local import to avoid circular dependency and conditional loading
+        # Local import to avoid circular dependency and conditional loading.
+        # Note: Imports billing models locally to avoid import errors
+        # when BILLING_ENABLED=False or billing app not installed.
         from billing.models import (
             Plan,
             UserCredits,
             Subscription,
             PaymentProvider
         )
+        from billing.services.credits_service import CreditsService
 
         try:
             free_plan = Plan.objects.get(slug='free')
@@ -167,17 +166,14 @@ class RegistrationService:
                 auto_renew=False
             )
 
-            # Initialize user credits
-            UserCredits.objects.create(
-                user=user,
-                subscription=subscription,
-                base_credits=base_credits,
-                bonus_credits=0,
-                consumed_credits=0,
-                period_start=current_time,
-                period_end=period_end,
-                is_active=True
-            )
+            # Initialize user credits using CreditsService to
+            # ensure idempotency
+            user_credits = CreditsService.get_user_credits(user.id)
+            user_credits.subscription = subscription
+            user_credits.base_credits = base_credits
+            user_credits.period_start = current_time
+            user_credits.period_end = period_end
+            user_credits.save()
 
             logger.info(
                 f"Initialized Free Plan for user {user.username}: "

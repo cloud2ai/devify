@@ -194,6 +194,7 @@ class TestCreateSubscription:
             consumed_credits=5,
             period_start=timezone.now() - timedelta(days=15),
             period_end=timezone.now() + timedelta(days=15),
+            is_active=True,
         )
 
         subscription = SubscriptionService.create_subscription(
@@ -206,7 +207,7 @@ class TestCreateSubscription:
         assert subscription.plan == starter_plan
         assert subscription.status == 'active'
 
-        credits = UserCredits.objects.get(user=test_user)
+        credits = UserCredits.objects.get(user=test_user, is_active=True)
         assert credits.subscription == subscription
         assert credits.base_credits == 100
         assert credits.consumed_credits == 0
@@ -235,15 +236,22 @@ class TestCreateSubscription:
                 provider='invalid_provider'
             )
 
-    def test_create_subscription_missing_user_credits(
+    def test_create_subscription_creates_user_credits(
         self, test_user, starter_plan
     ):
         """
-        Create subscription when UserCredits doesn't exist raises error
+        Create subscription when UserCredits doesn't exist creates it automatically
         """
-        with pytest.raises(UserCredits.DoesNotExist):
-            SubscriptionService.create_subscription(
-                user_id=test_user.id,
-                plan_id=starter_plan.id,
-                provider='stripe'
-            )
+        subscription = SubscriptionService.create_subscription(
+            user_id=test_user.id,
+            plan_id=starter_plan.id,
+            provider='stripe'
+        )
+
+        assert subscription.user == test_user
+        assert subscription.plan == starter_plan
+        assert subscription.status == 'active'
+
+        credits = UserCredits.objects.get(user=test_user, is_active=True)
+        assert credits.subscription == subscription
+        assert credits.base_credits == 100

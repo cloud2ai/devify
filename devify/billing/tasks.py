@@ -151,7 +151,8 @@ def downgrade_failed_paid_subscriptions():
             )
 
             # Update user credits
-            user_credits = UserCredits.objects.get(user=user)
+            # Use CreditsService to handle duplicate records
+            user_credits = CreditsService.get_user_credits(user.id)
             user_credits.subscription = new_subscription
             user_credits.base_credits = base_credits
             user_credits.consumed_credits = 0

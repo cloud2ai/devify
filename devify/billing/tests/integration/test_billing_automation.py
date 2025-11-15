@@ -44,7 +44,7 @@ class TestUserRegistrationFreePlan:
         assert subscription.status == 'active'
         assert subscription.auto_renew is True
 
-        credits = UserCredits.objects.get(user=test_user)
+        credits = UserCredits.objects.get(user=test_user, is_active=True)
         assert credits.base_credits == 10
         assert credits.consumed_credits == 0
         assert credits.subscription == subscription
@@ -96,7 +96,7 @@ class TestCreditRenewal:
         from billing.models import UserCredits
         from billing.tasks import renew_expired_credits
 
-        credits = UserCredits.objects.get(user=expired_free_subscription)
+        credits = UserCredits.objects.get(user=expired_free_subscription, is_active=True)
         old_period_end = credits.period_end
         old_consumed = credits.consumed_credits
 
@@ -136,6 +136,7 @@ class TestCreditRenewal:
             consumed_credits=80,
             period_start=past_time - timedelta(days=30),
             period_end=past_time,
+            is_active=True,
         )
 
         renew_expired_credits()
@@ -169,6 +170,7 @@ class TestCreditRenewal:
             consumed_credits=5,
             period_start=past_time - timedelta(days=30),
             period_end=past_time,
+            is_active=True,
         )
 
         old_consumed = credits.consumed_credits
@@ -186,7 +188,7 @@ class TestCreditRenewal:
         """
         B4: Boundary case - past_due subscription should not renew
         """
-        credits = UserCredits.objects.get(user=past_due_subscription)
+        credits = UserCredits.objects.get(user=past_due_subscription, is_active=True)
         old_consumed = credits.consumed_credits
 
         renew_expired_credits()
@@ -201,7 +203,8 @@ class TestCreditRenewal:
         B5: Boundary case - not expired subscription should skip
         """
         credits = UserCredits.objects.get(
-            user=test_user_with_free_subscription
+            user=test_user_with_free_subscription,
+            is_active=True
         )
         old_consumed = credits.consumed_credits
         old_period_end = credits.period_end
@@ -250,7 +253,7 @@ class TestAutomaticDowngrade:
         )
         assert new_subscription.plan == free_plan
 
-        credits = UserCredits.objects.get(user=past_due_subscription)
+        credits = UserCredits.objects.get(user=past_due_subscription, is_active=True)
         assert credits.subscription == new_subscription
         assert credits.base_credits == 10
 
@@ -286,6 +289,7 @@ class TestAutomaticDowngrade:
             consumed_credits=50,
             period_start=timezone.now() - timedelta(days=15),
             period_end=timezone.now() + timedelta(days=15),
+            is_active=True,
         )
 
         downgrade_failed_paid_subscriptions()
@@ -326,6 +330,7 @@ class TestAutomaticDowngrade:
             consumed_credits=5,
             period_start=timezone.now() - timedelta(days=15),
             period_end=timezone.now() + timedelta(days=15),
+            is_active=True,
         )
 
         downgrade_failed_paid_subscriptions()
@@ -371,6 +376,7 @@ class TestAutomaticDowngrade:
             consumed_credits=50,
             period_start=timezone.now() - timedelta(days=15),
             period_end=timezone.now() + timedelta(days=15),
+            is_active=True,
         )
 
         downgrade_failed_paid_subscriptions()
@@ -422,6 +428,7 @@ class TestAutomaticDowngrade:
                 consumed_credits=50,
                 period_start=subscription.current_period_start,
                 period_end=subscription.current_period_end,
+                is_active=True,
             )
 
         downgrade_failed_paid_subscriptions()
@@ -433,5 +440,5 @@ class TestAutomaticDowngrade:
             )
             assert new_subscription.plan == free_plan
 
-            credits = UserCredits.objects.get(user=user)
+            credits = UserCredits.objects.get(user=user, is_active=True)
             assert credits.base_credits == 10

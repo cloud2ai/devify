@@ -83,6 +83,13 @@ class UserCredits(models.Model):
         indexes = [
             models.Index(fields=['user', 'is_active']),
         ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=['user'],
+                condition=models.Q(is_active=True),
+                name='unique_active_user_credits'
+            )
+        ]
 
     def __str__(self):
         return (

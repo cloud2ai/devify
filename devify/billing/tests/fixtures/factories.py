@@ -126,5 +126,6 @@ def create_user_credits(
         consumed_credits=consumed_credits,
         period_start=period_start,
         period_end=period_end,
+        is_active=True,
     )
     return credits
