@@ -53,3 +53,17 @@ plans:
       max_attachment_count: 30
       storage_quota_mb: 20480
       retention_days: -1  # -1 means unlimited
+
+  - name: Internal Plan
+    slug: internal
+    description: Internal plan for staff and partners
+    monthly_price_cents: 0
+    is_internal: true
+    metadata:
+      credits_per_period: 10000
+      period_days: 30
+      workflow_cost_credits: 1
+      max_email_length: 500000
+      max_attachment_count: 100
+      storage_quota_mb: 102400
+      retention_days: -1

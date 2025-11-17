@@ -29,6 +29,7 @@ def create_billing_plan(
     monthly_price_cents,
     credits_per_period=10,
     period_days=30,
+    is_internal=False,
 ):
     """
     Create a billing plan
@@ -41,6 +42,7 @@ def create_billing_plan(
             'name': name,
             'description': f'{name} for testing',
             'monthly_price_cents': monthly_price_cents,
+            'is_internal': is_internal,
             'metadata': {
                 'credits_per_period': credits_per_period,
                 'period_days': period_days,

@@ -22,6 +22,10 @@ class Plan(models.Model):
         )
     )
     is_active = models.BooleanField(default=True)
+    is_internal = models.BooleanField(
+        default=False,
+        help_text="Internal plan for staff/partners, not visible to public"
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

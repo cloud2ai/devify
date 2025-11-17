@@ -219,3 +219,59 @@ def past_due_subscription(test_user, starter_plan, payment_provider):
     )
 
     return test_user
+
+
+@pytest.fixture
+@pytest.mark.django_db
+def internal_plan():
+    """
+    Create Internal plan
+    """
+    from billing.models import Plan
+
+    plan, _ = Plan.objects.get_or_create(
+        slug='internal',
+        defaults={
+            'name': 'Internal Plan',
+            'description': 'Internal plan for testing',
+            'monthly_price_cents': 0,
+            'is_internal': True,
+            'metadata': {
+                'credits_per_period': 10000,
+                'period_days': 30,
+                'workflow_cost_credits': 1,
+            }
+        }
+    )
+    return plan
+
+
+@pytest.fixture
+@pytest.mark.django_db
+def test_user_with_internal_subscription(test_user, internal_plan, payment_provider):
+    """
+    Create a test user with active Internal subscription
+    """
+    from billing.models import Subscription, UserCredits
+
+    subscription = Subscription.objects.create(
+        user=test_user,
+        plan=internal_plan,
+        provider=payment_provider,
+        status='active',
+        auto_renew=True,
+        current_period_start=timezone.now(),
+        current_period_end=timezone.now() + timedelta(days=30),
+    )
+
+    credits = UserCredits.objects.create(
+        user=test_user,
+        subscription=subscription,
+        base_credits=10000,
+        consumed_credits=0,
+        period_start=timezone.now(),
+        period_end=timezone.now() + timedelta(days=30),
+        is_active=True,
+    )
+
+    return test_user

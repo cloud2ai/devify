@@ -22,9 +22,10 @@ class PlanAdmin(admin.ModelAdmin):
         'slug',
         'monthly_price_display',
         'credits_per_period',
-        'is_active'
+        'is_active',
+        'is_internal'
     ]
-    list_filter = ['is_active']
+    list_filter = ['is_active', 'is_internal']
     search_fields = ['name', 'slug']
     readonly_fields = ['created_at', 'updated_at']
 

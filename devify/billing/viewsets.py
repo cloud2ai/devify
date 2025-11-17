@@ -9,6 +9,7 @@ from django.utils import timezone
 from djstripe.models import Customer
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
@@ -35,6 +36,22 @@ class PlanViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = Plan.objects.filter(is_active=True)
     serializer_class = PlanSerializer
     permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        """
+        Filter plans based on user type
+        - Internal users: see all plans (except internal plan itself) but
+          cannot purchase
+        - Regular users: exclude internal plans
+        - Staff users: all plans
+        """
+        queryset = Plan.objects.filter(is_active=True)
+
+        # Always exclude internal plans from public view
+        if not self.request.user.is_staff:
+            queryset = queryset.filter(is_internal=False)
+
+        return queryset
 
     def list(self, request, *args, **kwargs):
         """
@@ -249,6 +266,22 @@ class SubscriptionViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         return Subscription.objects.filter(user=self.request.user)
 
+    def _check_internal_user(self, user):
+        """
+        Check if user has internal plan subscription
+        If yes, raise PermissionDenied
+        """
+        has_internal_plan = Subscription.objects.filter(
+            user=user,
+            status='active',
+            plan__is_internal=True
+        ).exists()
+        if has_internal_plan:
+            raise PermissionDenied(
+                'Internal plan users cannot modify subscriptions. '
+                'Please contact administrator.'
+            )
+
     @action(detail=False, methods=['get'])
     def me(self, request):
         """
@@ -301,6 +334,7 @@ class SubscriptionViewSet(viewsets.ModelViewSet):
         """
         Cancel a subscription
         """
+        self._check_internal_user(request.user)
         subscription = self.get_object()
         try:
             SubscriptionService.cancel_subscription(subscription.id)
@@ -316,6 +350,7 @@ class SubscriptionViewSet(viewsets.ModelViewSet):
         """
         Resume a cancelled subscription
         """
+        self._check_internal_user(request.user)
         subscription = self.get_object()
         try:
             SubscriptionService.resume_subscription(subscription.id)
@@ -331,6 +366,7 @@ class SubscriptionViewSet(viewsets.ModelViewSet):
         """
         Create a Stripe Checkout Session for subscription
         """
+        self._check_internal_user(request.user)
         price_id = request.data.get('price_id')
 
         if not price_id:
@@ -393,6 +429,7 @@ class SubscriptionViewSet(viewsets.ModelViewSet):
         """
         Create a Stripe Customer Portal Session
         """
+        self._check_internal_user(request.user)
         try:
             stripe.api_key = (
                 settings.STRIPE_LIVE_SECRET_KEY
@@ -437,6 +474,7 @@ class SubscriptionViewSet(viewsets.ModelViewSet):
         Schedule a subscription downgrade
         Effective at the end of current period
         """
+        self._check_internal_user(request.user)
         stripe_price_id = request.data.get('stripe_price_id')
 
         if not stripe_price_id:

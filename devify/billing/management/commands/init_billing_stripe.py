@@ -277,17 +277,62 @@ class Command(BaseCommand):
         plans = plans_config.get('plans', [])
 
         for plan_data in plans:
+            # Create a copy to avoid modifying original dict
+            plan_data_copy = plan_data.copy()
+            # Extract metadata separately as it's nested
+            metadata = plan_data_copy.pop('metadata', {})
+            is_internal = plan_data_copy.pop('is_internal', False)
+
             plan, created = Plan.objects.get_or_create(
-                slug=plan_data['slug'],
-                defaults=plan_data
+                slug=plan_data_copy['slug'],
+                defaults={
+                    **plan_data_copy,
+                    'metadata': metadata,
+                    'is_internal': is_internal
+                }
             )
-            if created:
-                self.stdout.write(
-                    self.style.SUCCESS(f'  ✓ Created plan: {plan}')
-                )
+
+            if not created:
+                # Update existing plan if needed
+                updated = False
+                updated_fields = []
+
+                # Check and update all fields
+                for field_name, field_value in plan_data_copy.items():
+                    if hasattr(plan, field_name):
+                        current_value = getattr(plan, field_name)
+                        if current_value != field_value:
+                            setattr(plan, field_name, field_value)
+                            updated = True
+                            updated_fields.append(field_name)
+
+                # Check metadata
+                if plan.metadata != metadata:
+                    plan.metadata = metadata
+                    updated = True
+                    updated_fields.append('metadata')
+
+                # Check is_internal (important for Internal Plan updates)
+                if plan.is_internal != is_internal:
+                    plan.is_internal = is_internal
+                    updated = True
+                    updated_fields.append('is_internal')
+
+                if updated:
+                    plan.save()
+                    fields_str = ', '.join(updated_fields)
+                    self.stdout.write(
+                        self.style.SUCCESS(
+                            f'  ✓ Updated plan: {plan} (fields: {fields_str})'
+                        )
+                    )
+                else:
+                    self.stdout.write(
+                        self.style.SUCCESS(f'  ✓ Plan exists: {plan}')
+                    )
             else:
                 self.stdout.write(
-                    self.style.SUCCESS(f'  ✓ Plan exists: {plan}')
+                    self.style.SUCCESS(f'  ✓ Created plan: {plan}')
                 )
 
     def create_stripe_products(self):
@@ -299,9 +344,12 @@ class Command(BaseCommand):
         product, with each plan as a separate price.
         """
         stripe_provider = PaymentProvider.objects.get(name='stripe')
-        plans = Plan.objects.exclude(slug='free').order_by(
-            'monthly_price_cents'
-        )
+        # Exclude free plan and internal plans (they don't need Stripe products)
+        plans = Plan.objects.exclude(
+            slug='free'
+        ).exclude(
+            is_internal=True
+        ).order_by('monthly_price_cents')
 
         # Ensure unified product exists
         product_id = self._ensure_unified_product()

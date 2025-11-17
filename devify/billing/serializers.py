@@ -30,7 +30,8 @@ class PlanSerializer(serializers.ModelSerializer):
             'credits_per_period',
             'period_days',
             'metadata',
-            'is_active'
+            'is_active',
+            'is_internal'
         ]
 
     def get_credits_per_period(self, obj):
@@ -95,6 +96,10 @@ class SubscriptionSerializer(serializers.ModelSerializer):
     plan_name = serializers.CharField(source='plan.name', read_only=True)
     plan_slug = serializers.CharField(source='plan.slug', read_only=True)
     plan_metadata = serializers.SerializerMethodField()
+    plan_is_internal = serializers.BooleanField(
+        source='plan.is_internal',
+        read_only=True
+    )
     provider_name = serializers.CharField(
         source='provider.display_name',
         read_only=True
@@ -114,6 +119,7 @@ class SubscriptionSerializer(serializers.ModelSerializer):
             'plan_name',
             'plan_slug',
             'plan_metadata',
+            'plan_is_internal',
             'provider',
             'provider_name',
             'status',
