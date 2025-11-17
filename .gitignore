@@ -226,6 +226,8 @@ tmp
 
 staticfiles
 data
+data.dev
+cache.dev
 
 *.bak
 *.html
