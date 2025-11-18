@@ -2,9 +2,6 @@ name: Build and Deploy
 
 on:
   push:
-    branches:
-      - main
-      - master
     tags:
       - 'v*'
 
@@ -39,7 +36,6 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
-            type=ref,event=branch
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=semver,pattern={{major}}
