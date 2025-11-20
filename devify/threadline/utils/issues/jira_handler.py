@@ -346,8 +346,11 @@ class JiraIssueHandler:
         """
         try:
             summary_title = email_data["summary_title"]
-            summary_content = email_data["summary_content"]
-            llm_content = email_data["llm_content"]
+            summary_content = email_data.get("summary_content", "")
+            summary_data = email_data.get("summary_data")
+            todos = email_data.get("todos")
+            llm_content = email_data.get("llm_content", "")
+            language = email_data.get("language", "en")
 
             logger.info(
                 f"Starting JIRA issue creation: '{summary_title[:50]}...' "
@@ -363,7 +366,10 @@ class JiraIssueHandler:
                 summary_content=summary_content,
                 llm_content=llm_content,
                 attachments=attachments,
-                force=force
+                force=force,
+                summary_data=summary_data,
+                todos=todos,
+                language=language
             )
 
             # ========================================
@@ -381,7 +387,10 @@ class JiraIssueHandler:
                 summary_content=summary_content,
                 llm_content=llm_content,
                 attachments=attachments,
-                force=force
+                force=force,
+                summary_data=summary_data,
+                todos=todos,
+                language=language
             )
 
             # Merge all field data
@@ -497,17 +506,23 @@ class JiraIssueHandler:
         summary_content: str,
         llm_content: str,
         attachments: List[Dict[str, Any]],
-        force: bool
+        force: bool,
+        summary_data: Dict[str, Any] | None = None,
+        todos: List[Dict[str, Any]] | None = None,
+        language: str = 'en'
     ) -> Dict[str, Any]:
         """
         Process static fields and return a simple key-value dictionary.
 
         Args:
             summary_title: Issue summary title
-            summary_content: Issue summary content
+            summary_content: Issue summary content (fallback)
             llm_content: LLM processed content
             attachments: List of attachments
             force: Whether to force processing
+            summary_data: Structured summary data (preferred)
+            todos: List of TODO items (preferred)
+            language: Language for section headings
 
         Returns:
             Dict[str, Any]: Simple key-value dictionary for JIRA fields
@@ -545,7 +560,10 @@ class JiraIssueHandler:
                     summary_content=summary_content,
                     llm_content=llm_content,
                     attachments=attachments,
-                    convert_to_jira_wiki=convert_to_jira_wiki
+                    convert_to_jira_wiki=convert_to_jira_wiki,
+                    summary_data=summary_data,
+                    todos=todos,
+                    language=language
                 )
 
         logger.info(f"Processed {len(jira_fields)} static fields")
@@ -794,7 +812,10 @@ from configuration."""
         summary_content: str,
         llm_content: str,
         attachments: List[Dict[str, Any]],
-        force: bool
+        force: bool,
+        summary_data: Dict[str, Any] | None = None,
+        todos: List[Dict[str, Any]] | None = None,
+        language: str = 'en'
     ) -> Dict[str, Any]:
         """
         Stage 3: Process LLM fields using AI analysis.

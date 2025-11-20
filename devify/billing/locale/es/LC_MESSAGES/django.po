@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-11-06 14:26+0000\n"
+"POT-Creation-Date: 2025-11-19 07:41+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -19,67 +19,79 @@ msgstr ""
 "Plural-Forms: nplurals=3; plural=n == 1 ? 0 : n != 0 && n % 1000000 == 0 ? "
 "1 : 2;\n"
 
-#: tasks.py:48
-msgid "⚠️ Payment Failed - Action Required"
-msgstr "⚠️ Pago Fallido - Acción Requerida"
-
-#: tasks.py:51
-#, python-format
-msgid ""
-"Your subscription payment has failed %(attempt_count)s times.\n"
-"Reason: %(failure_reason)s\n"
-"\n"
-"Please update your payment method immediately to avoid service "
-"interruption.\n"
-"\n"
-"Update payment method: %(billing_url)s"
-msgstr ""
-"Su pago de suscripción ha fallado %(attempt_count)s veces.\n"
-"Razón: %(failure_reason)s\n"
-"\n"
-"Por favor actualice su método de pago inmediatamente para evitar la "
-"interrupción del servicio.\n"
-"\n"
-"Actualizar método de pago: %(billing_url)s"
-
-#: tasks.py:63
-msgid "Payment Failed - Automatic Retry Scheduled"
-msgstr "Pago Fallido - Reintento Automático Programado"
-
-#: tasks.py:66
-#, python-format
-msgid ""
-"Your subscription payment failed (Attempt %(attempt_count)s).\n"
-"Reason: %(failure_reason)s\n"
-"\n"
-"Stripe will retry automatically in the next few days.\n"
-"If the issue persists, please update your payment method.\n"
-"\n"
-"Manage subscription: %(billing_url)s"
-msgstr ""
-"Su pago de suscripción falló (Intento %(attempt_count)s).\n"
-"Razón: %(failure_reason)s\n"
-"\n"
-"Stripe lo reintentará automáticamente en los próximos días.\n"
-"Si el problema persiste, actualice su método de pago.\n"
-"\n"
-"Administrar suscripción: %(billing_url)s"
-
-#: tasks.py:139
-msgid "✅ Payment Successful"
+#: billing/tasks.py:217
+#, fuzzy
+#| msgid "✅ Payment Successful"
+msgid "Payment Successful"
 msgstr "✅ Pago Exitoso"
 
-#: tasks.py:141
-#, python-format
+#: billing/tasks.py:219
+#, fuzzy, python-brace-format
+#| msgid ""
+#| "Your subscription payment of $%(amount).2f was successful.\n"
+#| "\n"
+#| "Thank you for your continued subscription!\n"
+#| "\n"
+#| "View subscription: %(billing_url)s"
 msgid ""
-"Your subscription payment of $%(amount).2f was successful.\n"
-"\n"
-"Thank you for your continued subscription!\n"
-"\n"
-"View subscription: %(billing_url)s"
+"Your payment of ${amount} has been processed successfully. Thank you for "
+"your subscription!"
 msgstr ""
 "Su pago de suscripción de $%(amount).2f fue exitoso.\n"
 "\n"
 "¡Gracias por continuar su suscripción!\n"
 "\n"
 "Ver suscripción: %(billing_url)s"
+
+#: billing/tasks.py:270
+#, fuzzy
+#| msgid "⚠️ Payment Failed - Action Required"
+msgid "Payment Failed - Action Required"
+msgstr "⚠️ Pago Fallido - Acción Requerida"
+
+#: billing/tasks.py:272
+#, python-brace-format
+msgid ""
+"We were unable to process your payment (Attempt {attempt}). Reason: "
+"{reason}. Please update your payment method at {url} to continue your "
+"subscription."
+msgstr ""
+
+#, python-format
+#~ msgid ""
+#~ "Your subscription payment has failed %(attempt_count)s times.\n"
+#~ "Reason: %(failure_reason)s\n"
+#~ "\n"
+#~ "Please update your payment method immediately to avoid service "
+#~ "interruption.\n"
+#~ "\n"
+#~ "Update payment method: %(billing_url)s"
+#~ msgstr ""
+#~ "Su pago de suscripción ha fallado %(attempt_count)s veces.\n"
+#~ "Razón: %(failure_reason)s\n"
+#~ "\n"
+#~ "Por favor actualice su método de pago inmediatamente para evitar la "
+#~ "interrupción del servicio.\n"
+#~ "\n"
+#~ "Actualizar método de pago: %(billing_url)s"
+
+#~ msgid "Payment Failed - Automatic Retry Scheduled"
+#~ msgstr "Pago Fallido - Reintento Automático Programado"
+
+#, python-format
+#~ msgid ""
+#~ "Your subscription payment failed (Attempt %(attempt_count)s).\n"
+#~ "Reason: %(failure_reason)s\n"
+#~ "\n"
+#~ "Stripe will retry automatically in the next few days.\n"
+#~ "If the issue persists, please update your payment method.\n"
+#~ "\n"
+#~ "Manage subscription: %(billing_url)s"
+#~ msgstr ""
+#~ "Su pago de suscripción falló (Intento %(attempt_count)s).\n"
+#~ "Razón: %(failure_reason)s\n"
+#~ "\n"
+#~ "Stripe lo reintentará automáticamente en los próximos días.\n"
+#~ "Si el problema persiste, actualice su método de pago.\n"
+#~ "\n"
+#~ "Administrar suscripción: %(billing_url)s"

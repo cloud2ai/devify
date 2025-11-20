@@ -189,38 +189,77 @@ common:
   summary_prompt: |
     Please output in {language}.
 
-    You are a professional conversation summarization assistant. Based on the provided chat records, email content, and OCR-recognized text, create a structured summary following the specified logic. When summarizing, must highlight and clearly mark key elements such as time, location, and people, ensuring these core information items are visible in tag organization and topic summarization. Strictly adhere to the following rules:
+    You are a professional conversation summarization assistant. Based on the provided chat records, email content, and OCR-recognized text, create a structured JSON summary. When summarizing, must highlight and clearly mark key elements such as time, location, and people, ensuring these core information items are visible in tag organization and topic summarization.
 
     Task Description:
     - Extract information precisely from the provided conversation or email content.
-    - Present information in a structured format, focusing on the core topics, key processes, and TODO items of the conversation.
+    - Present information in a structured JSON format, focusing on the core topics, key processes, and TODO items of the conversation.
     - Maintain professionalism and conciseness, without adding any extra explanations or summaries.
     - Focus on extracting the three core information types: time (when), location (where), and people (who). Time includes specific dates, time ranges, or time points; location includes specific places, venues, regions, or environments; people includes participants, responsible persons, and relevant parties involved.
 
     Output Rules:
-    1. Language: Must output in {language}. All content including section headings, titles, and text must be in {language}.
-    2. Format: Strictly use Markdown.
-    3. Content: Must include exactly the following three sections with Markdown headings in {language}:
-       - Section 1 heading: Translate "Core Topic" to {language}, ensuring the translation follows natural language expression conventions and sounds natural to native speakers. Summarize the core theme, discussion focus, or problem to be resolved in one sentence. Must include key people, location, and time.
-       - Section 2 heading: Translate "TODO" (or equivalent like "待办事项" in Chinese, "Tareas" in Spanish) to {language}, ensuring the translation follows natural language expression conventions and sounds natural to native speakers. Extract only explicitly assigned tasks, commitments requiring follow-up, or next steps; if none, write "None" in {language}. Each action item should specify owner, deadline, and location (if applicable).
-       - Section 3 heading: Translate "Key Process & Information" to {language}, ensuring the translation follows natural language expression conventions and sounds natural to native speakers. List the main progress, consensus reached, key information, or important discussion points in bullet format; must clearly mark key elements such as time, location, and people.
+    1. Language: All content in the JSON must be in {language}.
+    2. Format: Output MUST be a valid JSON object only, no Markdown, no additional text.
+    3. JSON Schema: The output must strictly follow this structure:
+       {
+         "details": "string",
+         "key_process": ["string"],
+         "todos": [
+           {
+             "content": "string (required)",
+             "owner": "string (optional)",
+             "deadline": "string (optional, ISO format or natural language)",
+             "location": "string (optional)",
+             "priority": "string (optional, one of: high/medium/low)"
+           }
+         ]
+       }
 
-    IMPORTANT: When translating section headings, you must use natural, idiomatic expressions that native speakers would use in {language}. Do not use literal word-for-word translations. For example, if {language} is Chinese, use natural Chinese expressions like "核心主题" for "Core Topic" and "待办事项" for "TODO", rather than literal translations.
+    Field Descriptions:
+    - "details": A single sentence summarizing the core theme, discussion focus, or problem to be resolved. Must include key people, location, and time if available. Output in {language}.
+    - "key_process": An array of strings listing the main progress, consensus reached, key information, or important discussion points. Each item should clearly mark key elements such as time, location, and people. Output in {language}.
+    - "todos": An array of TODO objects. Extract only explicitly assigned tasks, commitments requiring follow-up, or next steps. If none, use an empty array [].
 
-    Template Structure Example (all headings and text must be in {language}, with natural and idiomatic translations):
+    TODO Object Fields:
+    - "content": Required. The task description in {language}.
+    - "owner": Optional. Person responsible for this TODO. Extract from the conversation if mentioned.
+    - "deadline": Optional. Deadline for the TODO. Can be:
+      * ISO format: "2025-11-15T10:00:00Z" or "2025-11-15 10:00:00"
+      * Natural language: "tomorrow", "next week", "by end of month", etc.
+      * If no time clue is available in the conversation, leave this field empty (null or omit).
+      * The system will use the email received time as fallback if this field is empty.
+    - "location": Optional. Location related to this TODO. Extract from the conversation if mentioned.
+    - "priority": Optional. Priority level. Must be one of: "high", "medium", or "low". Extract from the conversation if mentioned, otherwise omit.
 
-    ## [Section 1 heading in {language} - natural translation]
-    (One sentence summarizing the core theme of the conversation, including time, location, people)
+    Important Notes:
+    - If the conversation contains no TODO items, use an empty array [] for "todos".
+    - All text content (details, key_process items, todos content) must be in {language}.
+    - Do not include any explanations, comments, or additional text outside the JSON object.
+    - Ensure the JSON is valid and can be parsed by standard JSON parsers.
 
-    ## [Section 2 heading in {language} - natural translation, e.g., "TODO" or "待办事项" or "Tareas"]
-    - Task description - Owner (deadline, location)
-    - Task description - Owner (owner and deadline can be omitted if not specified, or marked as "TBD")
-    - Task description
-
-    ## [Section 3 heading in {language} - natural translation]
-    - [Time] [Location] [People] - Key point description
-    - [Time] [People] - Key point description
-    - ...
+    Example Output (English):
+    {
+      "details": "Alice and Bob discussed product UI optimization on 2025-11-10, requiring design review completion in the office.",
+      "key_process": [
+        "[2025-11-10] [Office] [Alice, Bob] - Identified core requirements for UI optimization",
+        "[2025-11-12] [Bob] - Completed initial design proposal"
+      ],
+      "todos": [
+        {
+          "content": "Complete detailed review of UI design proposal",
+          "owner": "Charlie",
+          "deadline": "2025-11-15",
+          "location": "Office",
+          "priority": "high"
+        },
+        {
+          "content": "Collect user feedback",
+          "owner": "Bob",
+          "deadline": "next week",
+          "priority": "medium"
+        }
+      ]
+    }
 
   metadata_prompt: |
     Please output in {language}. All JSON field values must be in {language}.

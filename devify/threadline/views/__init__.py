@@ -8,6 +8,8 @@ Public API Views:
 - Settings views: SettingsAPIView, SettingsDetailAPIView
 - Threadlines views: EmailMessageAPIView, EmailMessageDetailAPIView
   (EmailMessage with attachments exposed as threadlines)
+- TODO views: EmailTodoAPIView, EmailTodoDetailAPIView,
+  EmailTodoStatsAPIView, EmailTodoBatchAPIView
 
 Internal Views (not exposed in public API):
 - EmailTask views: EmailTaskAPIView, EmailTaskDetailAPIView
@@ -21,6 +23,12 @@ from .email_message import (
     EmailMessageAPIView,
     EmailMessageDetailAPIView,
     EmailMessageMetadataAPIView,
+)
+from .email_todo import (
+    EmailTodoAPIView,
+    EmailTodoDetailAPIView,
+    EmailTodoStatsAPIView,
+    EmailTodoBatchAPIView,
 )
 
 # Internal views (not exposed in public API)
@@ -36,6 +44,10 @@ __all__ = [
     'EmailMessageAPIView',
     'EmailMessageDetailAPIView',
     'EmailMessageMetadataAPIView',
+    'EmailTodoAPIView',
+    'EmailTodoDetailAPIView',
+    'EmailTodoStatsAPIView',
+    'EmailTodoBatchAPIView',
 
     # Internal views (not exposed in public API)
     'EmailTaskAPIView',

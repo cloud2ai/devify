@@ -7,6 +7,8 @@ from django.utils import timezone
 from devtoolbox.llm.azure_openai_provider import AzureOpenAIConfig
 from devtoolbox.llm.service import LLMService
 
+from threadline.utils.llm import parse_json_response
+
 logger = logging.getLogger(__name__)
 
 
@@ -134,6 +136,23 @@ class LLMTracker:
                         details = usage_meta['output_token_details']
                         reasoning = details.get('reasoning', 0)
                         usage['reasoning_tokens'] = reasoning
+
+                # Parse JSON if json_mode is enabled
+                # TODO(Ray): Remove old call_llm function and move json parser
+                #            here
+                if json_mode and isinstance(response_content, str):
+                    try:
+                        response_content = parse_json_response(
+                            response_content
+                        )
+                        logger.debug(
+                            f"Parsed JSON response in {node_name}"
+                        )
+                    except Exception as e:
+                        logger.warning(
+                            f"Failed to parse JSON response in "
+                            f"{node_name}: {e}. Returning raw string."
+                        )
             else:
                 response_content = str(response_obj)
 

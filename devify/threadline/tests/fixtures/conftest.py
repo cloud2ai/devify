@@ -31,7 +31,8 @@ from threadline.models import (
     EmailTask,
     EmailMessage,
     EmailAttachment,
-    Issue
+    Issue,
+    EmailTodo
 )
 
 
@@ -146,18 +147,8 @@ def test_email_message(test_user):
     """
     Create a test email message
     """
-    return EmailMessage.objects.create(
-        user=test_user,
-        message_id='test-message-123',
-        subject='Test Email Subject',
-        sender='sender@example.com',
-        recipients='recipient@example.com',
-        received_at='2024-01-01T10:00:00Z',
-        raw_content='Raw email content',
-        html_content='<p>HTML email content</p>',
-        text_content='Plain text email content',
-        status='fetched'
-    )
+    from ..fixtures.factories import EmailMessageFactory
+    return EmailMessageFactory(user=test_user)
 
 
 @pytest.fixture
@@ -192,4 +183,21 @@ def test_issue(test_user, test_email_message):
         external_id='TEST-123',
         issue_url='https://jira.example.com/browse/TEST-123',
         metadata={'project': 'TEST', 'assignee': 'testuser'}
+    )
+
+
+@pytest.fixture
+def test_email_todo(test_user, test_email_message):
+    """
+    Create a test email todo
+    """
+    return EmailTodo.objects.create(
+        user=test_user,
+        email_message=test_email_message,
+        content='Test TODO item',
+        is_completed=False,
+        priority='medium',
+        owner='Test Owner',
+        location='Test Location',
+        metadata={'source': 'test'}
     )

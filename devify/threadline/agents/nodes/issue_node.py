@@ -226,11 +226,26 @@ class IssueNode(BaseLangGraphNode):
                 return None
 
             title = state.get('summary_title', 'Email Issue')
-            description = state.get('summary_content', 'No content')
+            # Prefer structured data, fallback to summary_content
+            summary_content = state.get('summary_content', 'No content')
+            summary_data = state.get('summary_data')
+            todos = state.get('todos')
             priority = jira_config.get('default_priority', 'Medium')
             email_id = state.get('id')
             user_id = state.get('user_id')
             attachments = state.get('attachments', [])
+
+            # Get language from prompt_config for section headings
+            prompt_config = state.get('prompt_config', {})
+            language = (
+                prompt_config.get('language', 'en')
+                if isinstance(prompt_config, dict) else 'en'
+            )
+            # Normalize language code (zh-CN -> zh, en-US -> en)
+            if language.startswith('zh'):
+                language = 'zh'
+            elif language.startswith('en'):
+                language = 'en'
 
             jira_handler = JiraIssueHandler(issue_config)
             force = state.get('force', False)
@@ -241,17 +256,20 @@ class IssueNode(BaseLangGraphNode):
 
             issue_data = {
                 'title': title,
-                'description': description,
+                'description': summary_content,  # Will be replaced by handler
                 'priority': priority,
             }
 
             email_data = {
                 'id': email_id,
                 'summary_title': title,
-                'summary_content': description,
+                'summary_content': summary_content,
+                'summary_data': summary_data,
+                'todos': todos,
                 'llm_content': state.get('llm_content', ''),
                 'subject': state.get('subject', ''),
                 'metadata': state.get('metadata', {}),
+                'language': language,
             }
 
             issue_key = jira_handler.create_issue(

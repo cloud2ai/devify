@@ -256,10 +256,6 @@ class EmailMessage(models.Model):
     received_at = models.DateTimeField(
         verbose_name=_('Received At')
     )
-    raw_content = models.TextField(
-        verbose_name=_('Raw Content'),
-        help_text=_('Original email content')
-    )
     html_content = models.TextField(
         blank=True,
         verbose_name=_('HTML Content')
@@ -292,6 +288,17 @@ class EmailMessage(models.Model):
         verbose_name=_('Metadata'),
         help_text=_(
             'Structured metadata for intelligent search and filtering'
+        )
+    )
+
+    # Structured summary data (details, key_process)
+    summary_data = models.JSONField(
+        default=dict,
+        blank=True,
+        verbose_name=_('Summary Data'),
+        help_text=_(
+            'Structured summary data containing details and key_process. '
+            'TODO items are stored separately in EmailTodo model.'
         )
     )
 
@@ -583,6 +590,118 @@ class Issue(models.Model):
         Override save for any custom logic if needed
         """
         super().save(*args, **kwargs)
+
+
+class EmailTodo(models.Model):
+    """
+    TODO items extracted from email messages or manually created.
+
+    Supports status tracking, cross-email aggregation, and statistics.
+    """
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        verbose_name=_('User'),
+        related_name='email_todos',
+        help_text=_('User who owns this TODO')
+    )
+    email_message = models.ForeignKey(
+        EmailMessage,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        verbose_name=_('Email Message'),
+        related_name='todos',
+        help_text=_('Related email message (null for manually created TODOs)')
+    )
+    content = models.TextField(
+        verbose_name=_('Content'),
+        help_text=_('TODO item content')
+    )
+    is_completed = models.BooleanField(
+        default=False,
+        verbose_name=_('Is Completed'),
+        help_text=_('Whether this TODO is completed')
+    )
+    completed_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name=_('Completed At'),
+        help_text=_('Timestamp when TODO was marked as completed')
+    )
+    priority = models.CharField(
+        max_length=20,
+        blank=True,
+        null=True,
+        verbose_name=_('Priority'),
+        help_text=_('Priority level: high, medium, or low')
+    )
+    owner = models.CharField(
+        max_length=255,
+        blank=True,
+        null=True,
+        verbose_name=_('Owner'),
+        help_text=_('Person responsible for this TODO')
+    )
+    deadline = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name=_('Deadline'),
+        help_text=_('Deadline for this TODO')
+    )
+    location = models.CharField(
+        max_length=255,
+        blank=True,
+        null=True,
+        verbose_name=_('Location'),
+        help_text=_('Location related to this TODO')
+    )
+    metadata = models.JSONField(
+        default=dict,
+        blank=True,
+        verbose_name=_('Metadata'),
+        help_text=_('Additional metadata for this TODO')
+    )
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name=_('Created At')
+    )
+    updated_at = models.DateTimeField(
+        auto_now=True,
+        verbose_name=_('Updated At')
+    )
+
+    class Meta:
+        verbose_name = _('Email TODO')
+        verbose_name_plural = _('Email TODOs')
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['user', 'is_completed']),
+            models.Index(fields=['email_message']),
+            models.Index(fields=['deadline']),
+            models.Index(fields=['priority']),
+        ]
+
+    def __str__(self):
+        status = "✓" if self.is_completed else "○"
+        return f"{status} {self.content[:50]}"
+
+    def mark_completed(self):
+        """
+        Mark this TODO as completed.
+        """
+        self.is_completed = True
+        if not self.completed_at:
+            self.completed_at = timezone.now()
+        self.save(update_fields=['is_completed', 'completed_at', 'updated_at'])
+
+    def mark_incomplete(self):
+        """
+        Mark this TODO as incomplete (reopen).
+        """
+        self.is_completed = False
+        self.completed_at = None
+        self.save(update_fields=['is_completed', 'completed_at', 'updated_at'])
 
 
 class EmailAlias(models.Model):

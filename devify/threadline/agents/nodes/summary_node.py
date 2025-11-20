@@ -6,7 +6,10 @@ It operates purely on State without database access.
 """
 
 import logging
-from typing import Any, Dict
+from typing import Any, Dict, List
+
+from dateutil import parser as date_parser
+from django.utils import timezone
 
 from core.tracking import LLMTracker
 from threadline.agents.email_state import EmailState, add_node_error
@@ -30,10 +33,17 @@ class SummaryNode(BaseLangGraphNode):
     Responsibilities:
     - Check for email LLM content in State
     - Read prompt configuration from State (no database access)
-    - Execute LLM processing to generate summary content and title
-    - Update State with summary_content and summary_title
+    - Execute LLM processing to generate structured JSON
+      (details, key_process, todo)
+    - Process TODO items (time parsing, validation, fallback logic)
+    - Update State with summary_data, todos, summary_content and
+      summary_title
     - Skip if summary already exists (unless force mode)
     - Handle LLM errors gracefully
+
+    Note: summary_content is only generated in fallback mode when JSON
+    generation fails. For normal operation, use summary_data and todos
+    directly. Markdown rendering should be handled at API layer if needed.
     """
 
     def __init__(self):
@@ -68,12 +78,120 @@ class SummaryNode(BaseLangGraphNode):
 
         return True
 
+    def _process_todos(
+        self,
+        todos: List[Dict[str, Any]],
+        received_at: str
+    ) -> List[Dict[str, Any]]:
+        """
+        Process TODO items: validate and process time information.
+
+        Args:
+            todos: List of TODO items from LLM JSON response
+            received_at: Email received time (ISO format string)
+
+        Returns:
+            List of processed TODO items with deadline_processed field
+        """
+        processed_todos = []
+        base_time = None
+
+        # Parse base time from received_at
+        if received_at:
+            try:
+                base_time = date_parser.parse(received_at)
+            except (ValueError, TypeError) as e:
+                logger.warning(
+                    f"Failed to parse received_at '{received_at}': {e}. "
+                    f"Using current time as fallback."
+                )
+
+        if not base_time:
+            base_time = timezone.now()
+
+        for todo in todos:
+            if not isinstance(todo, dict):
+                logger.warning(f"Invalid TODO item (not a dict): {todo}")
+                continue
+
+            content = todo.get('content', '').strip()
+            if not content:
+                logger.warning("Skipping TODO item with empty content")
+                continue
+
+            # Process deadline
+            deadline_str = (
+                todo.get('deadline', '').strip()
+                if todo.get('deadline') else None
+            )
+            deadline_processed = None
+
+            if deadline_str:
+                try:
+                    deadline_processed = date_parser.parse(deadline_str)
+                    logger.debug(
+                        f"Parsed deadline '{deadline_str}' "
+                        f"to {deadline_processed}"
+                    )
+                except (ValueError, TypeError) as e:
+                    logger.warning(
+                        f"Failed to parse deadline '{deadline_str}': {e}. "
+                        f"Using base time as fallback."
+                    )
+                    deadline_processed = base_time
+            else:
+                # No time clue, use base time
+                deadline_processed = base_time
+                logger.debug(
+                    f"No deadline provided for TODO "
+                    f"'{content[:50]}...', "
+                    f"using base time: {deadline_processed}"
+                )
+
+            # Validate priority
+            priority = (
+                todo.get('priority', '').strip().lower()
+                if todo.get('priority') else None
+            )
+            if priority and priority not in ['high', 'medium', 'low']:
+                logger.warning(
+                    f"Invalid priority '{priority}' for TODO "
+                    f"'{content[:50]}...'. Setting to None."
+                )
+                priority = None
+
+            # Clean up other fields
+            owner = (
+                todo.get('owner', '').strip()
+                if todo.get('owner') else None
+            )
+            location = (
+                todo.get('location', '').strip()
+                if todo.get('location') else None
+            )
+
+            processed_todo = {
+                'content': content,
+                'owner': owner,
+                'location': location,
+                'priority': priority,
+                'deadline_processed': (
+                    deadline_processed.isoformat()
+                    if deadline_processed else None
+                ),
+                'deadline_original': deadline_str,
+            }
+            processed_todos.append(processed_todo)
+
+        return processed_todos
+
     def execute_processing(self, state: EmailState) -> EmailState:
         """
         Execute summary generation.
 
-        Generates summary content and title based on LLM-processed email
-        content (which already includes OCR context from attachments).
+        Generates structured JSON (details, key_process, todo) and processes
+        TODO items with time handling. summary_content is only generated in
+        fallback mode when JSON generation fails.
 
         Args:
             state (EmailState): Current email state
@@ -108,28 +226,13 @@ class SummaryNode(BaseLangGraphNode):
 
         logger.info("Using LLM-processed content for summary generation")
 
+        summary_data = state.get('summary_data')
         summary_content = state.get('summary_content', '')
         summary_title = state.get('summary_title', '')
+        existing_todos = state.get('todos') or []
 
         try:
-            if not summary_content or force:
-                logger.info("Generating summary content")
-                summary_content_raw, usage = LLMTracker.call_and_track(
-                    prompt=summary_prompt,
-                    content=content,
-                    json_mode=False,
-                    state=state,
-                    node_name=self.node_name
-                )
-                if summary_content_raw:
-                    summary_content = summary_content_raw.strip()
-                else:
-                    summary_content = ''
-                if summary_content:
-                    logger.info("Summary content generated successfully")
-                else:
-                    logger.warning("No summary content generated")
-
+            # Generate summary_title (still using Markdown mode)
             if not summary_title or force:
                 logger.info("Generating summary title")
                 summary_title_raw, usage = LLMTracker.call_and_track(
@@ -143,25 +246,94 @@ class SummaryNode(BaseLangGraphNode):
                     summary_title = summary_title_raw.strip()
                 else:
                     summary_title = ''
-                if summary_title:
-                    logger.info("Summary title generated successfully")
-                else:
-                    logger.warning("No summary title generated")
+
+            # Generate structured summary (JSON mode)
+            if not summary_data or force:
+                logger.info("Generating structured summary (JSON mode)")
+                try:
+                    # LLMTracker.call_and_track with json_mode=True
+                    # automatically parses JSON and returns dict
+                    summary_json, usage = LLMTracker.call_and_track(
+                        prompt=summary_prompt,
+                        content=content,
+                        json_mode=True,
+                        state=state,
+                        node_name=self.node_name
+                    )
+
+                    # Extract structured data
+                    summary_data = {
+                        'details': summary_json.get('details', '').strip(),
+                        'key_process': summary_json.get('key_process', [])
+                    }
+
+                    # Process TODOs
+                    raw_todos = summary_json.get('todos', [])
+                    if raw_todos:
+                        received_at = state.get('received_at', '')
+                        processed_todos = self._process_todos(
+                            raw_todos,
+                            received_at
+                        )
+                        logger.info(
+                            f"Processed {len(processed_todos)} TODO items"
+                        )
+                    else:
+                        processed_todos = []
+                        logger.info("No TODO items found in summary")
+
+                    # summary_content is not generated from structured data
+                    # Use existing summary_content or empty string
+                    # Markdown rendering should be handled at API layer
+                    summary_content = summary_content or ''
+
+                    logger.info("Structured summary generated successfully")
+
+                except Exception as json_error:
+                    logger.error(
+                        f"JSON summary generation failed: {json_error}. "
+                        f"Falling back to Markdown mode."
+                    )
+                    # Fallback to old Markdown mode
+                    summary_content_raw, usage = LLMTracker.call_and_track(
+                        prompt=summary_prompt,
+                        content=content,
+                        json_mode=False,
+                        state=state,
+                        node_name=self.node_name
+                    )
+                    if summary_content_raw:
+                        summary_content = summary_content_raw.strip()
+                    else:
+                        summary_content = ''
+                    # Keep existing summary_data if available
+                    if not summary_data:
+                        summary_data = {}
+                    processed_todos = []
+
+            else:
+                # Use existing data, but ensure todos are processed
+                processed_todos = existing_todos if existing_todos else []
 
             return {
                 **state,
+                'summary_data': summary_data,
+                'todos': processed_todos if processed_todos else None,
                 'summary_content': summary_content,
                 'summary_title': summary_title
             }
 
         except Exception as e:
-            logger.error(f"Summary generation failed: {e}")
+            logger.error(f"Summary generation failed: {e}", exc_info=True)
             error_message = f'Summary generation failed: {str(e)}'
             updated_state = add_node_error(
                 state,
                 self.node_name,
                 error_message
             )
+            # Preserve existing data on error
             updated_state['summary_content'] = summary_content or ''
             updated_state['summary_title'] = summary_title or ''
+            updated_state['summary_data'] = summary_data or {}
+            updated_state['todos'] = existing_todos if existing_todos else None
             return updated_state

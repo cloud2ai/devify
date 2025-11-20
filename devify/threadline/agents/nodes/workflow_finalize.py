@@ -10,15 +10,16 @@ from typing import Dict, Any
 
 from django.conf import settings
 from django.db import transaction
+from dateutil import parser as date_parser
 
-from billing.models import EmailCreditsTransaction, EmailWorkflowUsage
+from billing.models import EmailWorkflowUsage
 from threadline.agents.email_state import (
     EmailState,
     get_all_node_names_with_errors,
     has_node_errors,
 )
 from threadline.agents.nodes.base_node import BaseLangGraphNode
-from threadline.models import EmailAttachment, EmailMessage, Issue
+from threadline.models import EmailAttachment, EmailMessage, Issue, EmailTodo
 from threadline.state_machine import EmailStatus
 
 
@@ -189,6 +190,9 @@ class WorkflowFinalizeNode(BaseLangGraphNode):
             # Sync attachments
             self._sync_email_attachments(state)
 
+            # Sync TODOs
+            self._sync_todos(email, state)
+
             # Record usage metrics
             self._record_usage_metrics(email, state)
 
@@ -217,6 +221,7 @@ class WorkflowFinalizeNode(BaseLangGraphNode):
         field_updates = {
             'summary_title': state.get('summary_title', ''),
             'summary_content': state.get('summary_content', ''),
+            'summary_data': state.get('summary_data'),
             'llm_content': state.get('llm_content', ''),
             'metadata': state.get('metadata')
         }
@@ -284,6 +289,108 @@ class WorkflowFinalizeNode(BaseLangGraphNode):
             logger.info(
                 f"Synced {att_sync_count} attachment(s): "
                 f"{', '.join(att_sync_summary)}"
+            )
+
+    def _sync_todos(
+        self, email: EmailMessage, state: EmailState
+    ) -> None:
+        """
+        Create/update EmailTodo records from state.
+
+        Args:
+            email: EmailMessage object
+            state: Current email state
+        """
+
+        todos = state.get('todos')
+        if not todos:
+            logger.debug(f"No TODOs to sync for email {email.id}")
+            return
+
+        todo_sync_count = 0
+        todo_update_count = 0
+        todo_create_count = 0
+
+        for todo_data in todos:
+            if not isinstance(todo_data, dict):
+                logger.warning(f"Invalid TODO data (not a dict): {todo_data}")
+                continue
+
+            content = todo_data.get('content', '').strip()
+            if not content:
+                logger.warning("Skipping TODO with empty content")
+                continue
+
+            # Parse deadline_processed
+            deadline_processed_str = todo_data.get('deadline_processed')
+            deadline = None
+            if deadline_processed_str:
+                try:
+                    deadline = date_parser.parse(deadline_processed_str)
+                except (ValueError, TypeError) as e:
+                    logger.warning(
+                        f"Failed to parse deadline_processed "
+                        f"'{deadline_processed_str}': {e}"
+                    )
+
+            # Use get_or_create to avoid duplicates
+            # Match by email_message and content
+            todo, created = EmailTodo.objects.get_or_create(
+                email_message=email,
+                content=content,
+                defaults={
+                    'user': email.user,
+                    'is_completed': False,
+                    'priority': todo_data.get('priority'),
+                    'owner': todo_data.get('owner'),
+                    'deadline': deadline,
+                    'location': todo_data.get('location'),
+                    'metadata': todo_data.get('metadata', {})
+                }
+            )
+
+            if created:
+                todo_create_count += 1
+                logger.debug(
+                    f"Created TODO {todo.id} for email {email.id}: "
+                    f"'{content[:50]}...'"
+                )
+            else:
+                # Update existing TODO with new metadata
+                update_fields = []
+                priority = todo_data.get('priority')
+                if priority and todo.priority != priority:
+                    todo.priority = priority
+                    update_fields.append('priority')
+                owner = todo_data.get('owner')
+                if owner and todo.owner != owner:
+                    todo.owner = owner
+                    update_fields.append('owner')
+                if deadline and todo.deadline != deadline:
+                    todo.deadline = deadline
+                    update_fields.append('deadline')
+                location = todo_data.get('location')
+                if location and todo.location != location:
+                    todo.location = location
+                    update_fields.append('location')
+                if todo_data.get('metadata'):
+                    todo.metadata = todo_data.get('metadata', {})
+                    update_fields.append('metadata')
+
+                if update_fields:
+                    todo.save(update_fields=update_fields)
+                    todo_update_count += 1
+                    logger.debug(
+                        f"Updated TODO {todo.id} for email {email.id}: "
+                        f"fields={update_fields}"
+                    )
+
+            todo_sync_count += 1
+
+        if todo_sync_count > 0:
+            logger.info(
+                f"Synced {todo_sync_count} TODO(s) for email {email.id}: "
+                f"{todo_create_count} created, {todo_update_count} updated"
             )
 
     def _create_issue_record(
@@ -493,8 +600,8 @@ class WorkflowFinalizeNode(BaseLangGraphNode):
             # If self.email is None, before_processing likely failed
             # In this case, we can't update status reliably
             logger.warning(
-                f"Cannot update status: email object not available "
-                f"(before_processing may have failed)"
+                "Cannot update status: email object not available "
+                "(before_processing may have failed)"
             )
 
         return state

@@ -8,6 +8,7 @@ Public API endpoints:
 - settings/: User settings management
 - settings/email-aliases/: Email alias management for auto-assign mode
 - threadlines/: Email messages with attachments (threadlines)
+- todos/: TODO items management
 """
 
 from django.urls import path
@@ -17,7 +18,11 @@ from .views import (
     SettingsDetailAPIView,
     EmailMessageAPIView,
     EmailMessageDetailAPIView,
-    EmailMessageMetadataAPIView
+    EmailMessageMetadataAPIView,
+    EmailTodoAPIView,
+    EmailTodoDetailAPIView,
+    EmailTodoStatsAPIView,
+    EmailTodoBatchAPIView,
 )
 from .views.email_alias import (
     EmailAliasAPIView,
@@ -63,6 +68,14 @@ urlpatterns = [
     path('threadlines/<uuid:uuid>/metadata',
          EmailMessageMetadataAPIView.as_view(),
          name='threadlines-metadata'),
+
+    # TODO endpoints
+    path('todos', EmailTodoAPIView.as_view(), name='todos-list'),
+    path('todos/stats', EmailTodoStatsAPIView.as_view(), name='todos-stats'),
+    path('todos/batch', EmailTodoBatchAPIView.as_view(),
+         name='todos-batch'),
+    path('todos/<int:pk>', EmailTodoDetailAPIView.as_view(),
+         name='todos-detail'),
 
     # Monitoring endpoints
     # API endpoints (require authentication)

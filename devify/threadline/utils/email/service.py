@@ -69,7 +69,6 @@ class EmailSaveService:
                 'sender': email_data['sender'],
                 'recipients': email_data['recipients'],
                 'received_at': email_data['received_at'],
-                'raw_content': email_data['raw_content'],
                 'html_content': email_data.get('html_content', ''),
                 'text_content': email_data.get('text_content', ''),
                 'status': EmailStatus.FETCHED.value,

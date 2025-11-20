@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2024-01-01 00:00+0000\n"
+"POT-Creation-Date: 2025-11-19 07:41+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -18,158 +18,1246 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
-#: devify/v1/jirabot/tasks/notifications.py:74
-msgid "New email received: {subject}"
-msgstr "New email received: {subject}"
+#: accounts/serializers.py:35
+msgid "JWT access token"
+msgstr ""
 
-#: devify/v1/jirabot/tasks/notifications.py:75
-msgid "Email Fetching"
-msgstr "Email Fetching"
+#: accounts/serializers.py:36
+msgid "JWT refresh token"
+msgstr ""
 
-#: devify/v1/jirabot/tasks/notifications.py:76
-msgid "From: {sender}"
-msgstr "From: {sender}"
+#: accounts/serializers.py:37
+msgid "User basic info"
+msgstr ""
 
-#: devify/v1/jirabot/tasks/notifications.py:80
-msgid "OCR processing completed: {subject}"
-msgstr "OCR processing completed: {subject}"
+#: accounts/serializers.py:54
+msgid "Scene key (e.g., 'chat', 'product_issue')"
+msgstr ""
 
-#: devify/v1/jirabot/tasks/notifications.py:81
-msgid "OCR Processing"
-msgstr "OCR Processing"
+#: accounts/serializers.py:57
+msgid "Scene display name in requested language"
+msgstr ""
 
-#: devify/v1/jirabot/tasks/notifications.py:82
-msgid "Image text extraction successful"
-msgstr "Image text extraction successful"
+#: accounts/serializers.py:60
+msgid "Scene description in requested language"
+msgstr ""
 
-#: devify/v1/jirabot/tasks/notifications.py:86
-msgid "OCR processing failed: {subject}"
-msgstr "OCR processing failed: {subject}"
+#: accounts/serializers.py:70
+msgid "User's email address"
+msgstr ""
 
-#: devify/v1/jirabot/tasks/notifications.py:88
-msgid "Image text extraction failed"
-msgstr "Image text extraction failed"
+#: accounts/serializers.py:113
+#, python-format
+msgid ""
+"This email is already registered via %(providers)s. Please use %(providers)s "
+"to login instead."
+msgstr ""
 
-#: devify/v1/jirabot/tasks/notifications.py:92
-msgid "LLM processing completed: {subject}"
-msgstr "LLM processing completed: {subject}"
+#: accounts/serializers.py:122
+msgid "This email address is already registered. Please login instead."
+msgstr ""
 
-#: devify/v1/jirabot/tasks/notifications.py:93
-msgid "LLM Processing"
-msgstr "LLM Processing"
+#: accounts/serializers.py:144
+msgid "Virtual email username (will become username@domain)"
+msgstr ""
 
-#: devify/v1/jirabot/tasks/notifications.py:94
-msgid "Content analysis and summarization completed"
-msgstr "Content analysis and summarization completed"
+#: accounts/serializers.py:158
+msgid ""
+"Username can only contain letters, numbers, dots, hyphens, and underscores"
+msgstr ""
 
-#: devify/v1/jirabot/tasks/notifications.py:98
-msgid "LLM processing failed: {subject}"
-msgstr "LLM processing failed: {subject}"
+#: accounts/serializers.py:165
+msgid "Username cannot start or end with a dot"
+msgstr ""
 
-#: devify/v1/jirabot/tasks/notifications.py:100
-msgid "Content analysis failed"
-msgstr "Content analysis failed"
+#: accounts/serializers.py:176
+msgid "This username is reserved and cannot be used"
+msgstr ""
 
-#: devify/v1/jirabot/tasks/notifications.py:105
-msgid "JIRA issue created successfully: {subject}"
-msgstr "JIRA issue created successfully: {subject}"
+#: accounts/serializers.py:181
+msgid "This username is already taken"
+msgstr ""
 
-#: devify/v1/jirabot/tasks/notifications.py:106
-msgid "JIRA Creation"
-msgstr "JIRA Creation"
+#: accounts/serializers.py:193 accounts/views/registration.py:157
+msgid "Registration verification token"
+msgstr ""
 
-#: devify/v1/jirabot/tasks/notifications.py:108
-msgid "Issue: {key} | URL: {url}"
-msgstr "Issue: {key} | URL: {url}"
+#: accounts/serializers.py:202
+msgid "User password (8-32 characters, must contain letters and numbers)"
+msgstr ""
 
-#: devify/v1/jirabot/tasks/notifications.py:113
-msgid "Issue created but details not available"
-msgstr "Issue created but details not available"
+#: accounts/serializers.py:211 accounts/serializers.py:307
+msgid "Virtual email username"
+msgstr ""
 
-#: devify/v1/jirabot/tasks/notifications.py:118
-msgid "Issue created"
-msgstr "Issue created"
+#: accounts/serializers.py:217
+msgid "User's selected scene (e.g., 'chat', 'product_issue')"
+msgstr ""
 
-#: devify/v1/jirabot/tasks/notifications.py:123
-msgid "JIRA issue creation failed: {subject}"
-msgstr "JIRA issue creation failed: {subject}"
+#: accounts/serializers.py:224 accounts/serializers.py:317
+msgid ""
+"Specifies the language used by AI when generating summaries, titles, and "
+"metadata."
+msgstr ""
 
-#: devify/v1/jirabot/tasks/notifications.py:125
-msgid "Failed to create JIRA issue"
+#: accounts/serializers.py:230
+msgid "User's timezone (e.g., 'UTC', 'Asia/Shanghai')"
+msgstr ""
+
+#: accounts/serializers.py:242 accounts/views/password.py:251
+msgid "Password must be at least 8 characters long"
+msgstr ""
+
+#: accounts/serializers.py:247 accounts/views/password.py:261
+msgid "Password cannot exceed 32 characters"
+msgstr ""
+
+#: accounts/serializers.py:255 accounts/views/password.py:274
+msgid "Password must contain both letters and numbers"
+msgstr ""
+
+#: accounts/serializers.py:286 accounts/serializers.py:362
+#, python-format
+msgid "Unsupported language. Supported: %(languages)s"
+msgstr ""
+
+#: accounts/serializers.py:312
+msgid "User's selected scene"
+msgstr ""
+
+#: accounts/serializers.py:322
+msgid "User's timezone"
+msgstr ""
+
+#: accounts/serializers.py:331
+msgid "Scene is required"
+msgstr ""
+
+#: accounts/serializers.py:379
+msgid ""
+"User-friendly display name, prioritizing first_name + last_name from OAuth "
+"providers, falling back to username"
+msgstr ""
+
+#: accounts/serializers.py:387
+msgid "Primary virtual email address for receiving emails"
+msgstr ""
+
+#: accounts/serializers.py:393
+msgid "User profile information"
+msgstr ""
+
+#: accounts/serializers.py:398
+msgid "Authentication method and related information"
+msgstr ""
+
+#: accounts/serializers.py:552
+msgid "No user found with this email address"
+msgstr ""
+
+#: accounts/serializers.py:558 accounts/views/password.py:68
+msgid ""
+"OAuth users cannot reset password. Please login with your OAuth provider."
+msgstr ""
+
+#: accounts/serializers.py:567
+msgid "Please complete registration first"
+msgstr ""
+
+#: accounts/serializers.py:571
+msgid "User profile not found"
+msgstr ""
+
+#: accounts/services/email.py:71 accounts/services/email.py:72
+msgid "Complete Your AImyChats Registration"
+msgstr ""
+
+#: accounts/services/email.py:77
+#, python-format
+msgid "Please complete your registration by visiting: %(url)s"
+msgstr ""
+
+#: accounts/services/email.py:165 accounts/services/email.py:166
+msgid "Reset Your AImyChats Password"
+msgstr ""
+
+#: accounts/services/email.py:171
+#, python-format
+msgid "Please reset your password by visiting: %(url)s"
+msgstr ""
+
+#: accounts/views/oauth.py:52
+msgid "Complete OAuth user setup"
+msgstr ""
+
+#: accounts/views/oauth.py:74
+msgid "User has already completed registration"
+msgstr ""
+
+#: accounts/views/oauth.py:184
+msgid "Setup completed successfully"
+msgstr ""
+
+#: accounts/views/oauth.py:200
+#, fuzzy
+#| msgid "Failed to create JIRA issue"
+msgid "Failed to complete setup"
 msgstr "Failed to create JIRA issue"
 
-#: devify/v1/jirabot/tasks/notifications.py:130
-msgid "Status updated: {subject}"
-msgstr "Status updated: {subject}"
+#: accounts/views/password.py:51
+msgid "Send password reset email"
+msgstr ""
 
-#: devify/v1/jirabot/tasks/notifications.py:131
-msgid "Processing"
-msgstr "Processing"
+#: accounts/views/password.py:110
+msgid "Password reset email sent successfully"
+msgstr ""
 
-#: devify/v1/jirabot/tasks/notifications.py:132
-msgid "Status changed from {old_status} to {new_status}"
-msgstr "Status changed from {old_status} to {new_status}"
+#: accounts/views/password.py:120
+msgid "Failed to send password reset email"
+msgstr ""
 
-#: devify/v1/jirabot/tasks/notifications.py:150
-msgid "Webhook not configured or disabled, skipping notification"
-msgstr "Webhook not configured or disabled, skipping notification"
+#: accounts/views/password.py:135
+msgid "Failed to process password reset request"
+msgstr ""
 
-#: devify/v1/jirabot/tasks/notifications.py:155
-msgid "No events configured for notification"
-msgstr "No events configured for notification"
+#: accounts/views/password.py:154
+msgid "Confirm password reset"
+msgstr ""
 
-#: devify/v1/jirabot/tasks/notifications.py:160
-msgid "Status '{status}' not in configured events: {events}"
-msgstr "Status '{status}' not in configured events: {events}"
+#: accounts/views/password.py:204
+msgid "All fields are required"
+msgstr ""
 
-#: devify/v1/jirabot/tasks/notifications.py:175
-msgid "Webhook failed: {status_code}"
-msgstr "Webhook failed: {status_code}"
+#: accounts/views/password.py:213
+msgid "Passwords do not match"
+msgstr ""
 
-#: devify/v1/jirabot/tasks/notifications.py:177
-msgid "Webhook notification sent successfully for status: {status}"
-msgstr "Webhook notification sent successfully for status: {status}"
+#: accounts/views/password.py:230
+msgid "Invalid reset link"
+msgstr ""
 
-#: devify/v1/jirabot/tasks/notifications.py:180
-msgid "Webhook notification failed: {error}"
-msgstr "Webhook notification failed: {error}"
+#: accounts/views/password.py:240
+msgid "Invalid or expired reset link"
+msgstr ""
 
-#: devify/v1/jirabot/tasks/notifications.py:200
-msgid "Time"
-msgstr "Time"
+#: accounts/views/password.py:292
+msgid "Password has been reset successfully"
+msgstr ""
 
-#: devify/v1/jirabot/tasks/notifications.py:201
-msgid "Subject"
-msgstr "Subject"
+#: accounts/views/password.py:306
+#, fuzzy
+#| msgid "Failed to create JIRA issue"
+msgid "Failed to reset password"
+msgstr "Failed to create JIRA issue"
 
-#: devify/v1/jirabot/tasks/notifications.py:202
-msgid "Sender"
-msgstr "Sender"
+#: accounts/views/registration.py:55
+msgid "Send registration email"
+msgstr ""
 
-#: devify/v1/jirabot/tasks/notifications.py:203
-msgid "Stage"
-msgstr "Stage"
+#: accounts/views/registration.py:110
+msgid "Registration email sent successfully"
+msgstr ""
 
-#: devify/v1/jirabot/tasks/notifications.py:204
+#: accounts/views/registration.py:120
+msgid "Failed to send registration email"
+msgstr ""
+
+#: accounts/views/registration.py:134
+msgid "Failed to process registration request"
+msgstr ""
+
+#: accounts/views/registration.py:151
+msgid "Verify registration token"
+msgstr ""
+
+#: accounts/views/registration.py:188
+msgid "Token has expired"
+msgstr ""
+
+#: accounts/views/registration.py:197
+msgid "Invalid token"
+msgstr ""
+
+#: accounts/views/registration.py:214
+msgid "Complete registration"
+msgstr ""
+
+#: accounts/views/registration.py:243
+msgid "Invalid registration token"
+msgstr ""
+
+#: accounts/views/registration.py:255
+msgid "Registration token has expired"
+msgstr ""
+
+#: accounts/views/registration.py:307
+msgid "Failed to complete registration"
+msgstr ""
+
+#: accounts/views/registration.py:324
+msgid "Check username availability"
+msgstr ""
+
+#: accounts/views/registration.py:330
+msgid "Username to check"
+msgstr ""
+
+#: accounts/views/registration.py:348
+#, fuzzy
+#| msgid "No details available"
+msgid "Username is available"
+msgstr "No details available"
+
+#: accounts/views/registration.py:355
+msgid "Invalid username"
+msgstr ""
+
+#: accounts/views/scenes.py:37
+#, fuzzy
+#| msgid "No details available"
+msgid "Get available scenes"
+msgstr "No details available"
+
+#: accounts/views/scenes.py:43
+msgid "Language code (e.g., 'zh-CN', 'en-US', 'es')"
+msgstr ""
+
+#: accounts/views/scenes.py:83
+msgid "No scenes available for the requested language"
+msgstr ""
+
+#: accounts/views/scenes.py:100
+msgid "Failed to retrieve available scenes"
+msgstr ""
+
+#: threadline/admin.py:120 threadline/admin.py:676
+msgid "Basic Information"
+msgstr ""
+
+#: threadline/admin.py:125 threadline/admin.py:214 threadline/admin.py:299
+#: threadline/admin.py:561 threadline/admin.py:626 threadline/admin.py:683
+msgid "Timestamps"
+msgstr ""
+
+#: threadline/admin.py:159
+msgid "Value Preview"
+msgstr ""
+
+#: threadline/admin.py:199
+msgid "Task Information"
+msgstr ""
+
+#: threadline/admin.py:202
+msgid "Progress"
+msgstr ""
+
+#: threadline/admin.py:206
+msgid "Error Information"
+msgstr ""
+
+#: threadline/admin.py:210
 msgid "Details"
 msgstr "Details"
 
-#: devify/v1/jirabot/tasks/notifications.py:205
-msgid "Unknown"
-msgstr "Unknown"
+#: threadline/admin.py:248
+msgid "Email Information"
+msgstr ""
 
-#: devify/v1/jirabot/tasks/notifications.py:206
+#: threadline/admin.py:254
+msgid "Content Preview"
+msgstr ""
+
+#: threadline/admin.py:262
+msgid "Content (Full)"
+msgstr ""
+
+#: threadline/admin.py:266
+msgid "Summary Preview"
+msgstr ""
+
+#: threadline/admin.py:274
+msgid "Summary (Full)"
+msgstr ""
+
+#: threadline/admin.py:278
+#, fuzzy
+#| msgid "LLM Processing"
+msgid "LLM Processing Preview"
+msgstr "LLM Processing"
+
+#: threadline/admin.py:285
+#, fuzzy
+#| msgid "LLM Processing"
+msgid "LLM Processing (Full)"
+msgstr "LLM Processing"
+
+#: threadline/admin.py:289
+msgid "Status"
+msgstr ""
+
+#: threadline/admin.py:292
+msgid "Related Objects"
+msgstr ""
+
+#: threadline/admin.py:313 threadline/models.py:272
+msgid "Summary Title"
+msgstr ""
+
+#: threadline/admin.py:321 threadline/models.py:245
+msgid "Subject"
+msgstr "Subject"
+
+#: threadline/admin.py:327
+msgid "Attachments"
+msgstr ""
+
+#: threadline/admin.py:333 threadline/models.py:577
+#, fuzzy
+#| msgid "JIRA Issue"
+msgid "Issues"
+msgstr "JIRA Issue"
+
+#: threadline/admin.py:339
+msgid "Attachment Links"
+msgstr ""
+
+#: threadline/admin.py:358
+msgid "Issue Links"
+msgstr ""
+
+#: threadline/admin.py:377
+msgid "Raw Content Preview"
+msgstr ""
+
+#: threadline/admin.py:390
+msgid "HTML Content Preview"
+msgstr ""
+
+#: threadline/admin.py:403
+msgid "Text Content Preview"
+msgstr ""
+
+#: threadline/admin.py:411
+msgid "Summary Content Preview"
+msgstr ""
+
+#: threadline/admin.py:419
+msgid "LLM Content Preview"
+msgstr ""
+
+#: threadline/admin.py:427
+msgid "Metadata Preview"
+msgstr ""
+
+#: threadline/admin.py:444
+msgid "Trigger process (for FETCHED emails)"
+msgstr ""
+
+#: threadline/admin.py:477
+msgid "Force reprocess (charges credits again)"
+msgstr ""
+
+#: threadline/admin.py:546
+msgid "Attachment Information"
+msgstr ""
+
+#: threadline/admin.py:553
+msgid "File Storage"
+msgstr ""
+
+#: threadline/admin.py:557 threadline/models.py:618
+msgid "Content"
+msgstr ""
+
+#: threadline/admin.py:575 threadline/admin.py:639 threadline/models.py:338
+#: threadline/models.py:439 threadline/models.py:521 threadline/models.py:613
+msgid "Email Message"
+msgstr ""
+
+#: threadline/admin.py:610
+#, fuzzy
+#| msgid "Issue created"
+msgid "Issue Information"
+msgstr "Issue created"
+
+#: threadline/admin.py:615
+msgid "Classification"
+msgstr ""
+
+#: threadline/admin.py:618
+msgid "External System"
+msgstr ""
+
+#: threadline/admin.py:622 threadline/models.py:288 threadline/models.py:567
+#: threadline/models.py:662
+msgid "Metadata"
+msgstr ""
+
+#: threadline/admin.py:679
+msgid "Email Address"
+msgstr ""
+
+#: threadline/admin.py:689
+msgid "Domain"
+msgstr ""
+
+#: threadline/admin.py:698
+msgid "Full Email Address"
+msgstr ""
+
+#: threadline/admin.py:707
+msgid "Threadline Administration"
+msgstr ""
+
+#: threadline/admin.py:708
+msgid "Threadline Admin"
+msgstr ""
+
+#: threadline/admin.py:709
+msgid "Welcome to Threadline Administration"
+msgstr ""
+
+#: threadline/models.py:26 threadline/models.py:235 threadline/models.py:433
+#: threadline/models.py:514 threadline/models.py:604 threadline/models.py:718
+msgid "User"
+msgstr ""
+
+#: threadline/models.py:31
+msgid "Setting Key"
+msgstr ""
+
+#: threadline/models.py:32
+msgid "Configuration key name"
+msgstr ""
+
+#: threadline/models.py:35
+msgid "Setting Value"
+msgstr ""
+
+#: threadline/models.py:36
+msgid "Configuration value (JSON format)"
+msgstr ""
+
+#: threadline/models.py:41
+msgid "Description"
+msgstr ""
+
+#: threadline/models.py:42
+msgid "Description of this setting"
+msgstr ""
+
+#: threadline/models.py:46 threadline/models.py:729
+msgid "Active"
+msgstr ""
+
+#: threadline/models.py:47
+msgid "Whether this setting is active"
+msgstr ""
+
+#: threadline/models.py:53
+msgid "Setting"
+msgstr ""
+
+#: threadline/models.py:54
+msgid "Settings"
+msgstr ""
+
+#: threadline/models.py:152
+msgid "Running"
+msgstr ""
+
+#: threadline/models.py:153
+msgid "Completed"
+msgstr ""
+
+#: threadline/models.py:154 threadline/tasks/notifications.py:154
+msgid "Failed"
+msgstr ""
+
+#: threadline/models.py:155
+msgid "Cancelled"
+msgstr ""
+
+#: threadline/models.py:158
+#, fuzzy
+#| msgid "Email Fetching"
+msgid "IMAP Email Fetch"
+msgstr "Email Fetching"
+
+#: threadline/models.py:159
+#, fuzzy
+#| msgid "Email Fetching"
+msgid "Haraka Email Fetch"
+msgstr "Email Fetching"
+
+#: threadline/models.py:160
+msgid "Haraka Cleanup"
+msgstr ""
+
+#: threadline/models.py:161
+msgid "EmailTask Cleanup"
+msgstr ""
+
+#: threadline/models.py:162
+msgid "Stuck Email Reset"
+msgstr ""
+
+#: threadline/models.py:167
+msgid "Task Type"
+msgstr ""
+
+#: threadline/models.py:168
+msgid "Type of task being executed"
+msgstr ""
+
+#: threadline/models.py:173
+msgid "Celery Task ID"
+msgstr ""
+
+#: threadline/models.py:174
+msgid "Celery task ID for tracking"
+msgstr ""
+
+#: threadline/models.py:180
+msgid "Task Status"
+msgstr ""
+
+#: threadline/models.py:185
+msgid "Started At"
+msgstr ""
+
+#: threadline/models.py:190 threadline/models.py:629
+msgid "Completed At"
+msgstr ""
+
+#: threadline/models.py:194 threadline/models.py:324
+msgid "Error Message"
+msgstr ""
+
+#: threadline/models.py:198
+msgid "Execution Details"
+msgstr ""
+
+#: threadline/models.py:199
+msgid "Detailed execution log and status information"
+msgstr ""
+
+#: threadline/models.py:205
+msgid "Task"
+msgstr ""
+
+#: threadline/models.py:206
+msgid "Tasks"
+msgstr ""
+
+#: threadline/models.py:229 threadline/models.py:427
+msgid "UUID"
+msgstr ""
+
+#: threadline/models.py:230 threadline/models.py:428
+msgid "Unique identifier for external references"
+msgstr ""
+
+#: threadline/models.py:240
+msgid "Message ID"
+msgstr ""
+
+#: threadline/models.py:241
+msgid "Unique email message ID"
+msgstr ""
+
+#: threadline/models.py:249
+msgid "Sender"
+msgstr "Sender"
+
+#: threadline/models.py:250
+msgid "Sender email address (supports RFC 5322 format)"
+msgstr ""
+
+#: threadline/models.py:253
+msgid "Recipients"
+msgstr ""
+
+#: threadline/models.py:254
+msgid "Comma-separated list of recipients"
+msgstr ""
+
+#: threadline/models.py:257
+msgid "Received At"
+msgstr ""
+
+#: threadline/models.py:261
+msgid "HTML Content"
+msgstr ""
+
+#: threadline/models.py:265
+msgid "Text Content"
+msgstr ""
+
+#: threadline/models.py:276
+msgid "Summary Content"
+msgstr ""
+
+#: threadline/models.py:281
+msgid "Summary Priority"
+msgstr ""
+
+#: threadline/models.py:290
+msgid "Structured metadata for intelligent search and filtering"
+msgstr ""
+
+#: threadline/models.py:298
+msgid "Summary Data"
+msgstr ""
+
+#: threadline/models.py:300
+msgid ""
+"Structured summary data containing details and key_process. TODO items are "
+"stored separately in EmailTodo model."
+msgstr ""
+
+#: threadline/models.py:309 threadline/models.py:483
+#, fuzzy
+#| msgid "LLM Processing"
+msgid "LLM Processed Content"
+msgstr "LLM Processing"
+
+#: threadline/models.py:310
+msgid "Content organized by large language model"
+msgstr ""
+
+#: threadline/models.py:320
+#, fuzzy
+#| msgid "Processing"
+msgid "Processing Status"
+msgstr "Processing"
+
+#: threadline/models.py:328
+msgid "Fetch Retry Count"
+msgstr ""
+
+#: threadline/models.py:330
+msgid ""
+"Number of times workflow trigger has been retried for emails stuck in "
+"FETCHED status"
+msgstr ""
+
+#: threadline/models.py:339
+msgid "Email Messages"
+msgstr ""
+
+#: threadline/models.py:444
+msgid "Filename"
+msgstr ""
+
+#: threadline/models.py:445
+msgid "Original filename of the attachment"
+msgstr ""
+
+#: threadline/models.py:449
+msgid "Safe Filename"
+msgstr ""
+
+#: threadline/models.py:450
+msgid "Sanitized filename for safe storage"
+msgstr ""
+
+#: threadline/models.py:454
+msgid "Content Type"
+msgstr ""
+
+#: threadline/models.py:455
+msgid "MIME type of the attachment"
+msgstr ""
+
+#: threadline/models.py:458
+msgid "File Size"
+msgstr ""
+
+#: threadline/models.py:459
+msgid "Size of the attachment in bytes"
+msgstr ""
+
+#: threadline/models.py:463
+msgid "File Path"
+msgstr ""
+
+#: threadline/models.py:464
+msgid "Path to the stored attachment file"
+msgstr ""
+
+#: threadline/models.py:468
+msgid "Is Image"
+msgstr ""
+
+#: threadline/models.py:469
+msgid "Whether this attachment is an image"
+msgstr ""
+
+#: threadline/models.py:475
+msgid "OCR Content"
+msgstr ""
+
+#: threadline/models.py:476
+msgid "Text content recognized from image attachment"
+msgstr ""
+
+#: threadline/models.py:485
+msgid "Content organized by large language model based on OCR result"
+msgstr ""
+
+#: threadline/models.py:493
+#, fuzzy
+#| msgid "Email Fetching"
+msgid "Email Attachment"
+msgstr "Email Fetching"
+
+#: threadline/models.py:494
+#, fuzzy
+#| msgid "Email Fetching"
+msgid "Email Attachments"
+msgstr "Email Fetching"
+
+#: threadline/models.py:527
+#, fuzzy
+#| msgid "Issue created"
+msgid "Issue Title"
+msgstr "Issue created"
+
+#: threadline/models.py:528
+#, fuzzy
+#| msgid "Failed to create JIRA issue"
+msgid "Title of the issue"
+msgstr "Failed to create JIRA issue"
+
+#: threadline/models.py:532
+#, fuzzy
+#| msgid "Issue created"
+msgid "Issue Description"
+msgstr "Issue created"
+
+#: threadline/models.py:533
+msgid "Description of the issue"
+msgstr ""
+
+#: threadline/models.py:539
+msgid "Issue Priority"
+msgstr ""
+
+#: threadline/models.py:540
+msgid "Priority level of the issue"
+msgstr ""
+
+#: threadline/models.py:545
+msgid "Engine Type"
+msgstr ""
+
+#: threadline/models.py:546
+msgid "External system engine type"
+msgstr ""
+
+#: threadline/models.py:553
+msgid "External ID"
+msgstr ""
+
+#: threadline/models.py:554
+msgid "ID in external system"
+msgstr ""
+
+#: threadline/models.py:561
+msgid "Issue URL"
+msgstr ""
+
+#: threadline/models.py:562
+msgid "Direct link to the issue in external system"
+msgstr ""
+
+#: threadline/models.py:568
+msgid "Engine-specific configuration and data"
+msgstr ""
+
+#: threadline/models.py:576
+#, fuzzy
+#| msgid "JIRA Issue"
+msgid "Issue"
+msgstr "JIRA Issue"
+
+#: threadline/models.py:606
+msgid "User who owns this TODO"
+msgstr ""
+
+#: threadline/models.py:615
+msgid "Related email message (null for manually created TODOs)"
+msgstr ""
+
+#: threadline/models.py:619
+msgid "TODO item content"
+msgstr ""
+
+#: threadline/models.py:623
+msgid "Is Completed"
+msgstr ""
+
+#: threadline/models.py:624
+msgid "Whether this TODO is completed"
+msgstr ""
+
+#: threadline/models.py:630
+msgid "Timestamp when TODO was marked as completed"
+msgstr ""
+
+#: threadline/models.py:636
+msgid "Priority"
+msgstr ""
+
+#: threadline/models.py:637
+msgid "Priority level: high, medium, or low"
+msgstr ""
+
+#: threadline/models.py:643
+msgid "Owner"
+msgstr ""
+
+#: threadline/models.py:644
+msgid "Person responsible for this TODO"
+msgstr ""
+
+#: threadline/models.py:649
+msgid "Deadline"
+msgstr ""
+
+#: threadline/models.py:650
+msgid "Deadline for this TODO"
+msgstr ""
+
+#: threadline/models.py:656
+msgid "Location"
+msgstr ""
+
+#: threadline/models.py:657
+msgid "Location related to this TODO"
+msgstr ""
+
+#: threadline/models.py:663
+msgid "Additional metadata for this TODO"
+msgstr ""
+
+#: threadline/models.py:667 threadline/models.py:734
+msgid "Created At"
+msgstr ""
+
+#: threadline/models.py:671 threadline/models.py:738
+msgid "Updated At"
+msgstr ""
+
+#: threadline/models.py:675
+msgid "Email TODO"
+msgstr ""
+
+#: threadline/models.py:676
+msgid "Email TODOs"
+msgstr ""
+
+#: threadline/models.py:720
+msgid "User who owns this email alias"
+msgstr ""
+
+#: threadline/models.py:724
+msgid "Alias"
+msgstr ""
+
+#: threadline/models.py:725
+msgid "Email alias name (domain is auto-assigned)"
+msgstr ""
+
+#: threadline/models.py:730
+msgid "Whether this alias is active"
+msgstr ""
+
+#: threadline/models.py:742
+msgid "Email Alias"
+msgstr ""
+
+#: threadline/models.py:743
+msgid "Email Aliases"
+msgstr ""
+
+#: threadline/serializers.py:52
+msgid "Setting key cannot be empty"
+msgstr ""
+
+#: threadline/serializers.py:59
+msgid ""
+"Setting key can only contain letters, numbers, underscores, dots, and hyphens"
+msgstr ""
+
+#: threadline/serializers.py:73 threadline/serializers.py:142
+#: threadline/serializers.py:233 threadline/serializers.py:320
+#: threadline/serializers.py:557 threadline/serializers.py:693
+#: threadline/serializers.py:777 threadline/serializers.py:898
+msgid "User with this ID does not exist"
+msgstr ""
+
+#: threadline/serializers.py:81
+msgid "You can only create settings for yourself"
+msgstr ""
+
+#: threadline/serializers.py:94 threadline/serializers.py:153
+msgid "Key can only contain letters, numbers, underscores, and hyphens"
+msgstr ""
+
+#: threadline/serializers.py:113
+msgid "A setting with this key already exists for this user"
+msgstr ""
+
+#: threadline/serializers.py:328
+msgid "You can only create messages for yourself"
+msgstr ""
+
+#: threadline/serializers.py:339
+msgid "Message ID cannot be empty"
+msgstr ""
+
+#: threadline/serializers.py:351
+msgid "A message with this ID already exists for this user"
+msgstr ""
+
+#: threadline/serializers.py:365 threadline/serializers.py:632
+msgid "Invalid status transition from {} to {}"
+msgstr ""
+
+#: threadline/serializers.py:549
+msgid "User ID is required"
+msgstr ""
+
+#: threadline/serializers.py:618 threadline/serializers.py:714
+#: threadline/serializers.py:922
+msgid "Email message with this ID does not exist"
+msgstr ""
+
+#: threadline/serializers.py:701
+msgid "You can only create issues for yourself"
+msgstr ""
+
+#: threadline/serializers.py:721 threadline/serializers.py:929
+msgid "Email message does not belong to the specified user"
+msgstr ""
+
+#: threadline/serializers.py:733
+msgid "Engine must be one of: {}"
+msgstr ""
+
+#: threadline/serializers.py:745
+msgid "Priority must be one of: {}"
+msgstr ""
+
+#: threadline/serializers.py:833
+msgid "Alias can only contain letters, numbers, dots, hyphens, and underscores"
+msgstr ""
+
+#: threadline/serializers.py:840
+msgid "Alias cannot be empty"
+msgstr ""
+
+#: threadline/serializers.py:845
+msgid "Alias cannot be longer than 64 characters"
+msgstr ""
+
+#: threadline/serializers.py:851
+msgid "Alias cannot start or end with a dot"
+msgstr ""
+
+#: threadline/serializers.py:862
+msgid "This alias is reserved and cannot be used"
+msgstr ""
+
+#: threadline/serializers.py:906
+msgid "You can only create TODOs for yourself"
+msgstr ""
+
+#: threadline/serializers.py:940
+msgid "Priority must be one of: high, medium, low"
+msgstr ""
+
+#: threadline/tasks/notifications.py:95
+#, python-brace-format
+msgid "New email received: {subject}"
+msgstr "New email received: {subject}"
+
+#: threadline/tasks/notifications.py:97
+#, fuzzy
+#| msgid "Email Fetching"
+msgid "Email Fetched"
+msgstr "Email Fetching"
+
+#: threadline/tasks/notifications.py:98
+#, python-brace-format
+msgid "From: {sender}"
+msgstr "From: {sender}"
+
+#: threadline/tasks/notifications.py:104
+#, fuzzy, python-brace-format
+#| msgid "OCR processing failed: {subject}"
+msgid "Processing email: {subject}"
+msgstr "OCR processing failed: {subject}"
+
+#: threadline/tasks/notifications.py:106 threadline/tasks/notifications.py:166
+msgid "Processing"
+msgstr "Processing"
+
+#: threadline/tasks/notifications.py:108
+msgid "Email is being processed through the workflow"
+msgstr ""
+
+#: threadline/tasks/notifications.py:120 threadline/tasks/notifications.py:131
+#: threadline/tasks/notifications.py:141
+#, fuzzy, python-brace-format
+#| msgid "JIRA issue created successfully: {subject}"
+msgid "Email processed successfully: {subject}"
+msgstr "JIRA issue created successfully: {subject}"
+
+#: threadline/tasks/notifications.py:122 threadline/tasks/notifications.py:133
+#: threadline/tasks/notifications.py:143
+msgid "Success"
+msgstr ""
+
+#: threadline/tasks/notifications.py:125
+#, fuzzy, python-brace-format
+#| msgid "OCR processing completed: {subject}"
+msgid "All processing completed | Issue: {url}"
+msgstr "OCR processing completed: {subject}"
+
+#: threadline/tasks/notifications.py:135 threadline/tasks/notifications.py:145
+#, fuzzy
+#| msgid "OCR processing completed: {subject}"
+msgid "All processing stages completed successfully"
+msgstr "OCR processing completed: {subject}"
+
+#: threadline/tasks/notifications.py:152
+#, fuzzy, python-brace-format
+#| msgid "OCR processing failed: {subject}"
+msgid "Email processing failed: {subject}"
+msgstr "OCR processing failed: {subject}"
+
+#: threadline/tasks/notifications.py:156
+#, fuzzy
+#| msgid "OCR processing failed: {subject}"
+msgid "Processing failed, can be retried"
+msgstr "OCR processing failed: {subject}"
+
+#: threadline/tasks/notifications.py:164
+#, python-brace-format
+msgid "Status updated: {subject}"
+msgstr "Status updated: {subject}"
+
+#: threadline/tasks/notifications.py:168
+#, python-brace-format
+msgid "Status changed from {old_status} to {new_status}"
+msgstr "Status changed from {old_status} to {new_status}"
+
+#: threadline/tasks/notifications.py:172
+#, fuzzy
+#| msgid "Status updated: {subject}"
+msgid "Status updated"
+msgstr "Status updated: {subject}"
+
+#: threadline/tasks/notifications.py:190
+#, fuzzy, python-brace-format
+#| msgid "[AI] Email Processing: {status}"
+msgid "[AImyChats] Email Processing: {status}"
+msgstr "[AI] Email Processing: {status}"
+
+#: threadline/tasks/notifications.py:191
 msgid "No details available"
 msgstr "No details available"
 
-#: devify/v1/jirabot/tasks/notifications.py:208
-msgid "JIRA Issue"
-msgstr "JIRA Issue"
+#: threadline/utils/issues/jira_utils.py:477
+msgid "Core Topic"
+msgstr "Core Topic"
 
-#: devify/v1/jirabot/tasks/notifications.py:209
-msgid "JIRA URL"
-msgstr "JIRA URL"
+#: threadline/utils/issues/jira_utils.py:482
+msgid "TODO"
+msgstr "TODO"
 
-#: devify/v1/jirabot/tasks/notifications.py:195
-msgid "[AI] Email Processing: {status}"
-msgstr "[AI] Email Processing: {status}"
+#: threadline/utils/issues/jira_utils.py:497
+msgid "Owner"
+msgstr "Owner"
+
+#: threadline/utils/issues/jira_utils.py:499
+msgid "Deadline"
+msgstr "Deadline"
+
+#: threadline/utils/issues/jira_utils.py:501
+msgid "Location"
+msgstr "Location"
+
+#: threadline/utils/issues/jira_utils.py:503
+msgid "Priority"
+msgstr "Priority"
+
+#: threadline/utils/issues/jira_utils.py:510
+msgid "Key Process & Information"
+msgstr "Key Process & Information"
+
+#~ msgid "OCR Processing"
+#~ msgstr "OCR Processing"
+
+#~ msgid "Image text extraction successful"
+#~ msgstr "Image text extraction successful"
+
+#~ msgid "Image text extraction failed"
+#~ msgstr "Image text extraction failed"
+
+#~ msgid "LLM processing completed: {subject}"
+#~ msgstr "LLM processing completed: {subject}"
+
+#~ msgid "Content analysis and summarization completed"
+#~ msgstr "Content analysis and summarization completed"
+
+#~ msgid "LLM processing failed: {subject}"
+#~ msgstr "LLM processing failed: {subject}"
+
+#~ msgid "Content analysis failed"
+#~ msgstr "Content analysis failed"
+
+#~ msgid "JIRA Creation"
+#~ msgstr "JIRA Creation"
+
+#~ msgid "Issue: {key} | URL: {url}"
+#~ msgstr "Issue: {key} | URL: {url}"
+
+#~ msgid "Issue created but details not available"
+#~ msgstr "Issue created but details not available"
+
+#~ msgid "JIRA issue creation failed: {subject}"
+#~ msgstr "JIRA issue creation failed: {subject}"
+
+#~ msgid "Webhook not configured or disabled, skipping notification"
+#~ msgstr "Webhook not configured or disabled, skipping notification"
+
+#~ msgid "No events configured for notification"
+#~ msgstr "No events configured for notification"
+
+#~ msgid "Status '{status}' not in configured events: {events}"
+#~ msgstr "Status '{status}' not in configured events: {events}"
+
+#~ msgid "Webhook failed: {status_code}"
+#~ msgstr "Webhook failed: {status_code}"
+
+#~ msgid "Webhook notification sent successfully for status: {status}"
+#~ msgstr "Webhook notification sent successfully for status: {status}"
+
+#~ msgid "Webhook notification failed: {error}"
+#~ msgstr "Webhook notification failed: {error}"
+
+#~ msgid "Time"
+#~ msgstr "Time"
+
+#~ msgid "Stage"
+#~ msgstr "Stage"
+
+#~ msgid "Unknown"
+#~ msgstr "Unknown"
+
+#~ msgid "JIRA URL"
+#~ msgstr "JIRA URL"

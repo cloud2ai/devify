@@ -49,7 +49,6 @@ class EmailState(TypedDict, total=False):
     sender: str
     recipients: str
     received_at: str
-    raw_content: str
     html_content: str
     text_content: str
 
@@ -59,13 +58,20 @@ class EmailState(TypedDict, total=False):
     # Processing result fields
     summary_title: str | None
     summary_content: str | None
+    # Structured summary data containing details and key_process
+    summary_data: Dict[str, Any] | None
+    # TODO items with processed metadata
+    todos: List[Dict[str, Any]] | None
     llm_content: str | None
     metadata: Dict[str, Any] | None
 
     # Issue creation results (core fields - engine agnostic)
-    issue_id: int | None              # Database Issue.id
-    issue_url: str | None             # External issue URL (all engines)
-    issue_metadata: Dict[str, Any] | None  # Engine-specific data
+    # Database Issue.id
+    issue_id: int | None
+    # External issue URL (all engines)
+    issue_url: str | None
+    # Engine-specific data
+    issue_metadata: Dict[str, Any] | None
 
     # Issue workflow data (engine agnostic)
     should_create_issue: bool | None
@@ -75,8 +81,10 @@ class EmailState(TypedDict, total=False):
     issue_result_data: Dict[str, Any] | None
 
     # User configuration (loaded from Settings)
-    prompt_config: Dict[str, Any] | None  # User's prompt configuration
-    issue_config: Dict[str, Any] | None   # User's issue configuration
+    # User's prompt configuration
+    prompt_config: Dict[str, Any] | None
+    # User's issue configuration
+    issue_config: Dict[str, Any] | None
 
     # Fixed workflow fields
     error_message: str | None
@@ -130,12 +138,13 @@ def create_email_state(
         "sender": "",
         "recipients": "",
         "received_at": "",
-        "raw_content": "",
         "html_content": "",
         "text_content": "",
         "attachments": [],
         "summary_title": None,
         "summary_content": None,
+        "summary_data": None,
+        "todos": None,
         "llm_content": None,
         "metadata": None,
         "issue_id": None,

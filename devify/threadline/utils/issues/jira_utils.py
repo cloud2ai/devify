@@ -8,9 +8,10 @@ JiraIssueHandler class.
 
 import logging
 import re
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List
 
-from django.core.cache import cache
+from django.utils import translation
+from django.utils.translation import gettext as _
 
 from .md_to_jira import to_jira_wiki
 
@@ -307,21 +308,34 @@ def build_description_field(
     summary_content: str,
     llm_content: str,
     attachments: List[Dict[str, Any]],
-    convert_to_jira_wiki: bool
+    convert_to_jira_wiki: bool,
+    summary_data: Dict[str, Any] | None = None,
+    todos: List[Dict[str, Any]] | None = None,
+    language: str = 'en'
 ) -> str:
     """
     Build JIRA description field.
 
     Args:
-        summary_content: Email summary content
+        summary_content: Email summary content (fallback)
         llm_content: LLM processed content
         attachments: List of attachment dicts
         convert_to_jira_wiki: Whether to convert to JIRA Wiki format
+        summary_data: Structured summary data (preferred)
+        todos: List of TODO items (preferred)
+        language: Language for section headings
 
     Returns:
         Cleaned and formatted description text
     """
-    summary_part = build_summary_part(summary_content)
+    # Prefer structured data over summary_content
+    if summary_data or todos:
+        summary_part = render_summary(
+            summary_data, todos, language
+        )
+    else:
+        summary_part = build_summary_part(summary_content)
+
     original_chats_part = build_original_chats_part(
         llm_content,
         attachments
@@ -420,6 +434,88 @@ def embed_images(
         replacer,
         llm_content
     )
+
+
+def render_summary(
+    summary_data: Dict[str, Any] | None,
+    todos: List[Dict[str, Any]] | None,
+    language: str = 'en'
+) -> str:
+    """
+    Render Markdown summary from structured data.
+
+    Converts summary_data and todos to Markdown format for use in
+    JIRA descriptions or other contexts.
+
+    Args:
+        summary_data: Dictionary with 'details' and 'key_process'
+        todos: List of TODO dictionaries
+        language: Language for section headings (default: 'en')
+                   Supports 'en', 'zh', 'es' (maps to Django locales)
+
+    Returns:
+        Markdown formatted string
+    """
+    if not summary_data and not todos:
+        return ''
+
+    # Map language codes to Django locale names
+    language_map = {
+        'en': 'en',
+        'zh': 'zh_Hans',
+        'es': 'es'
+    }
+    django_locale = language_map.get(language, 'en')
+
+    # Activate the appropriate language for translations
+    with translation.override(django_locale):
+        sections = []
+
+        # Section 1: Details (Core Topic)
+        if summary_data and summary_data.get('details'):
+            heading = _("Core Topic")
+            sections.append(f"## {heading}\n\n{summary_data['details']}\n")
+
+        # Section 2: TODO
+        if todos:
+            heading = _("TODO")
+            sections.append(f"## {heading}\n")
+            for todo in todos:
+                content = todo.get('content', '')
+                owner = todo.get('owner')
+                deadline = (
+                    todo.get('deadline') or todo.get('deadline_original')
+                )
+                location = todo.get('location')
+                priority = todo.get('priority')
+
+                todo_line = f"- {content}"
+                if owner or deadline or location or priority:
+                    parts = []
+                    if owner:
+                        parts.append(f"{_('Owner')}: {owner}")
+                    if deadline:
+                        parts.append(f"{_('Deadline')}: {deadline}")
+                    if location:
+                        parts.append(f"{_('Location')}: {location}")
+                    if priority:
+                        parts.append(f"{_('Priority')}: {priority}")
+                    todo_line += f" ({', '.join(parts)})"
+                sections.append(todo_line)
+            sections.append("")
+
+        # Section 3: Key Process
+        if summary_data and summary_data.get('key_process'):
+            heading = _("Key Process & Information")
+            sections.append(f"## {heading}\n")
+            for item in summary_data['key_process']:
+                if isinstance(item, str):
+                    sections.append(f"- {item}")
+                else:
+                    sections.append(f"- {str(item)}")
+            sections.append("")
+
+        return "\n".join(sections)
 
 
 def build_summary_part(summary_content: str) -> str:

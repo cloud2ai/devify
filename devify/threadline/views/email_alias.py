@@ -16,7 +16,7 @@ from drf_spectacular.utils import extend_schema, OpenApiParameter
 from drf_spectacular.types import OpenApiTypes
 
 from threadline.models import EmailAlias
-from threadline.serializers import (
+from ..serializers import (
     EmailAliasSerializer,
     EmailAliasCreateSerializer
 )

@@ -1188,3 +1188,31 @@ msgstr "暂无详细信息"
 
 #~ msgid "JIRA URL"
 #~ msgstr "JIRA链接"
+
+#: threadline/utils/issues/jira_utils.py:477
+msgid "Core Topic"
+msgstr "核心主题"
+
+#: threadline/utils/issues/jira_utils.py:482
+msgid "TODO"
+msgstr "待办事项"
+
+#: threadline/utils/issues/jira_utils.py:497
+msgid "Owner"
+msgstr "负责人"
+
+#: threadline/utils/issues/jira_utils.py:499
+msgid "Deadline"
+msgstr "截止日期"
+
+#: threadline/utils/issues/jira_utils.py:501
+msgid "Location"
+msgstr "地点"
+
+#: threadline/utils/issues/jira_utils.py:503
+msgid "Priority"
+msgstr "优先级"
+
+#: threadline/utils/issues/jira_utils.py:510
+msgid "Key Process & Information"
+msgstr "关键流程与信息"

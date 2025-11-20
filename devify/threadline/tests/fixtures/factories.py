@@ -14,7 +14,8 @@ from threadline.models import (
     EmailTask,
     EmailMessage,
     EmailAttachment,
-    Issue
+    Issue,
+    EmailTodo
 )
 
 
@@ -108,7 +109,6 @@ class EmailMessageFactory(DjangoModelFactory):
     sender = factory.Faker('email')
     recipients = factory.Faker('email')
     received_at = factory.Faker('date_time_this_year')
-    raw_content = factory.Faker('text', max_nb_chars=1000)
     html_content = factory.Faker('text', max_nb_chars=500)
     text_content = factory.Faker('text', max_nb_chars=500)
     status = 'fetched'
@@ -230,3 +230,37 @@ class IssueWithMetadataFactory(IssueFactory):
             'component': 'email-processing'
         }
     })
+
+
+class EmailTodoFactory(DjangoModelFactory):
+    """
+    Factory for creating EmailTodo instances
+    """
+
+    class Meta:
+        model = EmailTodo
+
+    user = factory.SubFactory(UserFactory)
+    email_message = factory.SubFactory(EmailMessageFactory)
+    content = factory.Faker('sentence', nb_words=10)
+    is_completed = False
+    completed_at = None
+    priority = factory.Iterator(['high', 'medium', 'low', None])
+    owner = factory.Faker('name')
+    deadline = factory.Faker('date_time_this_month', tzinfo=None)
+    location = factory.Faker('city')
+    metadata = factory.LazyFunction(lambda: {})
+
+
+class EmailTodoWithEmailFactory(EmailTodoFactory):
+    """
+    Factory for creating EmailTodo with email message
+    """
+    email_message = factory.SubFactory(EmailMessageFactory)
+
+
+class EmailTodoWithoutEmailFactory(EmailTodoFactory):
+    """
+    Factory for creating manually created EmailTodo (no email_message)
+    """
+    email_message = None
