@@ -96,12 +96,14 @@ class SendRegistrationEmailView(APIView):
                 language
             )
             logger.info(
-                f"Email send attempt result: {success} for {email}"
+                f"Email send attempt result: {success} for {email} "
+                f"(language: {language})"
             )
 
             if success:
                 logger.info(
-                    f"Sent registration email to {email}"
+                    f"Sent registration email to {email} "
+                    f"(language: {language})"
                 )
                 return Response(
                     {
@@ -113,6 +115,15 @@ class SendRegistrationEmailView(APIView):
                     status=status.HTTP_200_OK
                 )
             else:
+                logger.error(
+                    f"Registration email send failed for {email} "
+                    f"(language: {language}, token: {token[:10]}...)",
+                    extra={
+                        'email': email,
+                        'language': language,
+                        'token_prefix': token[:10] if token else None,
+                    }
+                )
                 return Response(
                     {
                         'success': False,
@@ -125,8 +136,15 @@ class SendRegistrationEmailView(APIView):
 
         except Exception as e:
             logger.error(
-                f"Error in registration email flow: {e}",
-                exc_info=True
+                f"Error in registration email flow for {email} "
+                f"(language: {language}): {type(e).__name__}: {str(e)}",
+                exc_info=True,
+                extra={
+                    'email': email,
+                    'language': language,
+                    'exception_type': type(e).__name__,
+                    'exception_message': str(e),
+                }
             )
             return Response(
                 {

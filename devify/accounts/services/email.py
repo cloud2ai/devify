@@ -101,8 +101,27 @@ class RegistrationEmailService:
             return True
 
         except Exception as e:
+            exception_type = type(e).__name__
+            exception_msg = str(e)
+            from_email_val = (
+                from_email if 'from_email' in locals() else None
+            )
+            frontend_url = getattr(settings, 'FRONTEND_URL', None)
+
             logger.error(
-                f"Failed to send registration email to {email}: {e}"
+                f"Failed to send registration email to {email} "
+                f"(language: {language}, template: {template}): "
+                f"{exception_type}: {exception_msg}",
+                exc_info=True,
+                extra={
+                    'email': email,
+                    'language': language,
+                    'template': template,
+                    'exception_type': exception_type,
+                    'exception_message': exception_msg,
+                    'from_email': from_email_val,
+                    'frontend_url': frontend_url,
+                }
             )
             return False
 
@@ -195,7 +214,26 @@ class PasswordResetEmailService:
             return True
 
         except Exception as e:
+            exception_type = type(e).__name__
+            exception_msg = str(e)
+            from_email_val = (
+                from_email if 'from_email' in locals() else None
+            )
+            frontend_url = getattr(settings, 'FRONTEND_URL', None)
+
             logger.error(
-                f"Failed to send password reset email to {email}: {e}"
+                f"Failed to send password reset email to {email} "
+                f"(language: {language}, template: {template}): "
+                f"{exception_type}: {exception_msg}",
+                exc_info=True,
+                extra={
+                    'email': email,
+                    'language': language,
+                    'template': template,
+                    'exception_type': exception_type,
+                    'exception_message': exception_msg,
+                    'from_email': from_email_val,
+                    'frontend_url': frontend_url,
+                }
             )
             return False
