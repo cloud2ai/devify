@@ -8,12 +8,11 @@ processing.
 import logging
 import os
 import shutil
+from collections import defaultdict
 from django.conf import settings
 from typing import Dict, List, Optional
 
 from django.contrib.auth.models import User
-from django.db.models import Q
-from django.utils import timezone
 
 from threadline.models import (
     EmailAlias,
@@ -41,7 +40,6 @@ class EmailSaveService:
         self._email_to_user_map = {}
         self._user_cache = {}
         self._mappings_loaded = False
-
 
     def save_email(
         self,
@@ -211,9 +209,12 @@ class EmailSaveService:
         if self._mappings_loaded:
             return
 
-        logger.info("Loading auto_assign user mappings for batch processing...")
+        logger.info(
+            "Loading auto_assign user mappings for batch processing..."
+        )
 
-        # Get all email configs and filter in Python due to JSONField query limitations
+        # Get all email configs and filter in Python due to JSONField
+        # query limitations
         all_email_settings = Settings.objects.filter(
             key='email_config',
             is_active=True
@@ -241,25 +242,68 @@ class EmailSaveService:
             is_active=True
         ).values('alias', 'user_id')
 
-        alias_map = {alias['user_id']: alias['alias'] for alias in aliases}
+        # Group aliases by user_id (supports multiple aliases per user,
+        # but typically one user has one alias)
+        alias_map = defaultdict(list)
+        for alias in aliases:
+            alias_map[alias['user_id']].append(alias['alias'])
+
+        logger.info(
+            f"Found {len(aliases)} active aliases for "
+            f"{len(auto_assign_user_ids)} users"
+        )
 
         for user in users:
             user_id = user['id']
 
-            if user_id in alias_map:
-                alias = alias_map[user_id]
-                email_address = f"{alias}@{default_domain}"
-            else:
-                email_address = f"{user['username']}@{default_domain}"
+            # Cache user data
+            user_aliases = alias_map.get(user_id, [])
+            # Use first alias as primary email, or fallback to username
+            primary_email = (
+                f"{user_aliases[0]}@{default_domain}"
+                if user_aliases
+                else f"{user['username']}@{default_domain}"
+            )
 
             self._user_cache[user_id] = {
                 'id': user_id,
-                'email': email_address,
+                'email': primary_email,
                 'username': user['username']
             }
 
-            self._email_to_user_map[email_address] = user_id
+            # Map all aliases to user (typically just one alias)
+            for alias in user_aliases:
+                email_address = f"{alias}@{default_domain}"
+                # Check for duplicate mapping (should not happen due to
+                # unique constraint, but log warning if it does)
+                if email_address in self._email_to_user_map:
+                    existing_user_id = self._email_to_user_map[email_address]
+                    logger.warning(
+                        f"Duplicate email mapping detected: "
+                        f"{email_address} is already mapped to user "
+                        f"{existing_user_id}, attempting to map to user "
+                        f"{user_id}. This should not happen due to unique "
+                        f"constraint on EmailAlias.alias."
+                    )
+                self._email_to_user_map[email_address] = user_id
+                logger.info(
+                    f"Mapped alias {email_address} to user "
+                    f"{user['username']} (id: {user_id})"
+                )
 
+            # Also map default username@domain email to user
+            default_email = f"{user['username']}@{default_domain}"
+            if default_email not in self._email_to_user_map:
+                self._email_to_user_map[default_email] = user_id
+                logger.debug(
+                    f"Mapped default email {default_email} to user "
+                    f"{user['username']}"
+                )
+
+        logger.info(
+            f"Loaded {len(self._email_to_user_map)} email mappings for "
+            f"{len(users)} users"
+        )
         self._mappings_loaded = True
 
     def find_user_by_recipient(self, email_data: Dict) -> Optional[User]:
