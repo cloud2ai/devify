@@ -230,7 +230,10 @@ data.dev
 cache.dev
 
 *.bak
+# Ignore HTML files except email templates
 *.html
+!devify/accounts/templates/**/*.html
+!devify/threadline/templates/**/*.html
 
 /TODO.md
 
