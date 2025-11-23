@@ -41,15 +41,41 @@ class EmailTodoListSerializer(serializers.ModelSerializer):
         read_only=True,
         allow_null=True
     )
+    email_message_summary_title = serializers.CharField(
+        source='email_message.summary_title',
+        read_only=True,
+        allow_null=True
+    )
+    email_message_metadata = serializers.JSONField(
+        source='email_message.metadata',
+        read_only=True,
+        allow_null=True
+    )
+    # Nested email_message object for easier access
+    email_message = serializers.SerializerMethodField()
 
     class Meta:
         model = EmailTodo
         fields = [
             'id', 'content', 'is_completed', 'completed_at', 'priority',
             'owner', 'deadline', 'location', 'email_message_id',
-            'email_message_subject', 'created_at', 'updated_at'
+            'email_message_subject', 'email_message_summary_title',
+            'email_message_metadata', 'email_message', 'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'created_at', 'updated_at', 'completed_at']
+
+    def get_email_message(self, obj):
+        """
+        Get minimal email message data for grouping
+        """
+        if obj.email_message:
+            return {
+                'id': obj.email_message.id,
+                'subject': obj.email_message.subject,
+                'summary_title': obj.email_message.summary_title,
+                'metadata': obj.email_message.metadata or {}
+            }
+        return None
 
 
 class EmailTodoSerializer(serializers.ModelSerializer):
