@@ -181,9 +181,22 @@ class RegistrationService:
             )
 
         except Exception as e:
+            error_type = type(e).__name__
+            error_message = str(e)
             logger.warning(
-                f"Failed to initialize Free Plan for user "
-                f"{user.username}: {e}"
+                f"Failed to initialize Free Plan - "
+                f"User: {user.username}, "
+                f"User ID: {user.id}, "
+                f"Error: {error_type}: {error_message}",
+                exc_info=True,
+                extra={
+                    'user_id': user.id,
+                    'username': user.username,
+                    'exception_type': error_type,
+                    'exception_message': error_message,
+                    'service': 'RegistrationService',
+                    'method': '_initialize_free_plan',
+                }
             )
             raise
 
@@ -301,9 +314,27 @@ class RegistrationService:
             return user
 
         except Exception as e:
+            error_type = type(e).__name__
+            error_message = str(e)
             logger.error(
-                f"Failed to create user with config: {e}",
-                exc_info=True
+                f"Failed to create user with config - "
+                f"Email: {email}, "
+                f"Username: {username}, "
+                f"Scene: {scene}, "
+                f"Language: {language}, "
+                f"Error: {error_type}: {error_message}",
+                exc_info=True,
+                extra={
+                    'email': email,
+                    'username': username,
+                    'scene': scene,
+                    'language': language,
+                    'timezone': timezone_str,
+                    'exception_type': error_type,
+                    'exception_message': error_message,
+                    'service': 'RegistrationService',
+                    'method': 'create_user_with_config',
+                }
             )
             raise
 

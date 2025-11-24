@@ -108,10 +108,36 @@ class RegistrationEmailService:
             )
             frontend_url = getattr(settings, 'FRONTEND_URL', None)
 
+            # Determine error category for better debugging
+            error_category = 'UNKNOWN'
+            exception_msg_lower = exception_msg.lower()
+            if 'SMTP' in exception_type or 'smtp' in exception_msg_lower:
+                error_category = 'SMTP_ERROR'
+            elif (
+                'connection' in exception_msg_lower or
+                'timeout' in exception_msg_lower
+            ):
+                error_category = 'CONNECTION_ERROR'
+            elif (
+                'authentication' in exception_msg_lower or
+                'auth' in exception_msg_lower
+            ):
+                error_category = 'AUTH_ERROR'
+            elif 'template' in exception_msg_lower:
+                error_category = 'TEMPLATE_ERROR'
+            elif (
+                'email' in exception_msg_lower and
+                'invalid' in exception_msg_lower
+            ):
+                error_category = 'INVALID_EMAIL'
+
             logger.error(
-                f"Failed to send registration email to {email} "
-                f"(language: {language}, template: {template}): "
-                f"{exception_type}: {exception_msg}",
+                f"Failed to send registration email - "
+                f"Email: {email}, "
+                f"Language: {language}, "
+                f"Template: {template}, "
+                f"Error: {exception_type}: {exception_msg}, "
+                f"Category: {error_category}",
                 exc_info=True,
                 extra={
                     'email': email,
@@ -119,8 +145,10 @@ class RegistrationEmailService:
                     'template': template,
                     'exception_type': exception_type,
                     'exception_message': exception_msg,
+                    'error_category': error_category,
                     'from_email': from_email_val,
                     'frontend_url': frontend_url,
+                    'service': 'RegistrationEmailService',
                 }
             )
             return False
@@ -221,10 +249,36 @@ class PasswordResetEmailService:
             )
             frontend_url = getattr(settings, 'FRONTEND_URL', None)
 
+            # Determine error category for better debugging
+            error_category = 'UNKNOWN'
+            exception_msg_lower = exception_msg.lower()
+            if 'SMTP' in exception_type or 'smtp' in exception_msg_lower:
+                error_category = 'SMTP_ERROR'
+            elif (
+                'connection' in exception_msg_lower or
+                'timeout' in exception_msg_lower
+            ):
+                error_category = 'CONNECTION_ERROR'
+            elif (
+                'authentication' in exception_msg_lower or
+                'auth' in exception_msg_lower
+            ):
+                error_category = 'AUTH_ERROR'
+            elif 'template' in exception_msg_lower:
+                error_category = 'TEMPLATE_ERROR'
+            elif (
+                'email' in exception_msg_lower and
+                'invalid' in exception_msg_lower
+            ):
+                error_category = 'INVALID_EMAIL'
+
             logger.error(
-                f"Failed to send password reset email to {email} "
-                f"(language: {language}, template: {template}): "
-                f"{exception_type}: {exception_msg}",
+                f"Failed to send password reset email - "
+                f"Email: {email}, "
+                f"Language: {language}, "
+                f"Template: {template}, "
+                f"Error: {exception_type}: {exception_msg}, "
+                f"Category: {error_category}",
                 exc_info=True,
                 extra={
                     'email': email,
@@ -232,8 +286,10 @@ class PasswordResetEmailService:
                     'template': template,
                     'exception_type': exception_type,
                     'exception_message': exception_msg,
+                    'error_category': error_category,
                     'from_email': from_email_val,
                     'frontend_url': frontend_url,
+                    'service': 'PasswordResetEmailService',
                 }
             )
             return False

@@ -175,7 +175,8 @@ class CompleteGoogleSetupView(APIView):
 
             refresh = RefreshToken.for_user(user)
 
-            # Use UserDetailsSerializer to get complete user info including virtual_email
+            # Use UserDetailsSerializer to get complete user info
+            # including virtual_email
             user_serializer = UserDetailsSerializer(user)
 
             return Response(
@@ -190,14 +191,47 @@ class CompleteGoogleSetupView(APIView):
             )
 
         except Exception as e:
+            error_type = type(e).__name__
+            error_message = str(e)
+            client_ip = request.META.get('REMOTE_ADDR', 'unknown')
             logger.error(
-                f"Failed to complete Google setup: {e}",
-                exc_info=True
+                f"Failed to complete OAuth setup - "
+                f"IP: {client_ip}, "
+                f"User: {user.username}, "
+                f"Email: {user.email}, "
+                f"Error: {error_type}: {error_message}",
+                exc_info=True,
+                extra={
+                    'client_ip': client_ip,
+                    'user_id': user.id,
+                    'username': user.username,
+                    'email': user.email,
+                    'exception_type': error_type,
+                    'exception_message': error_message,
+                    'endpoint': 'oauth_complete_setup',
+                    'error_type': 'oauth_setup_failed',
+                }
             )
+
+            # Determine error code based on exception type
+            if isinstance(e, ValueError):
+                error_code = 'VALIDATION_ERROR'
+            elif 'UNIQUE constraint' in error_message:
+                error_code = 'DUPLICATE_ENTRY'
+            elif (
+                'EmailAlias' in error_type or
+                'email' in error_message.lower()
+            ):
+                error_code = 'EMAIL_ALIAS_ERROR'
+            else:
+                error_code = 'OAUTH_SETUP_FAILED'
+
             return Response(
                 {
                     'success': False,
-                    'error': _('Failed to complete setup')
+                    'error': _('Failed to complete setup'),
+                    'error_detail': f'{error_type}: {error_message}',
+                    'error_code': error_code
                 },
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )

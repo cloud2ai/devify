@@ -113,27 +113,78 @@ class SendPasswordResetEmailView(APIView):
                     status=status.HTTP_200_OK
                 )
             else:
+                logger.error(
+                    f"Password reset email send failed - "
+                    f"Email: {email}",
+                    extra={
+                        'email': email,
+                        'endpoint': 'password_reset_send',
+                        'error_type': 'email_send_failed',
+                    }
+                )
                 return Response(
                     {
                         'success': False,
-                        'error': _(
-                            'Failed to send password reset email'
-                        )
+                        'error': _('Failed to send password reset email'),
+                        'error_detail': (
+                            'Email service returned failure. '
+                            'Check email configuration and SMTP settings.'
+                        ),
+                        'error_code': 'EMAIL_SEND_FAILED'
                     },
                     status=status.HTTP_500_INTERNAL_SERVER_ERROR
                 )
 
-        except Exception as e:
-            logger.error(
-                f"Error in password reset email flow: {e}",
-                exc_info=True
+        except User.DoesNotExist:
+            logger.warning(
+                f"Password reset email failed: User not found - "
+                f"Email: {email}",
+                extra={
+                    'email': email,
+                    'endpoint': 'password_reset_send',
+                    'error_type': 'user_not_found',
+                }
             )
             return Response(
                 {
                     'success': False,
-                    'error': _(
-                        'Failed to process password reset request'
-                    )
+                    'error': _('User with this email does not exist'),
+                    'error_code': 'USER_NOT_FOUND'
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        except Exception as e:
+            error_type = type(e).__name__
+            error_message = str(e)
+            client_ip = request.META.get('REMOTE_ADDR', 'unknown')
+            logger.error(
+                f"Error in password reset email flow - "
+                f"IP: {client_ip}, "
+                f"Email: {email}, "
+                f"Error: {error_type}: {error_message}",
+                exc_info=True,
+                extra={
+                    'client_ip': client_ip,
+                    'email': email,
+                    'exception_type': error_type,
+                    'exception_message': error_message,
+                    'endpoint': 'password_reset_send',
+                    'error_type': 'password_reset_error',
+                }
+            )
+
+            # Determine error code based on exception type
+            if 'email' in error_message.lower() or 'SMTP' in error_message:
+                error_code = 'EMAIL_SEND_ERROR'
+            else:
+                error_code = 'PASSWORD_RESET_ERROR'
+
+            return Response(
+                {
+                    'success': False,
+                    'error': _('Failed to process password reset request'),
+                    'error_detail': f'{error_type}: {error_message}',
+                    'error_code': error_code
                 },
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
@@ -224,10 +275,27 @@ class ConfirmPasswordResetView(APIView):
             OverflowError,
             User.DoesNotExist
         ) as e:
+            error_type = type(e).__name__
+            error_message = str(e)
+            client_ip = request.META.get('REMOTE_ADDR', 'unknown')
+            logger.warning(
+                f"Password reset confirmation failed: Invalid reset link - "
+                f"IP: {client_ip}, "
+                f"Error: {error_type}: {error_message}",
+                extra={
+                    'client_ip': client_ip,
+                    'exception_type': error_type,
+                    'exception_message': error_message,
+                    'endpoint': 'password_reset_confirm',
+                    'error_type': 'invalid_reset_link',
+                }
+            )
             return Response(
                 {
                     'success': False,
-                    'error': _('Invalid reset link')
+                    'error': _('Invalid reset link'),
+                    'error_detail': f'{error_type}: {error_message}',
+                    'error_code': 'INVALID_RESET_LINK'
                 },
                 status=status.HTTP_400_BAD_REQUEST
             )
@@ -296,14 +364,40 @@ class ConfirmPasswordResetView(APIView):
             )
 
         except Exception as e:
+            error_type = type(e).__name__
+            error_message = str(e)
+            client_ip = request.META.get('REMOTE_ADDR', 'unknown')
             logger.error(
-                f"Error resetting password for {user.email}: {e}",
-                exc_info=True
+                f"Error resetting password - "
+                f"IP: {client_ip}, "
+                f"Email: {user.email}, "
+                f"Error: {error_type}: {error_message}",
+                exc_info=True,
+                extra={
+                    'client_ip': client_ip,
+                    'email': user.email,
+                    'user_id': user.id,
+                    'exception_type': error_type,
+                    'exception_message': error_message,
+                    'endpoint': 'password_reset_confirm',
+                    'error_type': 'password_reset_failed',
+                }
             )
+
+            # Determine error code based on exception type
+            if isinstance(e, ValueError):
+                error_code = 'VALIDATION_ERROR'
+            elif 'password' in error_message.lower():
+                error_code = 'PASSWORD_ERROR'
+            else:
+                error_code = 'PASSWORD_RESET_FAILED'
+
             return Response(
                 {
                     'success': False,
-                    'error': _('Failed to reset password')
+                    'error': _('Failed to reset password'),
+                    'error_detail': f'{error_type}: {error_message}',
+                    'error_code': error_code
                 },
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
