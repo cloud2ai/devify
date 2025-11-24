@@ -138,7 +138,6 @@ class RegistrationService:
         # when BILLING_ENABLED=False or billing app not installed.
         from billing.models import (
             Plan,
-            UserCredits,
             Subscription,
             PaymentProvider
         )
@@ -254,24 +253,63 @@ class RegistrationService:
             )
             logger.info(f"Created user: {username}")
 
-            Profile.objects.create(
+            # Profile may have been created by post_save signal
+            # Use get_or_create to avoid IntegrityError
+            profile, profile_created = Profile.objects.get_or_create(
                 user=user,
-                registration_completed=True,
-                language=language,
-                timezone=timezone_str
+                defaults={
+                    'registration_completed': True,
+                    'language': language,
+                    'timezone': timezone_str
+                }
             )
-            logger.info(f"Created profile for user: {username}")
 
-            EmailAlias.objects.create(
-                user=user,
-                alias=username,
-                is_active=True
-            )
-            logger.info(
-                f"Created email alias: "
-                f"{username}@"
-                f"{settings.AUTO_ASSIGN_EMAIL_DOMAIN}"
-            )
+            # Update profile if it already existed (created by signal)
+            if not profile_created:
+                profile.registration_completed = True
+                profile.language = language
+                profile.timezone = timezone_str
+                profile.save()
+                logger.info(
+                    f"Updated profile for user: {username} "
+                    f"(profile was created by signal)"
+                )
+            else:
+                logger.info(f"Created profile for user: {username}")
+
+            # EmailAlias may have been created by post_save signal
+            # Since unique_together = ['alias'], alias is globally unique
+            # Signal creates alias using user.username, which equals
+            # username here
+            try:
+                email_alias = EmailAlias.objects.get(alias=username)
+                # Alias exists, check if it belongs to this user
+                if email_alias.user != user:
+                    # This should not happen in normal flow, but handle it
+                    raise ValueError(
+                        f'Email alias "{username}" already exists '
+                        f'for another user'
+                    )
+                # Alias exists and belongs to this user (created by signal)
+                email_alias.is_active = True
+                email_alias.save()
+                logger.info(
+                    f"Updated email alias for user: {username} "
+                    f"(alias was created by signal)"
+                )
+            except EmailAlias.DoesNotExist:
+                # Alias doesn't exist, create new one
+                # Signal may have failed to create it (e.g., alias conflict)
+                email_alias = EmailAlias.objects.create(
+                    user=user,
+                    alias=username,
+                    is_active=True
+                )
+                logger.info(
+                    f"Created email alias: "
+                    f"{username}@"
+                    f"{settings.AUTO_ASSIGN_EMAIL_DOMAIN}"
+                )
 
             prompt_manager = PromptConfigManager()
             prompt_config = prompt_manager.generate_user_config(

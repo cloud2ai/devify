@@ -110,15 +110,30 @@ class CompleteGoogleSetupView(APIView):
                 profile.timezone = timezone_str
                 profile.save()
 
-                email_alias = EmailAlias.objects.create(
+                # EmailAlias may have been created by post_save signal
+                # Use get_or_create to avoid IntegrityError
+                email_alias, alias_created = EmailAlias.objects.get_or_create(
                     user=user,
                     alias=username,
-                    is_active=True
+                    defaults={
+                        'is_active': True
+                    }
                 )
-                logger.info(
-                    f"Created email alias: "
-                    f"{email_alias.full_email_address()}"
-                )
+
+                # Update alias if it already existed
+                if not alias_created:
+                    email_alias.is_active = True
+                    email_alias.save()
+                    logger.info(
+                        f"Updated email alias: "
+                        f"{email_alias.full_email_address()} "
+                        f"(alias was created by signal)"
+                    )
+                else:
+                    logger.info(
+                        f"Created email alias: "
+                        f"{email_alias.full_email_address()}"
+                    )
 
                 config_manager = PromptConfigManager()
                 prompt_config = config_manager.generate_user_config(

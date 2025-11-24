@@ -19,14 +19,10 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from threadline.models import EmailAlias, Settings
-from threadline.utils.prompt_config_manager import PromptConfigManager
-
 from ..models import Profile
 from ..serializers import (
     AuthTokenResponseSerializer,
     CompleteRegistrationSerializer,
-    SceneSerializer,
     SendRegistrationEmailSerializer,
     SuccessResponseSerializer,
     TokenVerificationResponseSerializer,
@@ -218,6 +214,30 @@ class VerifyRegistrationTokenView(APIView):
                 registration_token=token
             )
 
+            # Check if registration is already completed
+            if profile.registration_completed:
+                logger.warning(
+                    f"Token verification failed: "
+                    f"Registration already completed - "
+                    f"IP: {client_ip}, "
+                    f"Token prefix: {token_prefix}..., "
+                    f"Email: {profile.user.email}",
+                    extra={
+                        'client_ip': client_ip,
+                        'token_prefix': token_prefix,
+                        'email': profile.user.email,
+                        'endpoint': 'register_verify_token',
+                        'error_type': 'registration_already_completed',
+                    }
+                )
+                return Response(
+                    {
+                        'valid': False,
+                        'error': _('Registration has already been completed')
+                    },
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
             is_valid = RegistrationService.is_token_valid(
                 token,
                 profile.registration_token_expires
@@ -357,7 +377,8 @@ class CompleteRegistrationView(APIView):
 
         try:
             profile = Profile.objects.select_related('user').get(
-                registration_token=token
+                registration_token=token,
+                registration_completed=False
             )
         except Profile.DoesNotExist:
             username = safe_request_data.get('virtual_email_username', 'N/A')
@@ -378,6 +399,29 @@ class CompleteRegistrationView(APIView):
                 {
                     'success': False,
                     'error': _('Invalid registration token')
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Check if registration is already completed (double-check)
+        if profile.registration_completed:
+            logger.warning(
+                f"Registration completion failed: Already completed - "
+                f"IP: {client_ip}, "
+                f"Token prefix: {token_prefix}..., "
+                f"Email: {profile.user.email}",
+                extra={
+                    'client_ip': client_ip,
+                    'token_prefix': token_prefix,
+                    'email': profile.user.email,
+                    'endpoint': 'register_complete',
+                    'error_type': 'registration_already_completed',
+                }
+            )
+            return Response(
+                {
+                    'success': False,
+                    'error': _('Registration has already been completed')
                 },
                 status=status.HTTP_400_BAD_REQUEST
             )
@@ -436,8 +480,25 @@ class CompleteRegistrationView(APIView):
         )
 
         try:
-            profile.user.delete()
+            # Store old user and profile references before creating new user
+            old_user = profile.user
+            old_profile = profile
 
+            # Clear registration token to prevent reuse
+            old_profile.registration_token = None
+            old_profile.registration_token_expires = None
+            old_profile.save()
+
+            # Delete old temporary user first to free up the email
+            # This must be done before creating new user
+            # Note: create_user_with_config has @transaction.atomic decorator
+            # so it will handle its own transaction
+            old_profile.delete()
+            old_user.delete()
+
+            # Create new user with complete configuration
+            # This will check if email exists, but we just deleted old user
+            # so the check should pass
             user = RegistrationService.create_user_with_config(
                 email=email,
                 password=password,
