@@ -368,40 +368,12 @@ class RegistrationService:
             )
         )
 
-        try:
-            user = User.objects.get(email=email)
+        # Get or create user
+        user = User.objects.filter(email=email).first()
 
-            try:
-                profile = Profile.objects.get(user=user)
-            except Profile.DoesNotExist:
-                profile = Profile.objects.create(
-                    user=user,
-                    registration_completed=False,
-                    registration_token=token,
-                    registration_token_expires=expires_at,
-                    language=language
-                )
-                logger.info(
-                    f"Created profile for existing user: {user.username}"
-                )
-                return token, profile
-
-            if profile.registration_completed:
-                raise ValueError(
-                    'User already exists and registration is completed'
-                )
-
-            profile.registration_token = token
-            profile.registration_token_expires = expires_at
-            profile.language = language
-            profile.save()
-
-            logger.info(
-                f"Updated registration token for existing user: "
-                f"{user.username}"
-            )
-
-        except User.DoesNotExist:
+        if not user:
+            # Generate unique username if user doesn't exist
+            # Try email prefix first, then add counter if needed
             username = email.split('@')[0]
             base_username = username
             counter = 1
@@ -409,6 +381,7 @@ class RegistrationService:
                 username = f"{base_username}{counter}"
                 counter += 1
 
+            # Create new user
             user = User.objects.create_user(
                 username=username,
                 email=email,
@@ -416,17 +389,43 @@ class RegistrationService:
             )
             user.set_unusable_password()
             user.save()
+            logger.info(f"Created new user: {username} for email: {email}")
 
-            profile = Profile.objects.create(
-                user=user,
-                registration_completed=False,
-                registration_token=token,
-                registration_token_expires=expires_at,
-                language=language
+        # Get or create profile and update token
+        # Profile may have been created by post_save signal
+        profile, profile_created = Profile.objects.get_or_create(
+            user=user,
+            defaults={
+                'registration_completed': False,
+                'registration_token': token,
+                'registration_token_expires': expires_at,
+                'language': language
+            }
+        )
+
+        # If profile already exists, update token and language
+        if not profile_created:
+            profile.registration_token = token
+            profile.registration_token_expires = expires_at
+            profile.language = language
+            profile.save()
+
+        # Check if registration is already completed
+        if profile.registration_completed:
+            raise ValueError(
+                'User already exists and registration is completed'
             )
 
+        # Log appropriate message based on what was created
+        if profile_created:
             logger.info(
-                f"Created temporary user and profile for: {email}"
+                f"Created profile for user: {user.username} "
+                f"(email: {email})"
+            )
+        else:
+            logger.info(
+                f"Updated registration token for user: {user.username} "
+                f"(email: {email})"
             )
 
         return token, profile
