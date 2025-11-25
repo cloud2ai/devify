@@ -1,5 +1,6 @@
 import re
 
+from django.conf import settings
 from django.contrib.auth.models import User
 from django.utils.translation import gettext_lazy as _
 
@@ -10,6 +11,52 @@ from allauth.socialaccount.models import SocialAccount
 
 from accounts.models import Profile
 from threadline.models import EmailAlias
+
+
+def normalize_language_code(value):
+    """
+    Normalize requested language using configured mappings.
+
+    This function:
+    1. Uses settings.LANGUAGES to get supported languages (no hardcoding)
+    2. Uses settings.LANGUAGE_CODE_MAPPING for variant mappings
+    3. Falls back to settings.LANGUAGE_CODE if not found
+    4. Ensures returned code is always in LANGUAGES list
+
+    This approach is fully extensible - adding new languages only requires
+    updating settings.LANGUAGES and optionally LANGUAGE_CODE_MAPPING.
+    """
+    languages = settings.LANGUAGES
+    if not languages:
+        return settings.LANGUAGE_CODE
+
+    configured_codes = {
+        code.lower(): code
+        for code, _ in languages
+    }
+
+    default_language = settings.LANGUAGE_CODE
+    if default_language.lower() not in configured_codes:
+        default_language = languages[0][0]
+
+    if not value:
+        return default_language
+
+    raw_value = value.strip().lower()
+    if not raw_value:
+        return default_language
+
+    normalized_value = raw_value.replace('_', '-')
+    mapping = settings.LANGUAGE_CODE_MAPPING
+    mapped_value = mapping.get(normalized_value)
+    if mapped_value and mapped_value.lower() in configured_codes:
+        return configured_codes[mapped_value.lower()]
+
+    direct_match = configured_codes.get(normalized_value)
+    if direct_match:
+        return direct_match
+
+    return default_language
 
 
 class SuccessResponseSerializer(serializers.Serializer):
@@ -221,7 +268,10 @@ class CompleteRegistrationSerializer(serializers.Serializer):
 
     language = serializers.CharField(
         required=True,
-        help_text=_("Specifies the language used by AI when generating summaries, titles, and metadata.")
+        help_text=_(
+            "Specifies the language used by AI when generating "
+            "summaries, titles, and metadata."
+        )
     )
 
     timezone = serializers.CharField(
@@ -276,19 +326,9 @@ class CompleteRegistrationSerializer(serializers.Serializer):
 
     def validate_language(self, value):
         """
-        Validate language is supported.
+        Normalize language to supported value.
         """
-        supported_languages = ['en-US', 'zh-CN', 'es']
-
-        if value not in supported_languages:
-            raise serializers.ValidationError(
-                _(
-                    "Unsupported language. "
-                    "Supported: %(languages)s"
-                ) % {'languages': ', '.join(supported_languages)}
-            )
-
-        return value
+        return normalize_language_code(value)
 
 
 class CompleteGoogleSetupSerializer(serializers.Serializer):
@@ -314,7 +354,10 @@ class CompleteGoogleSetupSerializer(serializers.Serializer):
 
     language = serializers.CharField(
         required=True,
-        help_text=_("Specifies the language used by AI when generating summaries, titles, and metadata.")
+        help_text=_(
+            "Specifies the language used by AI when generating "
+            "summaries, titles, and metadata."
+        )
     )
 
     timezone = serializers.CharField(
@@ -352,26 +395,17 @@ class CompleteGoogleSetupSerializer(serializers.Serializer):
 
     def validate_language(self, value):
         """
-        Validate language is supported.
+        Normalize language to supported value.
         """
-        supported_languages = ['en-US', 'zh-CN', 'es']
-
-        if value not in supported_languages:
-            raise serializers.ValidationError(
-                _(
-                    "Unsupported language. "
-                    "Supported: %(languages)s"
-                ) % {'languages': ', '.join(supported_languages)}
-            )
-
-        return value
+        return normalize_language_code(value)
 
 
 class UserDetailsSerializer(serializers.ModelSerializer):
     """
     Custom user details serializer for dj-rest-auth.
     Includes virtual email address from EmailAlias and profile information.
-    Also includes authentication method information and password change capability.
+    Also includes authentication method information and password change
+    capability.
     """
     display_name = serializers.SerializerMethodField(
         read_only=True,
