@@ -1,0 +1,165 @@
+{% load i18n %}
+{% get_current_language as LANGUAGE_CODE %}
+<!DOCTYPE html>
+<html lang="{{ LANGUAGE_CODE|default:'en' }}">
+    <head>
+        <meta charset="utf-8" />
+        <meta
+            name="viewport"
+            content="width=device-width, initial-scale=1"
+        />
+        <title>{% trans "Account Connected" %}</title>
+        <link
+            rel="preconnect"
+            href="https://fonts.googleapis.com"
+        />
+        <link
+            rel="preconnect"
+            href="https://fonts.gstatic.com"
+            crossorigin
+        />
+        <link
+            href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap"
+            rel="stylesheet"
+        />
+        <style>
+            :root {
+                --color-primary: #2563eb;
+                --color-primary-dark: #1d4ed8;
+                --color-gray-50: #f9fafb;
+                --color-gray-200: #e5e7eb;
+                --color-gray-500: #6b7280;
+                --color-gray-800: #1f2937;
+                --shadow-soft: 0 16px 40px rgba(15, 23, 42, 0.16);
+                --radius-xl: 24px;
+            }
+
+            * {
+                box-sizing: border-box;
+            }
+
+            body {
+                margin: 0;
+                min-height: 100vh;
+                font-family: 'Inter', 'Noto Sans SC', sans-serif;
+                background: radial-gradient(
+                        circle at top,
+                        rgba(37, 99, 235, 0.08),
+                        transparent
+                    ),
+                    var(--color-gray-50);
+                color: var(--color-gray-800);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                padding: 32px;
+            }
+
+            .card {
+                width: min(520px, 100%);
+                background: #ffffff;
+                border-radius: var(--radius-xl);
+                padding: 40px;
+                box-shadow: var(--shadow-soft);
+                border: 1px solid rgba(15, 23, 42, 0.04);
+            }
+
+            .logo {
+                width: 48px;
+                height: 48px;
+                border-radius: 12px;
+                background: linear-gradient(
+                    135deg,
+                    var(--color-primary),
+                    var(--color-primary-dark)
+                );
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-size: 18px;
+                font-weight: 700;
+                color: #ffffff;
+            }
+
+            h1 {
+                font-size: 28px;
+                margin: 24px 0 12px;
+                color: var(--color-gray-800);
+            }
+
+            p {
+                margin: 0 0 16px;
+                color: var(--color-gray-500);
+                line-height: 1.6;
+            }
+
+            .actions {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 12px;
+                margin-top: 24px;
+            }
+
+            .btn {
+                flex: 1;
+                min-width: 140px;
+                text-align: center;
+                border-radius: 12px;
+                padding: 14px 18px;
+                font-weight: 600;
+                text-decoration: none;
+                transition: transform 0.2s ease, box-shadow 0.2s ease;
+            }
+
+            .btn-primary {
+                background: linear-gradient(
+                    135deg,
+                    var(--color-primary),
+                    var(--color-primary-dark)
+                );
+                color: #ffffff;
+                box-shadow: 0 8px 20px rgba(37, 99, 235, 0.35);
+            }
+
+            .btn:hover {
+                transform: translateY(-1px);
+            }
+
+            @media (max-width: 640px) {
+                body {
+                    padding: 24px;
+                }
+
+                .card {
+                    padding: 28px;
+                }
+
+                .actions {
+                    flex-direction: column;
+                }
+            }
+        </style>
+        <script>
+            setTimeout(function () {
+                window.location.href = "{{ frontend_url|default:'/' }}/auth/oauth/callback";
+            }, 2000);
+        </script>
+    </head>
+    <body>
+        <main class="card">
+            <div class="logo">AI</div>
+            <h1>{% trans "Account Connected" %}</h1>
+            <p>
+                {% trans "Your account has been successfully connected. Redirecting..." %}
+            </p>
+            <div class="actions">
+                <a
+                    class="btn btn-primary"
+                    href="{{ frontend_url|default:'/' }}/auth/oauth/callback"
+                >
+                    {% trans "Continue" %}
+                </a>
+            </div>
+        </main>
+    </body>
+</html>

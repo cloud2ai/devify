@@ -220,18 +220,21 @@ class CustomSocialAccountAdapter(DefaultSocialAccountAdapter):
         """
         Called after OAuth authentication but before login processing.
         Create Profile for existing users if needed.
+
+        This is necessary because signals only trigger on user creation
+        (created=True), not when existing users log in via OAuth.
         """
         user = sociallogin.user
 
+        # Only process existing users (user.pk exists)
         if user.pk:
             # Check if profile exists, create if not
-            if not hasattr(user, 'profile'):
-                Profile.objects.create(
+            # Use get_or_create to avoid race conditions
+            Profile.objects.get_or_create(
                     user=user,
-                    registration_completed=False
-                )
-                logger.info(
-                    f"Created profile for existing user: {user.email}"
+                defaults={
+                    'registration_completed': False
+                }
                 )
 
     def save_user(self, request, sociallogin, form=None):

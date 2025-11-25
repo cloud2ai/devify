@@ -48,7 +48,16 @@ def create_user_resources(sender, instance, created, **kwargs):
 
 def create_email_alias(user):
     """
-    Create EmailAlias for user if it doesn't exist
+    Create EmailAlias for user if it doesn't exist.
+
+    Only creates EmailAlias for users who have completed registration.
+    This prevents temporary users (created during registration token
+    generation) from reserving email aliases that users might want
+    to use later.
+
+    Note: Temporary users have registration_completed=False and will
+    be deleted when user completes registration. We don't want to
+    create EmailAlias for them as it would block the desired username.
     """
     if EmailAlias is None:
         logger.warning(
@@ -57,6 +66,26 @@ def create_email_alias(user):
         return None
 
     try:
+        # Check if user has completed registration
+        # Only create EmailAlias for users who have completed registration
+        # This prevents temporary users from reserving aliases
+        try:
+            profile = user.profile
+            if not profile.registration_completed:
+                logger.debug(
+                    f"Skipping EmailAlias creation for user {user.username} "
+                    f"(registration not completed yet)"
+                )
+                return None
+        except Profile.DoesNotExist:
+            # Profile doesn't exist yet, skip EmailAlias creation
+            # Profile will be created by create_profile signal
+            logger.debug(
+                f"Skipping EmailAlias creation for user {user.username} "
+                f"(profile not created yet)"
+            )
+            return None
+
         existing_alias = EmailAlias.objects.filter(
             user=user,
             is_active=True

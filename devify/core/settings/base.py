@@ -189,6 +189,10 @@ MIDDLEWARE = [
     # such as handling user sessions and account state.
     "allauth.account.middleware.AccountMiddleware",
 
+    # Custom middleware to map browser language codes to Django language codes
+    # Must be placed before LocaleMiddleware
+    'core.middleware.LanguageCodeMappingMiddleware',
+
     # 'django.middleware.locale.LocaleMiddleware' is Django's localization middleware.
     # It sets the language environment based on the user's language preferences.
     # The middleware checks headers (e.g., Accept-Language) or session settings.
@@ -205,7 +209,7 @@ TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
         'DIRS': [
-            os.path.join(BASE_DIR, 'accounts', 'templates'),
+            os.path.join(BASE_DIR.parent, 'accounts', 'templates'),
         ],
         'APP_DIRS': True,
         'OPTIONS': {
@@ -214,6 +218,7 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
+                'accounts.context_processors.frontend_settings',
             ],
         },
     },
@@ -268,7 +273,71 @@ LANGUAGE_CODE = 'en'
 LANGUAGES = (
     ('zh-hans', '简体中文'),
     ('en', 'English'),
+    ('es', 'Español'),  # Spanish (has translation files in locale/es/)
 )
+
+# Language code mapping from browser Accept-Language to Django language
+# codes. This allows browsers sending various language code formats to be
+# mapped to Django's standardized language codes. The mapping is used by
+# LanguageCodeMappingMiddleware.
+#
+# Common browser language codes -> Django language codes:
+# - Chinese variants: zh-CN, zh -> zh-hans
+# - English variants: en-US, en-GB, en-AU, etc. -> en (handled by Django)
+# - Spanish variants: es-ES, es-MX, es-AR, etc. -> es
+# - Other languages: mapped to default 'en' if not supported
+LANGUAGE_CODE_MAPPING = {
+    # Chinese variants
+    'zh-cn': 'zh-hans',
+    'zh': 'zh-hans',
+    'zh-tw': 'zh-hans',  # Traditional Chinese -> Simplified (fallback)
+    'zh-hk': 'zh-hans',  # Hong Kong Chinese -> Simplified (fallback)
+    'zh-sg': 'zh-hans',  # Singapore Chinese -> Simplified
+    'zh-mo': 'zh-hans',  # Macau Chinese -> Simplified (fallback)
+
+    # Spanish variants
+    'es-es': 'es',  # Spain Spanish
+    'es-mx': 'es',  # Mexico Spanish
+    'es-ar': 'es',  # Argentina Spanish
+    'es-co': 'es',  # Colombia Spanish
+    'es-cl': 'es',  # Chile Spanish
+    'es-pe': 'es',  # Peru Spanish
+    'es-ve': 'es',  # Venezuela Spanish
+
+    # English variants (Django's LocaleMiddleware handles these
+    # automatically via language prefix matching, but included here
+    # for completeness and explicit control)
+    'en-us': 'en',  # US English
+    'en-gb': 'en',  # UK English
+    'en-au': 'en',  # Australia English
+    'en-ca': 'en',  # Canada English
+    'en-nz': 'en',  # New Zealand English
+    'en-ie': 'en',  # Ireland English
+    'en-za': 'en',  # South Africa English
+
+    # Other common languages (mapped to default 'en' as fallback)
+    # These can be uncommented and mapped to specific languages when
+    # translations are added to the project
+    # 'fr-fr': 'fr',  # French (France)
+    # 'fr-ca': 'fr',  # French (Canada)
+    # 'de-de': 'de',  # German (Germany)
+    # 'de-at': 'de',  # German (Austria)
+    # 'de-ch': 'de',  # German (Switzerland)
+    # 'ja-jp': 'ja',  # Japanese
+    # 'ko-kr': 'ko',  # Korean
+    # 'pt-br': 'pt',  # Portuguese (Brazil)
+    # 'pt-pt': 'pt',  # Portuguese (Portugal)
+    # 'ru-ru': 'ru',  # Russian
+    # 'it-it': 'it',  # Italian
+    # 'ar-sa': 'ar',  # Arabic (Saudi Arabia)
+    # 'ar-eg': 'ar',  # Arabic (Egypt)
+    # 'nl-nl': 'nl',  # Dutch
+    # 'pl-pl': 'pl',  # Polish
+    # 'tr-tr': 'tr',  # Turkish
+    # 'vi-vn': 'vi',  # Vietnamese
+    # 'th-th': 'th',  # Thai
+    # 'id-id': 'id',  # Indonesian
+}
 
 # TIME_ZONE: Sets the default time zone, which controls how dates and times
 # are displayed and stored. For example, setting it to 'UTC' will make Django

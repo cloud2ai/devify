@@ -170,12 +170,12 @@ msgstr ""
 
 #: accounts/services/email.py:71 accounts/services/email.py:72
 msgid "Complete Your AImyChats Registration"
-msgstr ""
+msgstr "Completa tu registro en AImyChats"
 
 #: accounts/services/email.py:77
 #, python-format
 msgid "Please complete your registration by visiting: %(url)s"
-msgstr ""
+msgstr "Completa tu registro visitando: %(url)s"
 
 #: accounts/services/email.py:165 accounts/services/email.py:166
 msgid "Reset Your AImyChats Password"

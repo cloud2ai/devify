@@ -10,10 +10,22 @@ import logging
 from django.conf import settings
 from django.core.mail import EmailMultiAlternatives
 from django.template.loader import render_to_string
+from django.utils import translation
 from django.utils.translation import gettext_lazy as _
 
 
 logger = logging.getLogger(__name__)
+
+
+def get_translation_language_code(language):
+    """
+    Normalize the provided language to a Django translation code.
+    """
+    if not language:
+        return settings.LANGUAGE_CODE
+    normalized = language.lower().replace('_', '-')
+    mapping = getattr(settings, 'LANGUAGE_CODE_MAPPING', {})
+    return mapping.get(normalized, normalized)
 
 
 class RegistrationEmailService:
@@ -67,16 +79,12 @@ class RegistrationEmailService:
                 'token': token,
             })
 
-            subject_map = {
-                'zh-CN': _('Complete Your AImyChats Registration'),
-                'en-US': _('Complete Your AImyChats Registration'),
-            }
-            subject = str(subject_map.get(language, subject_map['en-US']))
-
-            text_content = str(_(
-                'Please complete your registration by visiting: '
-                '%(url)s'
-            ) % {'url': registration_url})
+            translation_code = get_translation_language_code(language)
+            with translation.override(translation_code):
+                subject = str(_('Complete Your AImyChats Registration'))
+                text_content = str(_(
+                    'Please complete your registration by visiting: %(url)s'
+                ) % {'url': registration_url})
 
             from_email = (
                 settings.EMAIL_HOST_USER
@@ -208,16 +216,12 @@ class PasswordResetEmailService:
                 'token': token,
             })
 
-            subject_map = {
-                'zh-CN': _('Reset Your AImyChats Password'),
-                'en-US': _('Reset Your AImyChats Password'),
-            }
-            subject = str(subject_map.get(language, subject_map['en-US']))
-
-            text_content = str(_(
-                'Please reset your password by visiting: '
-                '%(url)s'
-            ) % {'url': reset_url})
+            translation_code = get_translation_language_code(language)
+            with translation.override(translation_code):
+                subject = str(_('Reset Your AImyChats Password'))
+                text_content = str(_(
+                    'Please reset your password by visiting: %(url)s'
+                ) % {'url': reset_url})
 
             from_email = (
                 settings.EMAIL_HOST_USER

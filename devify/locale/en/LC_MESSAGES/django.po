@@ -1179,21 +1179,6 @@ msgstr "Core Topic"
 msgid "TODO"
 msgstr "TODO"
 
-#: threadline/utils/issues/jira_utils.py:497
-msgid "Owner"
-msgstr "Owner"
-
-#: threadline/utils/issues/jira_utils.py:499
-msgid "Deadline"
-msgstr "Deadline"
-
-#: threadline/utils/issues/jira_utils.py:501
-msgid "Location"
-msgstr "Location"
-
-#: threadline/utils/issues/jira_utils.py:503
-msgid "Priority"
-msgstr "Priority"
 
 #: threadline/utils/issues/jira_utils.py:510
 msgid "Key Process & Information"

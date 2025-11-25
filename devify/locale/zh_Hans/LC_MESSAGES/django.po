@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-11-06 14:25+0000\n"
+"POT-Creation-Date: 2025-11-25 13:59+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -80,7 +80,7 @@ msgstr ""
 msgid "This username is already taken"
 msgstr ""
 
-#: accounts/serializers.py:193 accounts/views/registration.py:157
+#: accounts/serializers.py:193 accounts/views/registration.py:200
 msgid "Registration verification token"
 msgstr ""
 
@@ -108,15 +108,15 @@ msgstr ""
 msgid "User's timezone (e.g., 'UTC', 'Asia/Shanghai')"
 msgstr ""
 
-#: accounts/serializers.py:242 accounts/views/password.py:251
+#: accounts/serializers.py:242 accounts/views/password.py:319
 msgid "Password must be at least 8 characters long"
 msgstr "密码至少需要 8 个字符"
 
-#: accounts/serializers.py:247 accounts/views/password.py:261
+#: accounts/serializers.py:247 accounts/views/password.py:329
 msgid "Password cannot exceed 32 characters"
 msgstr "密码不能超过 32 个字符"
 
-#: accounts/serializers.py:255 accounts/views/password.py:274
+#: accounts/serializers.py:255 accounts/views/password.py:342
 msgid "Password must contain both letters and numbers"
 msgstr "密码必须同时包含字母和数字"
 
@@ -178,24 +178,79 @@ msgstr "未找到用户档案"
 
 #: accounts/services/email.py:71 accounts/services/email.py:72
 msgid "Complete Your AImyChats Registration"
-msgstr ""
+msgstr "完成您的 AImyChats 注册"
 
 #: accounts/services/email.py:77
-#, fuzzy, python-format
-#| msgid "Please reset your password by visiting: %(url)s"
+#, python-format
 msgid "Please complete your registration by visiting: %(url)s"
-msgstr "请访问以下链接重置您的密码：%(url)s"
+msgstr "请访问以下链接完成注册：%(url)s"
 
-#: accounts/services/email.py:165 accounts/services/email.py:166
+#: accounts/services/email.py:212 accounts/services/email.py:213
 #, fuzzy
 #| msgid "Reset Your AimyChats Password"
 msgid "Reset Your AImyChats Password"
 msgstr "重置您的 AimyChats 密码"
 
-#: accounts/services/email.py:171
+#: accounts/services/email.py:218
 #, python-format
 msgid "Please reset your password by visiting: %(url)s"
 msgstr "请访问以下链接重置您的密码：%(url)s"
+
+#: accounts/templates/account/messages/existing_account.html:11
+#: accounts/templates/account/messages/existing_account.html:151
+msgid "Account Connected"
+msgstr ""
+
+#: accounts/templates/account/messages/existing_account.html:153
+msgid "Your account has been successfully connected. Redirecting..."
+msgstr ""
+
+#: accounts/templates/account/messages/existing_account.html:160
+#: accounts/templates/account/messages/logged_in.html:160
+msgid "Continue"
+msgstr ""
+
+#: accounts/templates/account/messages/logged_in.html:11
+#: accounts/templates/account/messages/logged_in.html:151
+msgid "Logged In"
+msgstr ""
+
+#: accounts/templates/account/messages/logged_in.html:153
+msgid "You have been successfully logged in. Redirecting..."
+msgstr ""
+
+#: accounts/templates/socialaccount/authentication_error.html:11
+#: accounts/templates/socialaccount/authentication_error.html:74
+msgid "Login Failed"
+msgstr "登录失败"
+
+#: accounts/templates/socialaccount/authentication_error.html:81
+msgid ""
+"We encountered an issue while connecting to your third-party account. This "
+"may be caused by network issues or account permissions."
+msgstr "连接您的第三方账户时遇到问题。这可能是由网络问题或账户权限引起的。"
+
+#: accounts/templates/socialaccount/authentication_error.html:88
+msgid "You can try the following:"
+msgstr "您可以尝试以下方法："
+
+#: accounts/templates/socialaccount/authentication_error.html:95
+msgid ""
+"Make sure your browser has third-party cookies enabled and allows popups."
+msgstr "确保您的浏览器已启用第三方 Cookie 并允许弹出窗口。"
+
+#: accounts/templates/socialaccount/authentication_error.html:101
+msgid ""
+"Refresh the page and try signing in with your third-party account again."
+msgstr "刷新页面，然后再次尝试使用您的第三方账户登录。"
+
+#: accounts/templates/socialaccount/authentication_error.html:107
+msgid "If you changed networks or VPN, please authorize again and retry."
+msgstr "如果您更换了网络或 VPN，请重新授权并重试。"
+
+#: accounts/templates/socialaccount/authentication_error.html:119
+msgid "Return to Login"
+msgstr "返回登录"
 
 #: accounts/views/oauth.py:52
 msgid "Complete OAuth user setup"
@@ -207,13 +262,13 @@ msgstr ""
 msgid "User has already completed registration"
 msgstr "请先完成注册"
 
-#: accounts/views/oauth.py:177
+#: accounts/views/oauth.py:200
 #, fuzzy
 #| msgid "Password reset email sent successfully"
 msgid "Setup completed successfully"
 msgstr "密码重置邮件已成功发送"
 
-#: accounts/views/oauth.py:193
+#: accounts/views/oauth.py:247
 #, fuzzy
 #| msgid "Failed to create JIRA issue"
 msgid "Failed to complete setup"
@@ -229,115 +284,127 @@ msgstr "发送密码重置邮件失败"
 msgid "Password reset email sent successfully"
 msgstr "密码重置邮件已成功发送"
 
-#: accounts/views/password.py:120
+#: accounts/views/password.py:128
 msgid "Failed to send password reset email"
 msgstr "发送密码重置邮件失败"
 
-#: accounts/views/password.py:135
+#: accounts/views/password.py:151
+#, fuzzy
+#| msgid "No user found with this email address"
+msgid "User with this email does not exist"
+msgstr "未找到使用此邮箱的用户"
+
+#: accounts/views/password.py:185
 msgid "Failed to process password reset request"
 msgstr "处理密码重置请求失败"
 
-#: accounts/views/password.py:154
+#: accounts/views/password.py:205
 msgid "Confirm password reset"
 msgstr ""
 
-#: accounts/views/password.py:204
+#: accounts/views/password.py:255
 msgid "All fields are required"
 msgstr "所有字段都是必填的"
 
-#: accounts/views/password.py:213
+#: accounts/views/password.py:264
 msgid "Passwords do not match"
 msgstr "两次输入的密码不一致"
 
-#: accounts/views/password.py:230
+#: accounts/views/password.py:296
 msgid "Invalid reset link"
 msgstr "无效的重置链接"
 
-#: accounts/views/password.py:240
+#: accounts/views/password.py:308
 msgid "Invalid or expired reset link"
 msgstr "无效或已过期的重置链接"
 
-#: accounts/views/password.py:292
+#: accounts/views/password.py:360
 msgid "Password has been reset successfully"
 msgstr "密码已成功重置"
 
-#: accounts/views/password.py:306
+#: accounts/views/password.py:398
 msgid "Failed to reset password"
 msgstr "重置密码失败"
 
-#: accounts/views/registration.py:55
+#: accounts/views/registration.py:51
 msgid "Send registration email"
 msgstr ""
 
-#: accounts/views/registration.py:110
+#: accounts/views/registration.py:123
 #, fuzzy
 #| msgid "Password reset email sent successfully"
 msgid "Registration email sent successfully"
 msgstr "密码重置邮件已成功发送"
 
-#: accounts/views/registration.py:120
+#: accounts/views/registration.py:144
 #, fuzzy
 #| msgid "Failed to send password reset email"
 msgid "Failed to send registration email"
 msgstr "发送密码重置邮件失败"
 
-#: accounts/views/registration.py:134
+#: accounts/views/registration.py:175
 #, fuzzy
 #| msgid "Failed to process password reset request"
 msgid "Failed to process registration request"
 msgstr "处理密码重置请求失败"
 
-#: accounts/views/registration.py:151
+#: accounts/views/registration.py:194
 msgid "Verify registration token"
 msgstr ""
 
-#: accounts/views/registration.py:188
+#: accounts/views/registration.py:236 accounts/views/registration.py:424
+#, fuzzy
+#| msgid "Please complete registration first"
+msgid "Registration has already been completed"
+msgstr "请先完成注册"
+
+#: accounts/views/registration.py:287
 msgid "Token has expired"
 msgstr ""
 
-#: accounts/views/registration.py:197
+#: accounts/views/registration.py:307
 #, fuzzy
 #| msgid "Invalid reset link"
 msgid "Invalid token"
 msgstr "无效的重置链接"
 
-#: accounts/views/registration.py:214
+#: accounts/views/registration.py:324
 #, fuzzy
 #| msgid "Please complete registration first"
 msgid "Complete registration"
 msgstr "请先完成注册"
 
-#: accounts/views/registration.py:243
+#: accounts/views/registration.py:401
 #, fuzzy
 #| msgid "Invalid reset link"
 msgid "Invalid registration token"
 msgstr "无效的重置链接"
 
-#: accounts/views/registration.py:255
+#: accounts/views/registration.py:451
 msgid "Registration token has expired"
 msgstr ""
 
-#: accounts/views/registration.py:307
+#: accounts/views/registration.py:574
 #, fuzzy
 #| msgid "Please complete registration first"
 msgid "Failed to complete registration"
 msgstr "请先完成注册"
 
-#: accounts/views/registration.py:324
+#: accounts/views/registration.py:593
 msgid "Check username availability"
 msgstr ""
 
-#: accounts/views/registration.py:330
+#: accounts/views/registration.py:599
 msgid "Username to check"
 msgstr ""
 
-#: accounts/views/registration.py:348
+#: accounts/views/registration.py:617
 #, fuzzy
 #| msgid "No details available"
 msgid "Username is available"
 msgstr "暂无详细信息"
 
-#: accounts/views/registration.py:355
+#: accounts/views/registration.py:624
 #, fuzzy
 #| msgid "Invalid reset link"
 msgid "Invalid username"
@@ -430,7 +497,7 @@ msgstr ""
 msgid "Related Objects"
 msgstr ""
 
-#: threadline/admin.py:313 threadline/models.py:276
+#: threadline/admin.py:313 threadline/models.py:272
 msgid "Summary Title"
 msgstr ""
 
@@ -442,7 +509,7 @@ msgstr "主题"
 msgid "Attachments"
 msgstr ""
 
-#: threadline/admin.py:333 threadline/models.py:570
+#: threadline/admin.py:333 threadline/models.py:577
 #, fuzzy
 #| msgid "JIRA Issue"
 msgid "Issues"
@@ -496,12 +563,12 @@ msgstr ""
 msgid "File Storage"
 msgstr ""
 
-#: threadline/admin.py:557
+#: threadline/admin.py:557 threadline/models.py:618
 msgid "Content"
 msgstr ""
 
-#: threadline/admin.py:575 threadline/admin.py:639 threadline/models.py:331
-#: threadline/models.py:432 threadline/models.py:514
+#: threadline/admin.py:575 threadline/admin.py:639 threadline/models.py:338
+#: threadline/models.py:439 threadline/models.py:521 threadline/models.py:613
 msgid "Email Message"
 msgstr ""
 
@@ -519,7 +586,8 @@ msgstr ""
 msgid "External System"
 msgstr ""
 
-#: threadline/admin.py:622 threadline/models.py:292 threadline/models.py:560
+#: threadline/admin.py:622 threadline/models.py:288 threadline/models.py:567
+#: threadline/models.py:662
 msgid "Metadata"
 msgstr ""
 
@@ -547,8 +615,8 @@ msgstr ""
 msgid "Welcome to Threadline Administration"
 msgstr ""
 
-#: threadline/models.py:26 threadline/models.py:235 threadline/models.py:426
-#: threadline/models.py:507 threadline/models.py:599
+#: threadline/models.py:26 threadline/models.py:235 threadline/models.py:433
+#: threadline/models.py:514 threadline/models.py:604 threadline/models.py:718
 msgid "User"
 msgstr ""
 
@@ -576,7 +644,7 @@ msgstr ""
 msgid "Description of this setting"
 msgstr ""
 
-#: threadline/models.py:46 threadline/models.py:610
+#: threadline/models.py:46 threadline/models.py:729
 msgid "Active"
 msgstr ""
 
@@ -656,11 +724,11 @@ msgstr ""
 msgid "Started At"
 msgstr ""
 
-#: threadline/models.py:190
+#: threadline/models.py:190 threadline/models.py:629
 msgid "Completed At"
 msgstr ""
 
-#: threadline/models.py:194 threadline/models.py:317
+#: threadline/models.py:194 threadline/models.py:324
 msgid "Error Message"
 msgstr ""
 
@@ -680,11 +748,11 @@ msgstr ""
 msgid "Tasks"
 msgstr ""
 
-#: threadline/models.py:229 threadline/models.py:420
+#: threadline/models.py:229 threadline/models.py:427
 msgid "UUID"
 msgstr ""
 
-#: threadline/models.py:230 threadline/models.py:421
+#: threadline/models.py:230 threadline/models.py:428
 msgid "Unique identifier for external references"
 msgstr ""
 
@@ -716,322 +784,406 @@ msgstr ""
 msgid "Received At"
 msgstr ""
 
-#: threadline/models.py:260
-msgid "Raw Content"
-msgstr ""
-
 #: threadline/models.py:261
-msgid "Original email content"
-msgstr ""
-
-#: threadline/models.py:265
 msgid "HTML Content"
 msgstr ""
 
-#: threadline/models.py:269
+#: threadline/models.py:265
 msgid "Text Content"
 msgstr ""
 
-#: threadline/models.py:280
+#: threadline/models.py:276
 msgid "Summary Content"
 msgstr ""
 
-#: threadline/models.py:285
+#: threadline/models.py:281
 msgid "Summary Priority"
 msgstr ""
 
-#: threadline/models.py:294
+#: threadline/models.py:290
 msgid "Structured metadata for intelligent search and filtering"
 msgstr ""
 
-#: threadline/models.py:302 threadline/models.py:476
+#: threadline/models.py:298
+msgid "Summary Data"
+msgstr ""
+
+#: threadline/models.py:300
+msgid ""
+"Structured summary data containing details and key_process. TODO items are "
+"stored separately in EmailTodo model."
+msgstr ""
+
+#: threadline/models.py:309 threadline/models.py:483
 #, fuzzy
 #| msgid "LLM Processing"
 msgid "LLM Processed Content"
 msgstr "LLM处理"
 
-#: threadline/models.py:303
+#: threadline/models.py:310
 msgid "Content organized by large language model"
 msgstr ""
 
-#: threadline/models.py:313
+#: threadline/models.py:320
 #, fuzzy
 #| msgid "Processing"
 msgid "Processing Status"
 msgstr "处理中"
 
-#: threadline/models.py:321
+#: threadline/models.py:328
 msgid "Fetch Retry Count"
 msgstr ""
 
-#: threadline/models.py:323
+#: threadline/models.py:330
 msgid ""
 "Number of times workflow trigger has been retried for emails stuck in "
 "FETCHED status"
 msgstr ""
 
-#: threadline/models.py:332
+#: threadline/models.py:339
 msgid "Email Messages"
 msgstr ""
 
-#: threadline/models.py:437
+#: threadline/models.py:444
 msgid "Filename"
 msgstr ""
 
-#: threadline/models.py:438
+#: threadline/models.py:445
 msgid "Original filename of the attachment"
 msgstr ""
 
-#: threadline/models.py:442
+#: threadline/models.py:449
 msgid "Safe Filename"
 msgstr ""
 
-#: threadline/models.py:443
+#: threadline/models.py:450
 msgid "Sanitized filename for safe storage"
 msgstr ""
 
-#: threadline/models.py:447
+#: threadline/models.py:454
 msgid "Content Type"
 msgstr ""
 
-#: threadline/models.py:448
+#: threadline/models.py:455
 msgid "MIME type of the attachment"
 msgstr ""
 
-#: threadline/models.py:451
+#: threadline/models.py:458
 msgid "File Size"
 msgstr ""
 
-#: threadline/models.py:452
+#: threadline/models.py:459
 msgid "Size of the attachment in bytes"
 msgstr ""
 
-#: threadline/models.py:456
+#: threadline/models.py:463
 msgid "File Path"
 msgstr ""
 
-#: threadline/models.py:457
+#: threadline/models.py:464
 msgid "Path to the stored attachment file"
 msgstr ""
 
-#: threadline/models.py:461
+#: threadline/models.py:468
 msgid "Is Image"
 msgstr ""
 
-#: threadline/models.py:462
+#: threadline/models.py:469
 msgid "Whether this attachment is an image"
 msgstr ""
 
-#: threadline/models.py:468
+#: threadline/models.py:475
 msgid "OCR Content"
 msgstr ""
 
-#: threadline/models.py:469
+#: threadline/models.py:476
 msgid "Text content recognized from image attachment"
 msgstr ""
 
-#: threadline/models.py:478
+#: threadline/models.py:485
 msgid "Content organized by large language model based on OCR result"
 msgstr ""
 
-#: threadline/models.py:486
+#: threadline/models.py:493
 #, fuzzy
 #| msgid "Email Fetching"
 msgid "Email Attachment"
 msgstr "邮件获取"
 
-#: threadline/models.py:487
+#: threadline/models.py:494
 #, fuzzy
 #| msgid "Email Fetching"
 msgid "Email Attachments"
 msgstr "邮件获取"
 
-#: threadline/models.py:520
+#: threadline/models.py:527
 #, fuzzy
 #| msgid "Issue created"
 msgid "Issue Title"
 msgstr "问题已创建"
 
-#: threadline/models.py:521
+#: threadline/models.py:528
 #, fuzzy
 #| msgid "Failed to create JIRA issue"
 msgid "Title of the issue"
 msgstr "创建JIRA问题失败"
 
-#: threadline/models.py:525
+#: threadline/models.py:532
 #, fuzzy
 #| msgid "Issue created"
 msgid "Issue Description"
 msgstr "问题已创建"
 
-#: threadline/models.py:526
+#: threadline/models.py:533
 msgid "Description of the issue"
 msgstr ""
 
-#: threadline/models.py:532
+#: threadline/models.py:539
 msgid "Issue Priority"
 msgstr ""
 
-#: threadline/models.py:533
+#: threadline/models.py:540
 msgid "Priority level of the issue"
 msgstr ""
 
-#: threadline/models.py:538
+#: threadline/models.py:545
 msgid "Engine Type"
 msgstr ""
 
-#: threadline/models.py:539
+#: threadline/models.py:546
 msgid "External system engine type"
 msgstr ""
 
-#: threadline/models.py:546
+#: threadline/models.py:553
 msgid "External ID"
 msgstr ""
 
-#: threadline/models.py:547
+#: threadline/models.py:554
 msgid "ID in external system"
 msgstr ""
 
-#: threadline/models.py:554
+#: threadline/models.py:561
 msgid "Issue URL"
 msgstr ""
 
-#: threadline/models.py:555
+#: threadline/models.py:562
 msgid "Direct link to the issue in external system"
 msgstr ""
 
-#: threadline/models.py:561
+#: threadline/models.py:568
 msgid "Engine-specific configuration and data"
 msgstr ""
 
-#: threadline/models.py:569
+#: threadline/models.py:576
 #, fuzzy
 #| msgid "JIRA Issue"
 msgid "Issue"
 msgstr "JIRA问题"
 
-#: threadline/models.py:601
+#: threadline/models.py:606
+#, fuzzy
+#| msgid "No user found with this email address"
+msgid "User who owns this TODO"
+msgstr "未找到使用此邮箱的用户"
+
+#: threadline/models.py:615
+msgid "Related email message (null for manually created TODOs)"
+msgstr ""
+
+#: threadline/models.py:619
+msgid "TODO item content"
+msgstr ""
+
+#: threadline/models.py:623
+msgid "Is Completed"
+msgstr ""
+
+#: threadline/models.py:624
+msgid "Whether this TODO is completed"
+msgstr ""
+
+#: threadline/models.py:630
+msgid "Timestamp when TODO was marked as completed"
+msgstr ""
+
+#: threadline/models.py:636
+msgid "Priority"
+msgstr "优先级"
+
+#: threadline/models.py:637
+msgid "Priority level: high, medium, or low"
+msgstr ""
+
+#: threadline/models.py:643
+msgid "Owner"
+msgstr "负责人"
+
+#: threadline/models.py:644
+msgid "Person responsible for this TODO"
+msgstr ""
+
+#: threadline/models.py:649
+msgid "Deadline"
+msgstr "截止日期"
+
+#: threadline/models.py:650
+msgid "Deadline for this TODO"
+msgstr ""
+
+#: threadline/models.py:656
+msgid "Location"
+msgstr "地点"
+
+#: threadline/models.py:657
+msgid "Location related to this TODO"
+msgstr ""
+
+#: threadline/models.py:663
+msgid "Additional metadata for this TODO"
+msgstr ""
+
+#: threadline/models.py:667 threadline/models.py:734
+msgid "Created At"
+msgstr ""
+
+#: threadline/models.py:671 threadline/models.py:738
+msgid "Updated At"
+msgstr ""
+
+#: threadline/models.py:675
+msgid "Email TODO"
+msgstr ""
+
+#: threadline/models.py:676
+msgid "Email TODOs"
+msgstr ""
+
+#: threadline/models.py:720
 #, fuzzy
 #| msgid "No user found with this email address"
 msgid "User who owns this email alias"
 msgstr "未找到使用此邮箱的用户"
 
-#: threadline/models.py:605
+#: threadline/models.py:724
 msgid "Alias"
 msgstr ""
 
-#: threadline/models.py:606
+#: threadline/models.py:725
 msgid "Email alias name (domain is auto-assigned)"
 msgstr ""
 
-#: threadline/models.py:611
+#: threadline/models.py:730
 msgid "Whether this alias is active"
 msgstr ""
 
-#: threadline/models.py:615
-msgid "Created At"
-msgstr ""
-
-#: threadline/models.py:619
-msgid "Updated At"
-msgstr ""
-
-#: threadline/models.py:623
+#: threadline/models.py:742
 msgid "Email Alias"
 msgstr ""
 
-#: threadline/models.py:624
+#: threadline/models.py:743
 msgid "Email Aliases"
 msgstr ""
 
-#: threadline/serializers.py:51
-msgid "Setting key cannot be empty"
-msgstr ""
-
-#: threadline/serializers.py:58
-msgid ""
-"Setting key can only contain letters, numbers, underscores, dots, and hyphens"
-msgstr ""
-
-#: threadline/serializers.py:72 threadline/serializers.py:141
-#: threadline/serializers.py:232 threadline/serializers.py:303
-#: threadline/serializers.py:541 threadline/serializers.py:677
-#: threadline/serializers.py:761
-msgid "User with this ID does not exist"
-msgstr ""
-
-#: threadline/serializers.py:80
-msgid "You can only create settings for yourself"
-msgstr ""
-
-#: threadline/serializers.py:93 threadline/serializers.py:152
-msgid "Key can only contain letters, numbers, underscores, and hyphens"
-msgstr ""
-
-#: threadline/serializers.py:112
-msgid "A setting with this key already exists for this user"
-msgstr ""
-
-#: threadline/serializers.py:311
-msgid "You can only create messages for yourself"
-msgstr ""
-
-#: threadline/serializers.py:322
-msgid "Message ID cannot be empty"
-msgstr ""
-
-#: threadline/serializers.py:334
-msgid "A message with this ID already exists for this user"
-msgstr ""
-
-#: threadline/serializers.py:348 threadline/serializers.py:616
-msgid "Invalid status transition from {} to {}"
-msgstr ""
-
-#: threadline/serializers.py:533
-msgid "User ID is required"
-msgstr ""
-
-#: threadline/serializers.py:602 threadline/serializers.py:698
-msgid "Email message with this ID does not exist"
-msgstr ""
-
-#: threadline/serializers.py:685
-msgid "You can only create issues for yourself"
-msgstr ""
-
-#: threadline/serializers.py:705
-msgid "Email message does not belong to the specified user"
-msgstr ""
-
-#: threadline/serializers.py:717
-msgid "Engine must be one of: {}"
-msgstr ""
-
-#: threadline/serializers.py:729
-msgid "Priority must be one of: {}"
-msgstr ""
-
-#: threadline/serializers.py:817
+#: threadline/serializers/email_alias.py:53
 msgid "Alias can only contain letters, numbers, dots, hyphens, and underscores"
 msgstr ""
 
-#: threadline/serializers.py:824
+#: threadline/serializers/email_alias.py:60
 msgid "Alias cannot be empty"
 msgstr ""
 
-#: threadline/serializers.py:829
+#: threadline/serializers/email_alias.py:65
 #, fuzzy
 #| msgid "Password cannot exceed 32 characters"
 msgid "Alias cannot be longer than 64 characters"
 msgstr "密码不能超过 32 个字符"
 
-#: threadline/serializers.py:835
+#: threadline/serializers/email_alias.py:71
 msgid "Alias cannot start or end with a dot"
 msgstr ""
 
-#: threadline/serializers.py:846
+#: threadline/serializers/email_alias.py:82
 msgid "This alias is reserved and cannot be used"
+msgstr ""
+
+#: threadline/serializers/email_attachment.py:87
+#: threadline/serializers/email_todo.py:149 threadline/serializers/issue.py:77
+msgid "Email message with this ID does not exist"
+msgstr ""
+
+#: threadline/serializers/email_attachment.py:103
+#: threadline/serializers/email_message.py:132
+msgid "Invalid status transition from {} to {}"
+msgstr ""
+
+#: threadline/serializers/email_message.py:83
+#: threadline/serializers/email_message.py:316
+#: threadline/serializers/email_task.py:63
+#: threadline/serializers/email_todo.py:124 threadline/serializers/issue.py:55
+#: threadline/serializers/issue.py:146 threadline/serializers/settings.py:59
+#: threadline/serializers/settings.py:116
+msgid "User with this ID does not exist"
+msgstr ""
+
+#: threadline/serializers/email_message.py:91
+msgid "You can only create messages for yourself"
+msgstr ""
+
+#: threadline/serializers/email_message.py:102
+msgid "Message ID cannot be empty"
+msgstr ""
+
+#: threadline/serializers/email_message.py:116
+msgid "A message with this ID already exists for this user"
+msgstr ""
+
+#: threadline/serializers/email_message.py:308
+msgid "User ID is required"
+msgstr ""
+
+#: threadline/serializers/email_todo.py:132
+msgid "You can only create TODOs for yourself"
+msgstr ""
+
+#: threadline/serializers/email_todo.py:156 threadline/serializers/issue.py:84
+msgid "Email message does not belong to the specified user"
+msgstr ""
+
+#: threadline/serializers/email_todo.py:167
+msgid "Priority must be one of: high, medium, low"
+msgstr ""
+
+#: threadline/serializers/issue.py:63
+msgid "You can only create issues for yourself"
+msgstr ""
+
+#: threadline/serializers/issue.py:99
+msgid "Engine must be one of: {}"
+msgstr ""
+
+#: threadline/serializers/issue.py:114
+msgid "Priority must be one of: {}"
+msgstr ""
+
+#: threadline/serializers/settings.py:39
+msgid "Setting key cannot be empty"
+msgstr ""
+
+#: threadline/serializers/settings.py:45
+msgid ""
+"Setting key can only contain letters, numbers, underscores, dots, and hyphens"
+msgstr ""
+
+#: threadline/serializers/settings.py:67
+msgid "You can only create settings for yourself"
+msgstr ""
+
+#: threadline/serializers/settings.py:87
+msgid "A setting with this key already exists for this user"
+msgstr ""
+
+#: threadline/serializers/settings.py:127
+msgid "Key can only contain letters, numbers, underscores, and hyphens"
 msgstr ""
 
 #: threadline/tasks/notifications.py:95
@@ -1126,6 +1278,18 @@ msgstr "[AI] 邮件处理: {status}"
 msgid "No details available"
 msgstr "暂无详细信息"
 
+#: threadline/utils/issues/jira_utils.py:476
+msgid "Core Topic"
+msgstr "核心主题"
+
+#: threadline/utils/issues/jira_utils.py:481
+msgid "TODO"
+msgstr "待办事项"
+
+#: threadline/utils/issues/jira_utils.py:509
+msgid "Key Process & Information"
+msgstr "关键流程与信息"
+
 #~ msgid "OCR Processing"
 #~ msgstr "OCR处理"
 
@@ -1188,31 +1352,3 @@ msgstr "暂无详细信息"
 
 #~ msgid "JIRA URL"
 #~ msgstr "JIRA链接"
-
-#: threadline/utils/issues/jira_utils.py:477
-msgid "Core Topic"
-msgstr "核心主题"
-
-#: threadline/utils/issues/jira_utils.py:482
-msgid "TODO"
-msgstr "待办事项"
-
-#: threadline/utils/issues/jira_utils.py:497
-msgid "Owner"
-msgstr "负责人"
-
-#: threadline/utils/issues/jira_utils.py:499
-msgid "Deadline"
-msgstr "截止日期"
-
-#: threadline/utils/issues/jira_utils.py:501
-msgid "Location"
-msgstr "地点"
-
-#: threadline/utils/issues/jira_utils.py:503
-msgid "Priority"
-msgstr "优先级"
-
-#: threadline/utils/issues/jira_utils.py:510
-msgid "Key Process & Information"
-msgstr "关键流程与信息"

@@ -271,28 +271,72 @@ class OAuthCallbackRedirectView(View):
 
         Generate JWT tokens and redirect to frontend with tokens in URL.
         """
-        user = request.user
+        try:
+            user = request.user
+            client_ip = request.META.get('REMOTE_ADDR', 'unknown')
 
-        if user and user.is_authenticated:
-            refresh = RefreshToken.for_user(user)
-            access_token = str(refresh.access_token)
-            refresh_token = str(refresh)
+            if user and user.is_authenticated:
+                try:
+                    refresh = RefreshToken.for_user(user)
+                    access_token = str(refresh.access_token)
+                    refresh_token = str(refresh)
 
-            redirect_url = (
-                f"{settings.FRONTEND_URL}/auth/oauth/callback"
-                f"?access_token={access_token}"
-                f"&refresh_token={refresh_token}"
+                    redirect_url = (
+                        f"{settings.FRONTEND_URL}/auth/oauth/callback"
+                        f"?access_token={access_token}"
+                        f"&refresh_token={refresh_token}"
+                    )
+
+                    logger.info(
+                        f"OAuth redirect: {user.email} "
+                        f"(username: {user.username}) "
+                        f"→ frontend with JWT tokens (IP: {client_ip})"
+                    )
+
+                    return redirect(redirect_url)
+                except Exception as e:
+                    error_type = type(e).__name__
+                    error_message = str(e)
+                    logger.error(
+                        f"Failed to generate JWT tokens for OAuth user - "
+                        f"IP: {client_ip}, "
+                        f"User: {user.email}, "
+                        f"Error: {error_type}: {error_message}",
+                        exc_info=True
+                    )
+                    # Redirect to frontend error page with error info
+                    error_url = (
+                        f"{settings.FRONTEND_URL}/auth/oauth/error"
+                        f"?error=token_generation_failed"
+                        f"&message={error_message}"
+                    )
+                    return redirect(error_url)
+
+            logger.warning(
+                f"OAuth callback: user not authenticated "
+                f"(IP: {client_ip}), redirecting to error page"
             )
-
-            logger.info(
-                f"OAuth redirect: {user.email} → "
-                f"frontend with JWT tokens"
+            # Redirect to frontend error page
+            error_url = (
+                f"{settings.FRONTEND_URL}/auth/oauth/error"
+                f"?error=authentication_failed"
             )
+            return redirect(error_url)
 
-            return redirect(redirect_url)
-
-        logger.warning(
-            "OAuth callback: user not authenticated, "
-            "redirecting without tokens"
-        )
-        return redirect(f"{settings.FRONTEND_URL}/auth/oauth/callback")
+        except Exception as e:
+            error_type = type(e).__name__
+            error_message = str(e)
+            client_ip = request.META.get('REMOTE_ADDR', 'unknown')
+            logger.error(
+                f"Unexpected error in OAuth callback redirect - "
+                f"IP: {client_ip}, "
+                f"Error: {error_type}: {error_message}",
+                exc_info=True
+            )
+            # Redirect to frontend error page
+            error_url = (
+                f"{settings.FRONTEND_URL}/auth/oauth/error"
+                f"?error=unexpected_error"
+                f"&message={error_message}"
+            )
+            return redirect(error_url)
