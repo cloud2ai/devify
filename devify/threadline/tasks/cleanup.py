@@ -19,7 +19,7 @@ from typing import Dict
 from django.conf import settings
 from django.utils import timezone
 
-from threadline.models import EmailTask
+from threadline.models import EmailTask, ThreadlineShareLink
 from threadline.utils.task_tracer import TaskTracer
 
 logger = logging.getLogger(__name__)
@@ -453,11 +453,111 @@ class EmailTaskCleanupManager:
         except Exception as e:
             logger.error(f"EmailTask cleanup failed: {e}")
             stats['errors'] += 1
-            # Fail task record
             details = {
                 'cleanup_type': 'TASK_CLEANUP',
                 'tasks_cleaned': stats['tasks_cleaned'],
                 'errors': stats['errors']
             }
             self.tracer.fail_task(details, str(e))
+            return stats
+
+
+class ShareLinkCleanupManager:
+    """
+    Cleanup manager for Threadline share links.
+
+    Deactivates share links that are past their expiry time to
+    prevent stale or unsafe public URLs from remaining active.
+    """
+
+    def __init__(self):
+        """Initialize share link cleanup configuration."""
+        config = getattr(settings, 'SHARE_LINK_CLEANUP_CONFIG', {})
+        self.grace_period_minutes = config.get('grace_period_minutes', 0)
+        self.batch_size = config.get('batch_size', 500)
+        self.tracer = TaskTracer('SHARE_LINK_CLEANUP')
+
+    def cleanup_expired_share_links(self) -> Dict:
+        """
+        Deactivate all share links that have passed their expiration time.
+
+        Returns:
+            Dict containing cleanup statistics
+        """
+        stats = {
+            'links_considered': 0,
+            'links_deactivated': 0,
+            'errors': 0
+        }
+
+        now = timezone.now()
+        cutoff = now - timedelta(minutes=self.grace_period_minutes)
+
+        base_filters = {
+            'is_active': True,
+            'expires_at__isnull': False,
+            'expires_at__lt': cutoff
+        }
+
+        expired_queryset = ThreadlineShareLink.objects.filter(
+            **base_filters
+        )
+        stats['links_considered'] = expired_queryset.count()
+
+        task_details = {
+            'cleanup_type': 'SHARE_LINK_CLEANUP',
+            'links_considered': stats['links_considered'],
+            'links_deactivated': 0,
+            'grace_period_minutes': self.grace_period_minutes,
+            'batch_size': self.batch_size
+        }
+        self.tracer.create_task(task_details.copy())
+
+        if stats['links_considered'] == 0:
+            task_details.update({'completed_at': now.isoformat()})
+            self.tracer.complete_task(task_details)
+            logger.info("Share link cleanup: no expired links found.")
+            return stats
+
+        try:
+            while True:
+                batch_queryset = ThreadlineShareLink.objects.filter(
+                    **base_filters
+                ).order_by('expires_at')[:self.batch_size]
+                batch_ids = list(batch_queryset.values_list('id', flat=True))
+
+                if not batch_ids:
+                    break
+
+                deactivated = ThreadlineShareLink.objects.filter(
+                    id__in=batch_ids
+                ).update(is_active=False, updated_at=now)
+
+                stats['links_deactivated'] += deactivated
+
+                task_details.update({
+                    'links_deactivated': stats['links_deactivated']
+                })
+                self.tracer.update_task(task_details.copy())
+
+            task_details.update({
+                'links_deactivated': stats['links_deactivated'],
+                'completed_at': timezone.now().isoformat()
+            })
+            self.tracer.complete_task(task_details)
+
+            logger.info(
+                "Share link cleanup completed. "
+                f"Deactivated {stats['links_deactivated']} expired links."
+            )
+            return stats
+
+        except Exception as exc:
+            stats['errors'] += 1
+            task_details.update({
+                'links_deactivated': stats['links_deactivated'],
+                'error': str(exc)
+            })
+            self.tracer.fail_task(task_details, str(exc))
+            logger.error(f"Share link cleanup failed: {exc}")
             return stats

@@ -200,7 +200,7 @@ class PromptConfigManager:
                 merged[key] = rendered
                 # Log first 100 chars of prompt to show language usage
                 if key in ['summary_prompt', 'metadata_prompt',
-                          'email_content_prompt']:
+                           'email_content_prompt']:
                     preview = rendered[:100].replace('\n', ' ')
                     logger.info(
                         f"Rendered {key} preview (first 100 chars): "
@@ -217,7 +217,7 @@ class PromptConfigManager:
                     rendered = self._render_prompt(value, shared_snippets)
                     merged[key] = rendered
                     if key in ['summary_prompt', 'metadata_prompt',
-                              'email_content_prompt']:
+                               'email_content_prompt']:
                         preview = rendered[:100].replace('\n', ' ')
                         logger.info(
                             f"Scene-specific {key} preview: {preview}..."

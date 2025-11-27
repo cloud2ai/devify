@@ -18,6 +18,26 @@ from .email_attachment import (
     EmailAttachmentMinimalSerializer
 )
 from .email_todo import EmailTodoListSerializer
+from .share_link import ThreadlineShareLinkSerializer
+
+
+def _get_latest_share_link(instance):
+    """
+    Retrieve latest share link, prioritizing prefetched data.
+    """
+    cache = getattr(instance, '_prefetched_objects_cache', None)
+    if cache and 'share_links' in cache:
+        prefetched = cache['share_links']
+        if prefetched:
+            for link in prefetched:
+                if link.is_active:
+                    return link
+            return None
+
+    return (instance.share_links
+            .filter(is_active=True)
+            .order_by('-created_at')
+            .first())
 
 
 class EmailMessageSerializer(serializers.ModelSerializer):
@@ -32,6 +52,7 @@ class EmailMessageSerializer(serializers.ModelSerializer):
     )
     attachments = serializers.SerializerMethodField()
     todos = serializers.SerializerMethodField()
+    share_status = serializers.SerializerMethodField()
 
     class Meta:
         model = EmailMessage
@@ -42,7 +63,8 @@ class EmailMessageSerializer(serializers.ModelSerializer):
             'summary_title', 'summary_content', 'summary_priority',
             'summary_data', 'todos',
             'llm_content', 'metadata', 'status', 'status_display',
-            'error_message', 'attachments', 'created_at', 'updated_at'
+            'error_message', 'attachments', 'share_status',
+            'created_at', 'updated_at'
         ]
         read_only_fields = [
             'id', 'uuid', 'status', 'created_at', 'updated_at'
@@ -232,6 +254,20 @@ class EmailMessageSerializer(serializers.ModelSerializer):
 
         return data
 
+    def get_share_status(self, obj):
+        """
+        Serialize share status for consumers.
+        """
+        share_link = _get_latest_share_link(obj)
+        if not share_link:
+            return None
+
+        serializer = ThreadlineShareLinkSerializer(
+            share_link,
+            context={'request': self.context.get('request')}
+        )
+        return serializer.data
+
 
 class EmailMessageListSerializer(serializers.ModelSerializer):
     """
@@ -242,6 +278,7 @@ class EmailMessageListSerializer(serializers.ModelSerializer):
         source='get_status_display', read_only=True)
     attachments_count = serializers.SerializerMethodField()
     attachments = serializers.SerializerMethodField()
+    share_status = serializers.SerializerMethodField()
 
     class Meta:
         model = EmailMessage
@@ -251,7 +288,7 @@ class EmailMessageListSerializer(serializers.ModelSerializer):
             'summary_title', 'summary_content', 'summary_priority',
             'status', 'status_display',
             'attachments_count', 'attachments',
-            'metadata', 'created_at'
+            'metadata', 'share_status', 'created_at'
         ]
         read_only_fields = [
             'id', 'uuid', 'status', 'created_at'
@@ -279,6 +316,20 @@ class EmailMessageListSerializer(serializers.ModelSerializer):
                 )
 
         return data
+
+    def get_share_status(self, obj):
+        """
+        Provide lightweight share status data.
+        """
+        share_link = _get_latest_share_link(obj)
+        if not share_link:
+            return None
+
+        serializer = ThreadlineShareLinkSerializer(
+            share_link,
+            context={'request': self.context.get('request')}
+        )
+        return serializer.data
 
 
 class EmailMessageCreateSerializer(serializers.ModelSerializer):

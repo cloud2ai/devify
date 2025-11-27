@@ -11,6 +11,7 @@ from typing import Dict, Any
 from threadline.agents.nodes.base_node import BaseLangGraphNode
 from threadline.agents.email_state import EmailState, add_node_error
 from threadline.utils.issues.jira_handler import JiraIssueHandler
+from threadline.utils.issues.jira_utils import build_description_field
 
 logger = logging.getLogger(__name__)
 
@@ -77,12 +78,27 @@ class IssueNode(BaseLangGraphNode):
             return False
 
         force = state.get('force', False)
-        summary_content = state.get('summary_content', '').strip()
         summary_title = state.get('summary_title', '').strip()
+        # Check for summary data - prefer structured data,
+        # fallback to summary_content
+        summary_data = state.get('summary_data')
+        todos = state.get('todos')
+        summary_content = state.get('summary_content', '').strip()
 
-        if not force and (not summary_content or not summary_title):
+        # Need either summary_title and (summary_data/todos OR
+        # summary_content)
+        has_summary_data = (
+            (summary_data and summary_data.get('details')) or todos
+        )
+        has_summary_content = summary_content and summary_content.strip()
+
+        if not force and (
+            not summary_title
+            or (not has_summary_data and not has_summary_content)
+        ):
             logger.error(
-                "Missing summary content or title for issue creation"
+                "Missing summary title or content for issue creation. "
+                "Need either summary_data/todos or summary_content."
             )
             return False
 
@@ -181,6 +197,122 @@ class IssueNode(BaseLangGraphNode):
 
         return updated_state
 
+    def _normalize_language(self, language: str) -> str:
+        """
+        Normalize language code for JIRA formatting.
+
+        Args:
+            language: Language code (e.g., 'zh-CN', 'en-US')
+
+        Returns:
+            Normalized language code (e.g., 'zh', 'en')
+        """
+        if language.startswith('zh'):
+            return 'zh'
+        elif language.startswith('en'):
+            return 'en'
+        return language
+
+    def _extract_language_from_state(
+        self, state: EmailState
+    ) -> str:
+        """
+        Extract and normalize language from prompt_config.
+
+        Args:
+            state: Current email state
+
+        Returns:
+            Normalized language code
+        """
+        prompt_config = state.get('prompt_config', {})
+        language = (
+            prompt_config.get('language', 'en')
+            if isinstance(prompt_config, dict) else 'en'
+        )
+        return self._normalize_language(language)
+
+    def _prepare_issue_data(
+        self,
+        state: EmailState,
+        jira_config: Dict[str, Any]
+    ) -> tuple[Dict[str, Any], Dict[str, Any], str]:
+        """
+        Prepare issue_data and email_data for JIRA creation.
+
+        Args:
+            state: Current email state
+            jira_config: JIRA configuration
+
+        Returns:
+            Tuple of (issue_data, email_data, language)
+        """
+        title = state.get('summary_title', 'Email Issue')
+        summary_content = state.get('summary_content', 'No content')
+        summary_data = state.get('summary_data')
+        todos = state.get('todos')
+        priority = jira_config.get('default_priority', 'Medium')
+        language = self._extract_language_from_state(state)
+
+        issue_data = {
+            'title': title,
+            'description': summary_content,  # Will be replaced by handler
+            'priority': priority,
+        }
+
+        email_data = {
+            'id': state.get('id'),
+            'summary_title': title,
+            'summary_content': summary_content,
+            'summary_data': summary_data,
+            'todos': todos,
+            'llm_content': state.get('llm_content', ''),
+            'subject': state.get('subject', ''),
+            'metadata': state.get('metadata', {}),
+            'language': language,
+        }
+
+        return issue_data, email_data, language
+
+    def _build_issue_description(
+        self,
+        state: EmailState,
+        jira_config: Dict[str, Any],
+        language: str
+    ) -> str:
+        """
+        Build description for issue result data.
+
+        JIRA handler already processed and sent description to JIRA.
+        We build it here for the result data structure.
+
+        Args:
+            state: Current email state
+            jira_config: JIRA configuration
+            language: Language code for formatting
+
+        Returns:
+            Formatted description string
+        """
+        summary_content = state.get('summary_content', 'No content')
+        summary_data = state.get('summary_data')
+        todos = state.get('todos')
+        llm_content = state.get('llm_content', '')
+        attachments = state.get('attachments', [])
+        convert_to_jira_wiki = jira_config.get(
+            'convert_to_jira_wiki', False
+        )
+
+        return build_description_field(
+            summary_content=summary_content,
+            llm_content=llm_content,
+            attachments=attachments,
+            convert_to_jira_wiki=convert_to_jira_wiki,
+            summary_data=summary_data,
+            todos=todos,
+            language=language
+        )
+
     def _create_jira_issue(
         self,
         state: EmailState,
@@ -193,9 +325,9 @@ class IssueNode(BaseLangGraphNode):
         Database record creation is handled by WorkflowFinalizeNode.
 
         TODO: JiraIssueHandler currently requires Issue and EmailMessage
-        objects. This needs to be refactored to accept pure data dictionaries
-        instead. For now, we call methods that expect these objects to exist
-        in State or be constructed from State data.
+        objects. This needs to be refactored to accept pure data
+        dictionaries instead. For now, we call methods that expect these
+        objects to exist in State or be constructed from State data.
 
         The ideal interface should be:
         - jira_handler.create_issue_from_data(issue_data, attachments, force)
@@ -225,66 +357,35 @@ class IssueNode(BaseLangGraphNode):
                 )
                 return None
 
-            title = state.get('summary_title', 'Email Issue')
-            # Prefer structured data, fallback to summary_content
-            summary_content = state.get('summary_content', 'No content')
-            summary_data = state.get('summary_data')
-            todos = state.get('todos')
-            priority = jira_config.get('default_priority', 'Medium')
-            email_id = state.get('id')
-            user_id = state.get('user_id')
-            attachments = state.get('attachments', [])
-
-            # Get language from prompt_config for section headings
-            prompt_config = state.get('prompt_config', {})
-            language = (
-                prompt_config.get('language', 'en')
-                if isinstance(prompt_config, dict) else 'en'
+            # Prepare data for JIRA creation
+            issue_data, email_data, language = self._prepare_issue_data(
+                state, jira_config
             )
-            # Normalize language code (zh-CN -> zh, en-US -> en)
-            if language.startswith('zh'):
-                language = 'zh'
-            elif language.startswith('en'):
-                language = 'en'
 
             jira_handler = JiraIssueHandler(issue_config)
             force = state.get('force', False)
+            attachments = state.get('attachments', [])
+            email_id = state.get('id')
+            user_id = state.get('user_id')
 
+            title = issue_data['title']
             logger.info(
                 f"Creating JIRA issue with title: {title[:50]}..."
             )
 
-            issue_data = {
-                'title': title,
-                'description': summary_content,  # Will be replaced by handler
-                'priority': priority,
-            }
-
-            email_data = {
-                'id': email_id,
-                'summary_title': title,
-                'summary_content': summary_content,
-                'summary_data': summary_data,
-                'todos': todos,
-                'llm_content': state.get('llm_content', ''),
-                'subject': state.get('subject', ''),
-                'metadata': state.get('metadata', {}),
-                'language': language,
-            }
-
+            # Create JIRA issue
             issue_key = jira_handler.create_issue(
                 issue_data=issue_data,
                 email_data=email_data,
                 attachments=attachments,
                 force=force
             )
-            email_id = state.get('id')
-            user_id = state.get('user_id')
             logger.info(
                 f"[{self.node_name}] Created JIRA issue {issue_key} for "
                 f"email {email_id}, user {user_id}"
             )
 
+            # Upload attachments
             upload_result = jira_handler.upload_attachments(
                 issue_key=issue_key,
                 attachments=attachments
@@ -294,10 +395,15 @@ class IssueNode(BaseLangGraphNode):
                 f"to JIRA {issue_key} for email {email_id}"
             )
 
+            # Build result data
             issue_url = f"{jira_config['url']}/browse/{issue_key}"
             project_key = (
                 issue_key.split('-')[0]
                 if '-' in issue_key else None
+            )
+
+            description = self._build_issue_description(
+                state, jira_config, language
             )
 
             return {
@@ -306,7 +412,7 @@ class IssueNode(BaseLangGraphNode):
                 'project': project_key,
                 'title': title,
                 'description': description,
-                'priority': priority,
+                'priority': issue_data['priority'],
                 'engine': 'jira',
                 'upload_result': upload_result
             }

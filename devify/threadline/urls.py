@@ -23,6 +23,10 @@ from .views import (
     EmailTodoDetailAPIView,
     EmailTodoStatsAPIView,
     EmailTodoBatchAPIView,
+    ThreadlineShareLinkAPIView,
+    ThreadlineShareLinkDetailAPIView,
+    PublicShareLinkAPIView,
+    PublicShareLinkVerifyAPIView,
 )
 from .views.email_alias import (
     EmailAliasAPIView,
@@ -68,6 +72,9 @@ urlpatterns = [
     path('threadlines/<uuid:uuid>/metadata',
          EmailMessageMetadataAPIView.as_view(),
          name='threadlines-metadata'),
+    path('threadlines/<uuid:uuid>/share-link',
+         ThreadlineShareLinkAPIView.as_view(),
+         name='threadlines-share-link'),
 
     # TODO endpoints
     path('todos', EmailTodoAPIView.as_view(), name='todos-list'),
@@ -76,6 +83,19 @@ urlpatterns = [
          name='todos-batch'),
     path('todos/<int:pk>', EmailTodoDetailAPIView.as_view(),
          name='todos-detail'),
+
+    # Share link management
+    path('share-links/<uuid:share_uuid>',
+         ThreadlineShareLinkDetailAPIView.as_view(),
+         name='share-links-detail'),
+
+    # Public share endpoints
+    path('public/share/<uuid:share_uuid>',
+         PublicShareLinkAPIView.as_view(),
+         name='public-share'),
+    path('public/share/<uuid:share_uuid>/verify',
+         PublicShareLinkVerifyAPIView.as_view(),
+         name='public-share-verify'),
 
     # Monitoring endpoints
     # API endpoints (require authentication)

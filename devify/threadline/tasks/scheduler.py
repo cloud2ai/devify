@@ -9,7 +9,8 @@ from threadline.state_machine import EmailStatus
 from threadline.tasks.email_fetch import imap_email_fetch, haraka_email_fetch
 from threadline.tasks.email_workflow import process_email_workflow
 from threadline.tasks.cleanup import (EmailCleanupManager,
-                                      EmailTaskCleanupManager)
+                                      EmailTaskCleanupManager,
+                                      ShareLinkCleanupManager)
 from threadline.utils.task_cleanup import cleanup_stale_tasks
 from threadline.utils.task_lock import prevent_duplicate_task
 from threadline.utils.task_tracer import TaskTracer
@@ -267,4 +268,26 @@ def schedule_email_task_cleanup():
 
     except Exception as exc:
         logger.error(f"EmailTask cleanup scheduling failed: {exc}")
+        raise
+
+
+@shared_task
+@prevent_duplicate_task("share_link_cleanup", timeout=30)
+def schedule_share_link_cleanup():
+    """
+    Share link cleanup scheduler.
+
+    Deactivates expired share links to ensure stale URLs are not accessible.
+    """
+    try:
+        logger.info("Starting share link cleanup scheduler")
+
+        cleanup_manager = ShareLinkCleanupManager()
+        result = cleanup_manager.cleanup_expired_share_links()
+
+        logger.info(f"Share link cleanup completed: {result}")
+        return result
+
+    except Exception as exc:
+        logger.error(f"Share link cleanup scheduling failed: {exc}")
         raise

@@ -4,6 +4,7 @@ from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError
 from django.conf import settings
 from django.db import models
+from django.db.models import F, Q
 from django.utils.translation import gettext_lazy as _
 from django.utils import timezone
 
@@ -702,6 +703,118 @@ class EmailTodo(models.Model):
         self.is_completed = False
         self.completed_at = None
         self.save(update_fields=['is_completed', 'completed_at', 'updated_at'])
+
+
+class ThreadlineShareLink(models.Model):
+    """
+    Share link for exposing EmailMessage in read-only mode.
+    """
+
+    uuid = models.UUIDField(
+        default=uuid_lib.uuid4,
+        unique=True,
+        editable=False,
+        verbose_name=_('UUID')
+    )
+    email_message = models.ForeignKey(
+        EmailMessage,
+        on_delete=models.CASCADE,
+        related_name='share_links',
+        verbose_name=_('Email Message')
+    )
+    owner = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='threadline_share_links',
+        verbose_name=_('Owner')
+    )
+    expires_at = models.DateTimeField(
+        blank=True,
+        null=True,
+        verbose_name=_('Expires At')
+    )
+    password_hash = models.CharField(
+        max_length=128,
+        blank=True,
+        verbose_name=_('Password Hash')
+    )
+    password = models.CharField(
+        max_length=6,
+        blank=True,
+        verbose_name=_('Password')
+    )
+    is_active = models.BooleanField(
+        default=True,
+        verbose_name=_('Is Active')
+    )
+    view_count = models.PositiveIntegerField(
+        default=0,
+        verbose_name=_('View Count')
+    )
+    last_viewed_at = models.DateTimeField(
+        blank=True,
+        null=True,
+        verbose_name=_('Last Viewed At')
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = _('Threadline Share Link')
+        verbose_name_plural = _('Threadline Share Links')
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['uuid']),
+            models.Index(fields=['email_message']),
+            models.Index(fields=['owner']),
+            models.Index(fields=['is_active']),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=['email_message'],
+                condition=Q(is_active=True),
+                name='unique_active_share_per_email'
+            )
+        ]
+
+    def __str__(self):
+        return f"ShareLink({self.email_message_id})"
+
+    def is_expired(self) -> bool:
+        """
+        Determine whether share link has expired.
+        """
+        if not self.expires_at:
+            return False
+        return timezone.now() >= self.expires_at
+
+    def is_valid(self) -> bool:
+        """
+        Share link is valid when active and not expired.
+        """
+        return self.is_active and not self.is_expired()
+
+    def deactivate(self):
+        """
+        Soft deactivate the share link.
+        """
+        if not self.is_active:
+            return
+        self.is_active = False
+        self.save(update_fields=['is_active', 'updated_at'])
+
+    def mark_viewed(self):
+        """
+        Update view count and last viewed timestamp.
+        """
+        timestamp = timezone.now()
+        ThreadlineShareLink.objects.filter(pk=self.pk).update(
+            view_count=F('view_count') + 1,
+            last_viewed_at=timestamp,
+            updated_at=timestamp
+        )
+        self.view_count += 1
+        self.last_viewed_at = timestamp
 
 
 class EmailAlias(models.Model):

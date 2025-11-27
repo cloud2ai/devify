@@ -34,7 +34,10 @@ class EmailMessageAPIView(BaseAPIView):
         """
         Get EmailMessage queryset with related objects
         """
-        return EmailMessage.objects.select_related('user').all()
+        return (EmailMessage.objects
+                .select_related('user')
+                .prefetch_related('share_links')
+                .all())
 
     @extend_schema(
         operation_id='threadlines_list',
@@ -209,13 +212,16 @@ class EmailMessageDetailAPIView(BaseAPIView):
         """
         Get EmailMessage queryset with related objects
         """
-        return EmailMessage.objects.select_related('user').all()
+        return (EmailMessage.objects
+                .select_related('user')
+                .prefetch_related('share_links')
+                .all())
 
     def get_object(self, uuid):
         """
         Get email message by UUID with user ownership validation
         """
-        return EmailMessage.objects.get(uuid=uuid, user=self.request.user)
+        return self.get_queryset().get(uuid=uuid, user=self.request.user)
 
     @extend_schema(
         operation_id='threadlines_retrieve',

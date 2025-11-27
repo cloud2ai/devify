@@ -50,7 +50,8 @@ from .models import (
     EmailAlias,
     EmailMessage,
     EmailAttachment,
-    Issue
+    Issue,
+    ThreadlineShareLink
 )
 from .tasks.email_workflow import process_email_workflow
 
@@ -590,6 +591,75 @@ class EmailAttachmentAdmin(admin.ModelAdmin):
         """Optimize queryset with select_related."""
         return (super().get_queryset(request)
                 .select_related('email_message', 'user'))
+
+
+@admin.register(ThreadlineShareLink)
+class ThreadlineShareLinkAdmin(admin.ModelAdmin):
+    """Admin interface for ThreadlineShareLink model."""
+
+    list_display = [
+        'uuid',
+        'email_message_link',
+        'owner',
+        'expires_at',
+        'is_active',
+        'view_count',
+        'last_viewed_at',
+        'created_at'
+    ]
+    list_filter = ['is_active', 'expires_at', 'created_at']
+    search_fields = [
+        'uuid',
+        'email_message__subject',
+        'owner__username',
+        'owner__email'
+    ]
+    readonly_fields = [
+        'created_at',
+        'updated_at',
+        'view_count',
+        'last_viewed_at',
+        'email_message_link'
+    ]
+
+    fieldsets = (
+        (_('Share Link'), {
+            'fields': (
+                'uuid',
+                'email_message_link',
+                'owner',
+                'is_active'
+            )
+        }),
+        (_('Security'), {
+            'fields': ('expires_at',),
+        }),
+        (_('Usage'), {
+            'fields': ('view_count', 'last_viewed_at'),
+            'classes': ('collapse',)
+        }),
+        (_('Timestamps'), {
+            'fields': ('created_at', 'updated_at'),
+            'classes': ('collapse',)
+        }),
+    )
+
+    @admin.display(description=_('Email Message'))
+    def email_message_link(self, obj):
+        """Display clickable link to related email message."""
+        url = reverse(
+            'admin:threadline_emailmessage_change',
+            args=[obj.email_message.pk]
+        )
+        subject = (obj.email_message.subject[:50] + '...'
+                   if len(obj.email_message.subject) > 50
+                   else obj.email_message.subject)
+        return mark_safe(f'<a href="{url}" target="_blank">{subject}</a>')
+
+    def get_queryset(self, request):
+        """Optimize queryset with select_related."""
+        return (super().get_queryset(request)
+                .select_related('email_message', 'owner'))
 
 
 @admin.register(Issue)

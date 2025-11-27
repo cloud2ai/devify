@@ -18,8 +18,11 @@ from django.utils import timezone
 from threadline.models import EmailTask
 from threadline.tasks.cleanup import (
     EmailCleanupManager,
-    EmailTaskCleanupManager
+    EmailTaskCleanupManager,
+    ShareLinkCleanupManager
 )
+from threadline.tasks.scheduler import schedule_share_link_cleanup
+from threadline.tests.fixtures.factories import ThreadlineShareLinkFactory
 
 
 class EmailCleanupManagerTest(TestCase):
@@ -399,3 +402,142 @@ class EmailTaskCleanupManagerTest(TestCase):
 
         self.assertEqual(result['tasks_cleaned'], 1)
         self.assertEqual(EmailTask.objects.count(), 1)
+
+
+@pytest.mark.django_db(transaction=True, reset_sequences=True)
+class ShareLinkCleanupManagerTest(TestCase):
+    """Test ShareLinkCleanupManager functionality"""
+
+    @override_settings(SHARE_LINK_CLEANUP_CONFIG={
+        'grace_period_minutes': 0,
+        'batch_size': 10
+    })
+    def test_cleanup_deactivates_expired_links(self):
+        """Expired links should be deactivated"""
+        expired_link = ThreadlineShareLinkFactory(
+            expires_at=timezone.now() - timedelta(hours=2)
+        )
+        active_link = ThreadlineShareLinkFactory(
+            expires_at=timezone.now() + timedelta(hours=2)
+        )
+
+        with patch('threadline.tasks.cleanup.TaskTracer') as mock_tracer:
+            mock_tracer.return_value = MagicMock()
+            manager = ShareLinkCleanupManager()
+            result = manager.cleanup_expired_share_links()
+
+        expired_link.refresh_from_db()
+        active_link.refresh_from_db()
+
+        self.assertFalse(expired_link.is_active)
+        self.assertTrue(active_link.is_active)
+        self.assertEqual(result['links_deactivated'], 1)
+        self.assertEqual(result['links_considered'], 1)
+        mock_tracer.return_value.create_task.assert_called_once()
+        mock_tracer.return_value.complete_task.assert_called_once()
+
+    @override_settings(SHARE_LINK_CLEANUP_CONFIG={
+        'grace_period_minutes': 60,
+        'batch_size': 10
+    })
+    def test_cleanup_respects_grace_period(self):
+        """Grace period prevents recent expirations from deactivation"""
+        link = ThreadlineShareLinkFactory(
+            expires_at=timezone.now() - timedelta(minutes=30)
+        )
+
+        with patch('threadline.tasks.cleanup.TaskTracer'):
+            manager = ShareLinkCleanupManager()
+            result = manager.cleanup_expired_share_links()
+
+        link.refresh_from_db()
+
+        self.assertTrue(link.is_active)
+        self.assertEqual(result['links_deactivated'], 0)
+        self.assertEqual(result['links_considered'], 0)
+
+    @override_settings(SHARE_LINK_CLEANUP_CONFIG={
+        'grace_period_minutes': 0,
+        'batch_size': 1
+    })
+    def test_cleanup_processes_in_batches(self):
+        """Batch configuration should limit per-iteration deactivation"""
+        links = ThreadlineShareLinkFactory.create_batch(
+            3,
+            expires_at=timezone.now() - timedelta(hours=3)
+        )
+
+        with patch('threadline.tasks.cleanup.TaskTracer'):
+            manager = ShareLinkCleanupManager()
+            result = manager.cleanup_expired_share_links()
+
+        for link in links:
+            link.refresh_from_db()
+            self.assertFalse(link.is_active)
+
+        self.assertEqual(result['links_deactivated'], 3)
+        self.assertEqual(result['links_considered'], 3)
+
+
+class ShareLinkCleanupSchedulerTest(TestCase):
+    """Test schedule_share_link_cleanup task wrapper"""
+
+    @patch('threadline.tasks.scheduler.release_task_lock')
+    @patch('threadline.tasks.scheduler.acquire_task_lock', return_value=True)
+    @patch('threadline.tasks.scheduler.is_task_locked', return_value=False)
+    @patch('threadline.tasks.scheduler.ShareLinkCleanupManager')
+    @patch('threadline.tasks.scheduler.logger')
+    def test_scheduler_runs_cleanup(
+        self,
+        mock_logger,
+        mock_manager_cls,
+        mock_is_locked,
+        mock_acquire_lock,
+        mock_release_lock
+    ):
+        """Scheduler should invoke cleanup manager and return stats"""
+        mock_manager = MagicMock()
+        mock_manager.cleanup_expired_share_links.return_value = {
+            'links_deactivated': 2
+        }
+        mock_manager_cls.return_value = mock_manager
+
+        result = schedule_share_link_cleanup.run()
+
+        mock_manager_cls.assert_called_once()
+        mock_manager.cleanup_expired_share_links.assert_called_once()
+        mock_logger.info.assert_any_call("Starting share link cleanup scheduler")
+        mock_logger.info.assert_any_call(
+            "Share link cleanup completed: {'links_deactivated': 2}"
+        )
+        self.assertEqual(result, {'links_deactivated': 2})
+
+    @patch('threadline.tasks.scheduler.release_task_lock')
+    @patch('threadline.tasks.scheduler.acquire_task_lock', return_value=True)
+    @patch('threadline.tasks.scheduler.is_task_locked', return_value=False)
+    @patch('threadline.tasks.scheduler.ShareLinkCleanupManager')
+    @patch('threadline.tasks.scheduler.logger')
+    def test_scheduler_logs_and_raises_on_failure(
+        self,
+        mock_logger,
+        mock_manager_cls,
+        mock_is_locked,
+        mock_acquire_lock,
+        mock_release_lock
+    ):
+        """Scheduler should log error and re-raise exception"""
+        mock_manager = MagicMock()
+        mock_manager.cleanup_expired_share_links.side_effect = RuntimeError(
+            "boom"
+        )
+        mock_manager_cls.return_value = mock_manager
+
+        with self.assertRaises(RuntimeError):
+            schedule_share_link_cleanup.run()
+
+        mock_logger.info.assert_called_with(
+            "Starting share link cleanup scheduler"
+        )
+        mock_logger.error.assert_called_with(
+            "Share link cleanup scheduling failed: boom"
+        )

@@ -1,4 +1,167 @@
-# Chat scenario prompts
-# All prompts are now defined in common section of default.yaml
-# This file is kept for future scene-specific customizations if needed
-# Currently, chat scenario uses the default prompts from common section
+# Chat scenario overrides default prompts via the common section below.
+# Only keys defined here replace default.yaml values; others keep defaults.
+# Sample structure:
+# common:
+#   summary_title_prompt: |
+#     Custom content...
+common:
+  # Scene-specific prompts override default common prompts with same keys.
+  # Unspecified keys continue to use configurations from prompts/default.yaml.
+  summary_title_prompt: |
+    Please output in {language}.
+
+    Extract a single concise title from the provided chat or message
+    conversation that belongs to a daily life scenario.
+
+    Requirements:
+    - Focus on life-related content such as family, children, bills,
+      appointments, travel, health, or personal tasks
+    - Use simple, natural, and readable language without technical jargon
+    - Capture only the most important topic when multiple appear
+    - Maximum length: 200 characters
+    - Output only the title text without prefixes, tags, or extra text
+
+  summary_prompt: |
+    Please output in {language}.
+
+    You are a professional conversation summarization assistant. Based on the
+    provided chat records, email content, and OCR-recognized text, create a
+    structured JSON summary. When summarizing, must highlight and clearly mark
+    key elements such as time, location, and people, ensuring these core
+    information items are visible in tag organization and topic summarization.
+
+    Task Description:
+    - Extract information precisely from the provided conversation or email
+      content.
+    - Present information in a structured JSON format, focusing on the core
+      topics, key processes, and TODO items of the conversation.
+    - Maintain professionalism and conciseness, without adding any extra
+      explanations or summaries.
+    - Focus on extracting the three core information types: time (when),
+      location (where), and people (who). Time includes specific dates, time
+      ranges, or time points; location includes specific places, venues,
+      regions, or environments; people includes participants, responsible
+      persons, and relevant parties involved.
+    - All dates/times present in the conversation content should be
+      interpreted using the provided user timezone context (unless the text
+      explicitly specifies another timezone).
+
+    Output Rules:
+    1. Language: All content in the JSON must be in {language}.
+    2. Format: Output MUST be a valid JSON object only, no Markdown, no
+       additional text.
+    3. JSON Schema: The output must strictly follow this structure:
+       {
+         "details": "string",
+         "key_process": ["string"],
+         "todos": [
+           {
+             "content": "string (required)",
+             "owner": "string (optional)",
+             "deadline": "string (optional, ISO 8601 format)",
+             "location": "string (optional)",
+             "priority": "string (optional, one of: high/medium/low)"
+           }
+         ]
+       }
+
+    Field Descriptions:
+    - "details": A single sentence summarizing the core theme, discussion
+      focus, or problem to be resolved. Must include key people, location, and
+      time if available. Output in {language}.
+    - "key_process": An array of strings listing the main progress, consensus
+      reached, key information, or important discussion points. Each item
+      should clearly mark key elements such as time, location, and people.
+      Output in {language}.
+    - "todos": An array of TODO objects. Extract only explicitly assigned
+      tasks, commitments requiring follow-up, or next steps. If none, use an
+      empty array [].
+
+    TODO Object Fields:
+    - "content": Required. The task description in {language}.
+    - "owner": Optional. Person responsible for this TODO. Extract from the
+      conversation if mentioned.
+    - "deadline": Optional. Deadline for the TODO. Must use ISO 8601 format
+      such as "2025-11-15T10:00:00Z" or "2025-11-15 10:00:00". If the
+      conversation only provides fuzzy time (e.g., "tomorrow"), interpret it
+      into a concrete ISO timestamp when possible; otherwise omit the field.
+    - "location": Optional. Location related to this TODO. Extract from the
+      conversation if mentioned.
+    - "priority": Optional. Priority level. Must be one of: "high", "medium",
+      or "low". Extract from the conversation if mentioned, otherwise omit.
+
+    Important Notes:
+    - If the conversation contains no TODO items, use an empty array [] for
+      "todos".
+    - All text content (details, key_process items, todos content) must be in
+      {language}.
+    - Do not include any explanations, comments, or additional text outside
+      the JSON object.
+    - Ensure the JSON is valid and can be parsed by standard JSON parsers.
+
+    Scenario-specific guidance (daily chat):
+    - Emphasize life events: family duties, friends' gatherings, school runs,
+      bill reminders, travel arrangements, health or household tasks.
+    - Identify participant relationships (family, friends, colleagues,
+      children) and reflect them in "details" or "key_process".
+    - Trace time markers such as appointments, reminders, payment deadlines,
+      or trip dates; arrange key_process chronologically when possible.
+    - Capture emotional signals (complaints, happiness, anxiety, suggestions)
+      only when they help explain the action or decision.
+    - Ignore idle chatter lacking actionable meaning; focus on chores, plans,
+      unexpected events, and explicit next steps.
+    - Every TODO must be concrete and executable (e.g., "Pay utility bill by
+      Friday", "Drive kids to weekend event"), with owner and timeframe
+      whenever available.
+    - Mention in "details" that the context is a life/daily chat scenario when
+      it is clear.
+
+  metadata_prompt: |
+    Please output in {language}. All JSON field values must be in {language}.
+    Do NOT output in Chinese unless {language} is Chinese.
+
+    Task: Extract core metadata from the given conversation/email/OCR content.
+    Be concise and strictly follow the output format.
+
+    CRITICAL FORMAT RULES:
+    1) Output must be a single valid JSON object, nothing else.
+    2) JSON keys must be English (case-sensitive) and fixed as:
+       "category", "participants", "timeline", "keywords".
+    3) Every field must exist. If unknown, use "" (for string) or [] (for
+       array).
+    4) Proper nouns (names, places, product/tech terms) MUST be preserved in
+       their original form. Do not translate proper nouns.
+    5) Timeline MUST use strict 24-hour format: "YYYY-MM-DD HH:mm"
+       - Must include both date AND time (to the minute)
+       - Use 24-hour format (00:00 to 23:59)
+       - Example: "2025-10-30 14:30"
+       - No fuzzy words like "yesterday", "tomorrow", "last week"
+       - If no date/time can be determined, use []
+    6) Keywords must be strictly relevant to the core problem/issue in the
+       conversation. Avoid generic or unrelated terms; keep tags concise.
+    7) Category should be a SHORT, GENERAL classification (1-3 words max).
+       Use broad categories (translate to {language} appropriately).
+    8) Use only standard ASCII punctuation inside JSON. No comments or extra
+       text.
+
+    JSON Schema:
+    {
+      "category": "string",
+      "participants": ["string", "..."],
+      "timeline": ["YYYY-MM-DD HH:mm", "..."],
+      "keywords": ["string", "..."]
+    }
+
+    Scenario-specific guidance (daily chat):
+    - category: Choose a lifestyle grouping such as "Family", "Daily Life",
+      "Health", "Travel", "Finance", or similar. Keep it broad to aid
+      filtering.
+    - participants: Collect the actual names or nicknames appearing in the
+      conversation to support contact-based search; no role labels needed.
+    - timeline: Record concrete appointment times, bill due moments, trip
+      departures, or reminder timestamps. Skip vague references that cannot
+      be converted into "YYYY-MM-DD HH:mm".
+    - keywords: Capture household chores, events, locations, activities,
+      needs, or items that describe the daily discussion context.
+    - Ignore idle chit-chat with no actionable meaning; focus on life events
+      and tasks.

@@ -6,7 +6,11 @@ Threadline models.
 """
 
 import factory
+import uuid
+from datetime import timedelta
 from django.contrib.auth.models import User
+from django.contrib.auth.hashers import make_password
+from django.utils import timezone
 from factory.django import DjangoModelFactory
 
 from threadline.models import (
@@ -15,7 +19,8 @@ from threadline.models import (
     EmailMessage,
     EmailAttachment,
     Issue,
-    EmailTodo
+    EmailTodo,
+    ThreadlineShareLink
 )
 
 
@@ -104,7 +109,9 @@ class EmailMessageFactory(DjangoModelFactory):
         model = EmailMessage
 
     user = factory.SubFactory(UserFactory)
-    message_id = factory.Sequence(lambda n: f'message-{n}@example.com')
+    message_id = factory.LazyFunction(
+        lambda: f"{uuid.uuid4().hex}@example.com"
+    )
     subject = factory.Faker('sentence', nb_words=6)
     sender = factory.Faker('email')
     recipients = factory.Faker('email')
@@ -257,6 +264,21 @@ class EmailTodoWithEmailFactory(EmailTodoFactory):
     Factory for creating EmailTodo with email message
     """
     email_message = factory.SubFactory(EmailMessageFactory)
+
+
+class ThreadlineShareLinkFactory(DjangoModelFactory):
+    """
+    Factory for creating ThreadlineShareLink instances
+    """
+
+    class Meta:
+        model = ThreadlineShareLink
+
+    email_message = factory.SubFactory(EmailMessageFactory)
+    owner = factory.LazyAttribute(lambda obj: obj.email_message.user)
+    expires_at = factory.LazyFunction(lambda: timezone.now() + timedelta(days=7))
+    password_hash = factory.LazyFunction(lambda: make_password('123456'))
+
 
 
 class EmailTodoWithoutEmailFactory(EmailTodoFactory):

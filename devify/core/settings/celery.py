@@ -87,6 +87,14 @@ CELERY_BEAT_SCHEDULE = {
         'kwargs': {},
     },
 
+    # Share link cleanup - runs hourly at minute 10
+    'schedule_share_link_cleanup': {
+        'task': 'threadline.tasks.scheduler.schedule_share_link_cleanup',
+        'schedule': crontab(minute='10'),
+        'args': (),
+        'kwargs': {},
+    },
+
     # Renew expired credits (Free Plan & Paid Plan) - runs daily at 4 AM
     'renew_expired_credits': {
         'task': 'billing.tasks.renew_expired_credits',

@@ -9,6 +9,7 @@ the single entry point for all database validations and initializations.
 import logging
 
 from django.conf import settings as django_settings
+from django.core.exceptions import ObjectDoesNotExist
 
 from billing.services.subscription_service import SubscriptionService
 from threadline.agents.nodes.base_node import BaseLangGraphNode
@@ -371,6 +372,7 @@ class WorkflowPrepareNode(BaseLangGraphNode):
             'issue_metadata': issue_metadata,
             'prompt_config': prompt_config,
             'issue_config': issue_config,
+            'user_timezone': self._get_user_timezone(),
             'created_at': (
                 self.email.created_at.isoformat()
                 if self.email.created_at else None
@@ -380,6 +382,54 @@ class WorkflowPrepareNode(BaseLangGraphNode):
                 if self.email.updated_at else None
             )
         }
+
+    def _get_user_timezone(self) -> str:
+        """
+        Get user's timezone preference for prompt context.
+
+        Returns:
+            str: Timezone string (e.g., 'Asia/Shanghai') or 'UTC'
+        """
+        default_timezone = getattr(
+            django_settings,
+            'DEFAULT_USER_TIMEZONE',
+            'UTC'
+        )
+
+        user = self.email.user
+
+        # Attempt to fetch timezone from user profile
+        try:
+            profile = getattr(user, 'profile', None)
+            if profile and getattr(profile, 'timezone', None):
+                return profile.timezone
+        except ObjectDoesNotExist:
+            pass
+        except Exception as exc:
+            logger.warning(
+                "Failed to load timezone from profile for user %s: %s",
+                user.id,
+                exc
+            )
+
+        # Fallback to subscription settings if available
+        try:
+            settings_timezone = Settings.get_user_config(
+                user,
+                'timezone'
+            )
+            if isinstance(settings_timezone, str) and settings_timezone:
+                return settings_timezone
+        except ValueError:
+            pass
+        except Exception as exc:
+            logger.warning(
+                "Failed to load timezone from Settings for user %s: %s",
+                user.id,
+                exc
+            )
+
+        return default_timezone
 
     def execute_processing(self, state: EmailState) -> EmailState:
         """

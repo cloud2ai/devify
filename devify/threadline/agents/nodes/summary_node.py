@@ -10,6 +10,7 @@ from typing import Any, Dict, List
 
 from dateutil import parser as date_parser
 from django.utils import timezone
+from zoneinfo import ZoneInfo
 
 from core.tracking import LLMTracker
 from threadline.agents.email_state import EmailState, add_node_error
@@ -185,6 +186,123 @@ class SummaryNode(BaseLangGraphNode):
 
         return processed_todos
 
+    def _build_prompt_context(self, state: EmailState) -> str:
+        """
+        Build LLM prompt context with current time and timezone info.
+
+        Args:
+            state: Current email state
+
+        Returns:
+            str: Formatted context string
+        """
+        subject = state.get('subject', '') or ''
+        llm_content = state.get('llm_content', '') or ''
+        user_timezone = state.get('user_timezone') or 'UTC'
+
+        current_utc = timezone.now()
+        current_utc_str = current_utc.isoformat()
+
+        local_time_str = current_utc_str
+        if user_timezone:
+            try:
+                local_time = current_utc.astimezone(ZoneInfo(user_timezone))
+                local_time_str = local_time.isoformat()
+            except Exception as exc:
+                logger.warning(
+                    "Failed to convert timezone '%s': %s",
+                    user_timezone,
+                    exc
+                )
+
+        context_parts = [
+            f"Subject: {subject}",
+            f"Processing Timestamp (UTC): {current_utc_str}",
+            f"User Timezone: {user_timezone}",
+            (
+                f"Processing Timestamp ({user_timezone}): "
+                f"{local_time_str}"
+            ),
+            (
+                "Important: Dates and times discussed in the following "
+                "content should be interpreted using the provided user "
+                "timezone unless explicitly stated otherwise."
+            ),
+            f"Text Content: {llm_content}",
+        ]
+
+        return "\n".join(context_parts) + "\n"
+
+    def _build_summary_content(
+        self,
+        summary_data: Dict[str, Any] | None,
+        processed_todos: List[Dict[str, Any]] | None,
+        existing_summary_content: str = ''
+    ) -> str:
+        """
+        Build summary_content from structured data for metadata_node.
+
+        This method generates a text representation of the summary data
+        including details, TODOs, and key processes. This is required by
+        metadata_node to extract metadata from the summary.
+
+        Args:
+            summary_data: Dictionary containing 'details' and 'key_process'
+            processed_todos: List of processed TODO items
+            existing_summary_content: Existing summary content as fallback
+
+        Returns:
+            Formatted summary content string
+        """
+        content_parts = []
+
+        # Add details section
+        if summary_data and summary_data.get('details'):
+            content_parts.append(summary_data['details'])
+
+        # Add TODO section
+        if processed_todos:
+            content_parts.append("\nTODO:")
+            for todo in processed_todos:
+                if not isinstance(todo, dict):
+                    continue
+                todo_content = todo.get('content', '')
+                if not todo_content:
+                    continue
+                todo_parts = [todo_content]
+                if todo.get('owner'):
+                    owner = todo['owner']
+                    todo_parts.append(f"Owner: {owner}")
+                if todo.get('deadline_original'):
+                    deadline = todo['deadline_original']
+                    todo_parts.append(f"Deadline: {deadline}")
+                if todo.get('location'):
+                    location = todo['location']
+                    todo_parts.append(f"Location: {location}")
+                if todo.get('priority'):
+                    priority = todo['priority']
+                    todo_parts.append(f"Priority: {priority}")
+                todo_line = f"- {' | '.join(todo_parts)}"
+                content_parts.append(todo_line)
+
+        # Add key processes section
+        if summary_data and summary_data.get('key_process'):
+            key_process_list = summary_data['key_process']
+            if (
+                isinstance(key_process_list, list)
+                and key_process_list
+            ):
+                content_parts.append("\nKey Processes:")
+                for i, process in enumerate(key_process_list, 1):
+                    content_parts.append(f"{i}. {process}")
+
+        # Return generated content or fallback to existing
+        return (
+            "\n".join(content_parts)
+            if content_parts
+            else existing_summary_content or ''
+        )
+
     def execute_processing(self, state: EmailState) -> EmailState:
         """
         Execute summary generation.
@@ -217,14 +335,12 @@ class SummaryNode(BaseLangGraphNode):
             logger.error(error_message)
             return add_node_error(state, self.node_name, error_message)
 
-        # Build content with subject and LLM-processed email content
-        # Note: llm_content already includes OCR context from attachments
-        content = (
-            f"Subject: {state.get('subject', '')}\n"
-            f"Text Content: {state.get('llm_content', '')}\n"
-        )
+        content = self._build_prompt_context(state)
 
-        logger.info("Using LLM-processed content for summary generation")
+        logger.info(
+            "Using LLM-processed content and timezone context "
+            "for summary generation"
+        )
 
         summary_data = state.get('summary_data')
         summary_content = state.get('summary_content', '')
@@ -282,10 +398,13 @@ class SummaryNode(BaseLangGraphNode):
                         processed_todos = []
                         logger.info("No TODO items found in summary")
 
-                    # summary_content is not generated from structured data
-                    # Use existing summary_content or empty string
-                    # Markdown rendering should be handled at API layer
-                    summary_content = summary_content or ''
+                    # Generate summary_content from structured data for
+                    # metadata_node
+                    summary_content = self._build_summary_content(
+                        summary_data=summary_data,
+                        processed_todos=processed_todos,
+                        existing_summary_content=summary_content
+                    )
 
                     logger.info("Structured summary generated successfully")
 
@@ -314,6 +433,13 @@ class SummaryNode(BaseLangGraphNode):
             else:
                 # Use existing data, but ensure todos are processed
                 processed_todos = existing_todos if existing_todos else []
+                # Regenerate summary_content if needed for metadata_node
+                if not summary_content and summary_data:
+                    summary_content = self._build_summary_content(
+                        summary_data=summary_data,
+                        processed_todos=processed_todos,
+                        existing_summary_content=summary_content
+                    )
 
             return {
                 **state,

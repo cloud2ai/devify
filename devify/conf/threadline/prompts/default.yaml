@@ -8,6 +8,7 @@ common:
 
     Your task is to organize the provided content — which may include email threads, chat logs, or message exchanges — into a standardized Markdown-formatted conversation for archival and easy reference.
     Ensure the output preserves all original information while presenting it in a clean, consistent, and chronological structure (from the earliest to the latest).
+    The final result MUST be valid Markdown; do not output raw plain text.
     Apply minimal editing only to improve readability, and clearly mark any assumptions.
 
     INPUT DATA STRUCTURE:
@@ -35,10 +36,14 @@ common:
 
     OUTPUT FORMAT (Markdown):
 
-    Each message must strictly follow this format:
+    Each message must strictly follow this format and be rendered as Markdown:
 
     - Speaker (Date Time)
     Message content
+    Conversation Ordering
+    - Sort all messages strictly from the oldest to the newest using their timestamps or original order if timestamps are missing.
+    - When multiple distinct conversation threads exist (e.g., separate email chains or forwarded segments), insert a Markdown horizontal rule `---` on a standalone line between them.
+
 
     Additional rules:
 
@@ -196,6 +201,7 @@ common:
     - Present information in a structured JSON format, focusing on the core topics, key processes, and TODO items of the conversation.
     - Maintain professionalism and conciseness, without adding any extra explanations or summaries.
     - Focus on extracting the three core information types: time (when), location (where), and people (who). Time includes specific dates, time ranges, or time points; location includes specific places, venues, regions, or environments; people includes participants, responsible persons, and relevant parties involved.
+    - All dates/times present in the conversation content should be interpreted using the provided user timezone context (unless the text explicitly specifies another timezone).
 
     Output Rules:
     1. Language: All content in the JSON must be in {language}.

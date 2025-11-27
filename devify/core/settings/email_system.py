@@ -153,3 +153,19 @@ EMAIL_CLEANUP_CONFIG = {
         os.getenv('EMAIL_CLEANUP_TASK_RETENTION_DAYS', '3')
     ),
 }
+
+# ============================
+# Share Link Cleanup Settings
+# ============================
+
+# SHARE_LINK_CLEANUP_CONFIG: Cleanup behavior for expired share links
+# - grace_period_minutes: Minutes to keep expired links active before cleanup
+# - batch_size: Number of records to deactivate per iteration
+SHARE_LINK_CLEANUP_CONFIG = {
+    'grace_period_minutes': int(
+        os.getenv('SHARE_LINK_CLEANUP_GRACE_MINUTES', '0')
+    ),
+    'batch_size': int(
+        os.getenv('SHARE_LINK_CLEANUP_BATCH_SIZE', '500')
+    )
+}

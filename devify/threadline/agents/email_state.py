@@ -85,6 +85,8 @@ class EmailState(TypedDict, total=False):
     prompt_config: Dict[str, Any] | None
     # User's issue configuration
     issue_config: Dict[str, Any] | None
+    # User's timezone preference
+    user_timezone: str | None
 
     # Fixed workflow fields
     error_message: str | None
@@ -166,6 +168,7 @@ def create_email_state(
         "credits_transaction_id": None,
         "credits_refunded": None,
         "email_uuid": None,
+        "user_timezone": "UTC",
     }
 
 

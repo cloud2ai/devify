@@ -41,6 +41,11 @@ from .email_message import (
     EmailMessageCreateSerializer,
     EmailMessageUpdateSerializer,
 )
+from .share_link import (
+    ThreadlineShareLinkSerializer,
+    ThreadlineShareLinkCreateSerializer,
+    SharePasswordSerializer,
+)
 
 # EmailAttachment serializers
 from .email_attachment import (
@@ -87,6 +92,9 @@ __all__ = [
     'EmailMessageListSerializer',
     'EmailMessageCreateSerializer',
     'EmailMessageUpdateSerializer',
+    'ThreadlineShareLinkSerializer',
+    'ThreadlineShareLinkCreateSerializer',
+    'SharePasswordSerializer',
     # EmailAttachment
     'EmailAttachmentSerializer',
     'EmailAttachmentNestedSerializer',
