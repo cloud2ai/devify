@@ -466,7 +466,7 @@ To simplify configuration, all required settings should be added here. Below are
 | Key                  | Description                                                      | Required | Example Key Fields/Notes                |
 |----------------------|------------------------------------------------------------------|----------|-----------------------------------------|
 | email_config         | Email collection mode and configuration (auto_assign or custom_imap) | Yes      | See below - supports Haraka auto-assign and IMAP modes |
-| issue_config         | Issue creation engine configuration (JIRA, email, Slack, etc.)   | Yes      | See below                              |
+| issue_config         | Issue creation engine configuration (JIRA, Feishu Bitable, etc.) | Yes      | See below                              |
 | prompt_config        | AI prompt templates for email/attachment/summary processing       | Yes      | See below                              |
 | webhook_config       | Webhook configuration for external notifications                  | No       | See below                              |
 
@@ -484,7 +484,8 @@ To simplify configuration, all required settings should be added here. Below are
 
 **Note:**
 - The initialization command is idempotent and safe to run multiple times
-- JIRA configuration is loaded from `conf/threadline/issues/jira_config.yaml` (YAML format)
+- Issue configuration is loaded from `conf/threadline/issues/issue_config.yaml`
+  first, with `conf/threadline/issues/jira_config.yaml` kept as a fallback
 - Other settings are stored in JSON format in the database
 - Settings can be customized via Django Admin after initialization
 
@@ -715,13 +716,14 @@ When using `custom_imap` mode, you can optionally configure filters in the `filt
 
 ### Issue Config(issue_config)
 
-The issue configuration supports multiple engines (JIRA, email, Slack, etc.) with engine-specific settings.
+The issue configuration supports multiple engines (JIRA, Feishu Bitable, etc.) with engine-specific settings.
 
 | Key                | Type     | Description                                      | Example                      |
 |--------------------|----------|--------------------------------------------------|------------------------------|
 | enable             | boolean  | Whether issue creation is enabled                | true                         |
-| issue_engine       | string   | Issue creation engine type                       | "jira"                       |
+| issue_engine       | string   | Issue creation engine type                       | "jira" or "feishu"           |
 | jira               | object   | JIRA-specific configuration                      | See JIRA config below        |
+| feishu             | object   | Feishu Bitable-specific configuration            | See Feishu config below      |
 | language           | string   | LLM output language                              | "Chinese" or "English"       |
 | fields             | object   | Field configurations (see below)                 | See JIRA config below        |
 
@@ -779,12 +781,51 @@ fields:
     fetch_from_api: true
     jira_field: components
 
-  epic_link_config:
+ epic_link_config:
     use_llm: true
     fetch_from_api: true
     jira_field: customfield_10014
     default: "REQ-100"
 ```
+
+#### Feishu Bitable Configuration
+
+Feishu Bitable issue creation is configured via the same `issue_config`
+setting in the database. Switch the engine to `feishu` and provide the
+Feishu-specific connection details and field mappings.
+
+```yaml
+enable: true
+issue_engine: feishu
+language: Chinese
+
+feishu:
+  base_url: "https://open.feishu.cn/open-apis"
+  app_id: "your-app-id"
+  app_secret: "your-app-secret"
+  tenant_access_token: ""
+  app_token: "bascnxxxxxxxxxxxxxxxx"
+  default_table_name: "需求转化"
+  table_name: "需求转化"
+  attachment_field_name: "附件"
+  image_field_name: "附件"
+  field_mappings:
+    任务简述: "title"
+    需求收集管理: "summary_content"
+    备注: "description"
+    优先级: "feishu_priority"
+    状态: "feishu_status"
+    SourceID: "email_id"
+```
+
+**Notes:**
+- `tenant_access_token` can be provided directly, or you can supply
+  `app_id` + `app_secret` and let the backend fetch a token on demand.
+- `field_mappings` maps Feishu table field names to the workflow fields
+  used by the handler.
+- Attachment upload is handled during record creation when attachments
+  include local `file_path` values; the separate `upload_attachments` hook
+  remains a no-op to avoid duplicate uploads.
 
 **JIRA Field Types:**
 
