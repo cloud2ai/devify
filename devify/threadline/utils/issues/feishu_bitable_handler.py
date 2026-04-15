@@ -9,31 +9,24 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import time
 from typing import Any, Dict, List
 
 import requests
 
-try:
-    import lark_oapi as lark
-    from lark_oapi.api.bitable.v1.model import (
-        AppTableRecord as LarkAppTableRecord,
-        CreateAppTableRecordRequest,
-        ListAppTableRequest,
-    )
-    from lark_oapi.api.drive.v1.model import (
-        UploadAllFileRequest,
-        UploadAllFileRequestBody,
-    )
-    from lark_oapi.core.model import RequestOption
-except ImportError:  # pragma: no cover - only before dependency is installed
-    lark = None
-    LarkAppTableRecord = None
-    CreateAppTableRecordRequest = None
-    ListAppTableRequest = None
-    UploadAllFileRequest = None
-    UploadAllFileRequestBody = None
-    RequestOption = None
+import lark_oapi as lark
+from lark_oapi.api.bitable.v1.model import (
+    AppTableRecord as LarkAppTableRecord,
+    CreateAppTableRecordRequest,
+    ListAppTableRequest,
+    UpdateAppTableRecordRequest,
+)
+from lark_oapi.api.drive.v1.model import (
+    UploadAllFileRequest,
+    UploadAllFileRequestBody,
+)
+from lark_oapi.core.model import RequestOption
 
 logger = logging.getLogger(__name__)
 
@@ -46,7 +39,9 @@ DEFAULT_TOKEN_URL = (
 )
 DEFAULT_TABLES_URL = "/bitable/v1/apps/{app_token}/tables"
 DEFAULT_RECORDS_URL = "/bitable/v1/apps/{app_token}/tables/{table_id}/records"
-DEFAULT_RECORD_URL = "/bitable/v1/apps/{app_token}/tables/{table_id}/records/{record_id}"
+DEFAULT_RECORD_URL = (
+    "/bitable/v1/apps/{app_token}/tables/{table_id}/records/{record_id}"
+)
 DEFAULT_UPLOAD_URL = "/drive/v1/files/upload_all"
 
 
@@ -60,18 +55,16 @@ class FeishuBitableIssueHandler:
 
     def __init__(self, config: Dict[str, Any]):
         self.config = config
-        self.feishu_config = (
-            config.get("feishu")
-            or config.get("feishu_bitable")
-            or {}
-        )
+        self.feishu_config = config.get("feishu_bitable") or {}
 
         self.base_url = self.feishu_config.get("base_url", DEFAULT_BASE_URL)
         self.app_token = self.feishu_config.get("app_token")
         self.table_name = self.feishu_config.get("table_name")
         self.table_id = self.feishu_config.get("table_id")
         self.default_table_name = self.feishu_config.get("default_table_name")
-        self.record_url_template = self.feishu_config.get("record_url_template")
+        self.record_url_template = self.feishu_config.get(
+            "record_url_template"
+        )
         self.attachment_field_name = self.feishu_config.get(
             "attachment_field_name", "附件"
         )
@@ -79,7 +72,7 @@ class FeishuBitableIssueHandler:
             "image_field_name", self.attachment_field_name
         )
         self.attachment_upload_parent_type = self.feishu_config.get(
-            "attachment_upload_parent_type", "bitable_file"
+            "attachment_upload_parent_type", "bitable"
         )
         self.image_upload_parent_type = self.feishu_config.get(
             "image_upload_parent_type", self.attachment_upload_parent_type
@@ -87,8 +80,8 @@ class FeishuBitableIssueHandler:
         self.attachment_upload_parent_node = self.feishu_config.get(
             "attachment_upload_parent_node"
         )
-        self.image_upload_parent_node = self.feishu_config.get(
-            "image_upload_parent_node"
+        self.attachment_upload_parent_folder_token = self.feishu_config.get(
+            "attachment_upload_parent_folder_token"
         )
         self.field_mappings = self.feishu_config.get("field_mappings", {})
         self.app_id = self.feishu_config.get("app_id")
@@ -104,7 +97,11 @@ class FeishuBitableIssueHandler:
 
         if not self.app_token:
             logger.warning("Feishu Bitable app_token is not configured")
-        if not self.table_name and not self.table_id and not self.default_table_name:
+        if (
+            not self.table_name
+            and not self.table_id
+            and not self.default_table_name
+        ):
             logger.warning("Feishu Bitable table identifier is not configured")
 
     def get_issue_url(self, record_id: str) -> str:
@@ -130,7 +127,7 @@ class FeishuBitableIssueHandler:
         issue_data: Dict[str, Any],
         email_data: Dict[str, Any],
         attachments: List[Dict[str, Any]],
-        force: bool = False
+        force: bool = False,
     ) -> str:
         """
         Create a Feishu Bitable record.
@@ -148,6 +145,7 @@ class FeishuBitableIssueHandler:
             issue_data=issue_data,
             email_data=email_data,
             attachments=attachments,
+            include_attachments=True,
         )
 
         if not payload_fields:
@@ -156,7 +154,10 @@ class FeishuBitableIssueHandler:
             )
 
         table_id = self._resolve_table_id()
-        url = f"{self.base_url}{DEFAULT_RECORDS_URL.format(app_token=self.app_token, table_id=table_id)}"
+        url = self.base_url + DEFAULT_RECORDS_URL.format(
+            app_token=self.app_token,
+            table_id=table_id,
+        )
 
         response_data = self._post_with_retry(url, {"fields": payload_fields})
         record_id = self._extract_record_id(response_data)
@@ -175,26 +176,42 @@ class FeishuBitableIssueHandler:
         return record_id
 
     def upload_attachments(
-        self,
-        issue_key: str,
-        attachments: List[Dict[str, Any]]
+        self, issue_key: str, attachments: List[Dict[str, Any]]
     ) -> Dict[str, int]:
         """
-        Feishu Bitable record creation does not upload email attachments.
+        Feishu attachments are uploaded during record creation.
 
-        The attachments are kept in the workflow state but not pushed to
-        Feishu unless the table schema is extended with file fields.
+        This method remains as a compatibility hook so callers can invoke it
+        unconditionally without causing a second update pass.
         """
-        skipped_count = len(attachments or [])
-        if skipped_count:
+        attachments = attachments or []
+        if not attachments:
+            return {
+                "uploaded_count": 0,
+                "skipped_count": 0,
+            }
+
+        attachment_field_name = (
+            self.attachment_field_name or self.image_field_name
+        )
+        if not attachment_field_name:
             logger.info(
-                "Skipping %s attachment(s) for Feishu Bitable record %s",
-                skipped_count,
+                "No Feishu attachment field configured for record %s",
                 issue_key,
             )
+            return {
+                "uploaded_count": 0,
+                "skipped_count": len(attachments),
+            }
+
+        logger.info(
+            "Feishu attachment upload already happened during record "
+            "creation for record %s",
+            issue_key,
+        )
         return {
             "uploaded_count": 0,
-            "skipped_count": skipped_count,
+            "skipped_count": len(attachments),
         }
 
     def _build_record_fields(
@@ -202,6 +219,7 @@ class FeishuBitableIssueHandler:
         issue_data: Dict[str, Any],
         email_data: Dict[str, Any],
         attachments: List[Dict[str, Any]],
+        include_attachments: bool = True,
     ) -> Dict[str, Any]:
         """
         Map workflow data to Feishu table fields.
@@ -218,6 +236,11 @@ class FeishuBitableIssueHandler:
             ),
             "feishu_status": "未开始",
             "email_id": email_data.get("id"),
+            "email_id_str": (
+                str(email_data.get("id"))
+                if email_data.get("id") is not None
+                else None
+            ),
             "subject": email_data.get("subject"),
             "summary_title": email_data.get("summary_title"),
             "summary_content": email_data.get("summary_content"),
@@ -240,8 +263,9 @@ class FeishuBitableIssueHandler:
                 continue
             payload_fields[field_name] = value
 
-        attachment_payload = self._build_attachment_payload(attachments)
-        payload_fields.update(attachment_payload)
+        if include_attachments:
+            attachment_payload = self._build_attachment_payload(attachments)
+            payload_fields.update(attachment_payload)
 
         return payload_fields
 
@@ -302,16 +326,15 @@ class FeishuBitableIssueHandler:
             return {}
 
         payload_fields: Dict[str, Any] = {}
-        attachment_field_name = self.attachment_field_name or self.image_field_name
+        attachment_field_name = (
+            self.attachment_field_name or self.image_field_name
+        )
 
         if attachment_field_name:
             file_tokens = self._upload_attachments_to_tokens(
                 attachments,
                 parent_type=self.attachment_upload_parent_type,
-                parent_node=(
-                    self.attachment_upload_parent_node
-                    or self.image_upload_parent_node
-                ),
+                parent_node=self._resolve_attachment_parent_node(),
             )
             if file_tokens:
                 payload_fields[attachment_field_name] = file_tokens
@@ -338,7 +361,17 @@ class FeishuBitableIssueHandler:
                 )
                 continue
 
+            if not os.path.exists(file_path):
+                logger.warning(
+                    "Skipping attachment with missing file_path: %s",
+                    file_path,
+                )
+                continue
+
             try:
+                resolved_parent_node = (
+                    parent_node or self._resolve_attachment_parent_node()
+                )
                 file_token = self._upload_single_file(
                     file_path=file_path,
                     file_name=(
@@ -347,7 +380,7 @@ class FeishuBitableIssueHandler:
                         or file_path.rsplit("/", 1)[-1]
                     ),
                     parent_type=parent_type,
-                    parent_node=parent_node,
+                    parent_node=resolved_parent_node,
                 )
                 uploaded.append({"file_token": file_token})
             except Exception as exc:
@@ -358,6 +391,143 @@ class FeishuBitableIssueHandler:
                 )
 
         return uploaded
+
+    def _update_record_fields(
+        self,
+        record_id: str,
+        fields: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        """
+        Update an existing Feishu Bitable record with the provided fields.
+        """
+        table_id = self._resolve_table_id()
+
+        if self._sdk_available():
+            return self._update_record_via_sdk(
+                table_id=table_id,
+                record_id=record_id,
+                fields=fields,
+            )
+
+        url = (
+            f"{self.base_url}"
+            f"/bitable/v1/apps/{self.app_token}"
+            f"/tables/{table_id}/records/{record_id}"
+        )
+        headers = {
+            "Authorization": f"Bearer {self._get_access_token()}",
+            "Content-Type": "application/json",
+        }
+
+        response = requests.put(
+            url,
+            headers=headers,
+            json={"fields": fields},
+            timeout=15,
+        )
+
+        response_text = response.text
+        try:
+            data = response.json()
+        except ValueError:
+            data = {}
+
+        if response.status_code >= 400 or data.get("code") not in (0, None):
+            raise ValueError(
+                self._format_response_error(
+                    self._build_error_details(
+                        response=response,
+                        response_text=response_text,
+                        response_json=data,
+                    )
+                )
+            )
+
+        return data
+
+    def _update_record_via_sdk(
+        self,
+        table_id: str,
+        record_id: str,
+        fields: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        """
+        Update an existing Feishu Bitable record using the official SDK.
+        """
+        client = self._get_sdk_client()
+        if (
+            client is None
+            or UpdateAppTableRecordRequest is None
+            or LarkAppTableRecord is None
+        ):
+            raise ValueError("Feishu SDK is unavailable")
+
+        request = (
+            UpdateAppTableRecordRequest.builder()
+            .app_token(self.app_token)
+            .table_id(table_id)
+            .record_id(record_id)
+            .request_body(LarkAppTableRecord.builder().fields(fields).build())
+            .build()
+        )
+        response = client.bitable.v1.app_table_record.update(
+            request,
+            self._get_sdk_request_option(),
+        )
+        if not response.success():
+            raise ValueError(
+                self._format_sdk_response_error(
+                    response,
+                    "Failed to update Feishu Bitable record",
+                )
+            )
+
+        return {
+            "code": response.code,
+            "data": {
+                "record": {
+                    "record_id": record_id,
+                }
+            },
+        }
+
+    def _resolve_attachment_parent_node(self) -> str:
+        """
+        Resolve the configured parent node token used for attachment uploads.
+        """
+        explicit_parent_node = (
+            self.attachment_upload_parent_node or ""
+        ).strip()
+        if explicit_parent_node:
+            return explicit_parent_node
+
+        parent_type = (self.attachment_upload_parent_type or "").strip()
+        if parent_type in {"bitable", "bitable_file"}:
+            if self.app_token:
+                return self.app_token
+
+            legacy_folder_token = (
+                self.attachment_upload_parent_folder_token or ""
+            ).strip()
+            if legacy_folder_token:
+                return legacy_folder_token
+
+            raise ValueError(
+                "Feishu bitable attachment upload requires app_token or "
+                "feishu_bitable.attachment_upload_parent_node"
+            )
+
+        folder_token = (
+            self.attachment_upload_parent_folder_token or ""
+        ).strip()
+        if folder_token:
+            return folder_token
+
+        raise ValueError(
+            "Feishu attachment upload requires "
+            "feishu_bitable.attachment_upload_parent_node or "
+            "feishu_bitable.attachment_upload_parent_folder_token"
+        )
 
     def _upload_single_file(
         self,
@@ -371,6 +541,7 @@ class FeishuBitableIssueHandler:
         """
         with open(file_path, "rb") as file_obj:
             file_bytes = file_obj.read()
+            file_obj.seek(0)
 
             if self._sdk_available():
                 return self._upload_single_file_via_sdk(
@@ -385,71 +556,56 @@ class FeishuBitableIssueHandler:
         headers = {
             "Authorization": f"Bearer {self._get_access_token()}",
         }
-        parent_node_candidates = [
-            parent_node,
-            self.app_token,
-            f"{self.app_token}_{self._resolve_table_id()}",
-        ]
-
-        last_error: Exception | None = None
-        for candidate in [item for item in parent_node_candidates if item]:
-            form_data = {
-                "file_name": file_name,
-                "parent_type": parent_type,
-                "parent_node": candidate,
-                "size": str(len(file_bytes)),
-            }
-            files = {
-                "file": (file_name, file_bytes),
-            }
-
-            response = requests.post(
-                url,
-                headers=headers,
-                data=form_data,
-                files=files,
-                timeout=30,
+        if not parent_node:
+            raise ValueError(
+                "Feishu attachment upload requires a parent node token"
             )
 
-            response_text = response.text
-            try:
-                data = response.json()
-            except ValueError:
-                data = {}
+        form_data = {
+            "file_name": file_name,
+            "parent_type": parent_type,
+            "parent_node": parent_node,
+            "size": str(len(file_bytes)),
+        }
+        files = {
+            "file": (file_name, file_bytes),
+        }
 
-            if response.status_code >= 400 or data.get("code") not in (0, None):
-                last_error = ValueError(
-                    self._format_response_error(
-                        self._build_error_details(
-                            response=response,
-                            response_text=response_text,
-                            response_json=data,
-                        )
-                    )
-                )
-                logger.warning(
-                    "Feishu upload failed for %s with parent_node=%s: %s",
-                    file_name,
-                    candidate,
-                    last_error,
-                )
-                continue
-
-            file_token = data.get("data", {}).get("file_token")
-            if not file_token:
-                last_error = ValueError(
-                    f"Feishu upload response missing file_token: {data}"
-                )
-                continue
-
-            return file_token
-
-        raise ValueError(
-            f"Failed to upload file to Feishu: {file_name}. Last error: {last_error}"
+        response = requests.post(
+            url,
+            headers=headers,
+            data=form_data,
+            files=files,
+            timeout=30,
         )
 
+        response_text = response.text
+        try:
+            data = response.json()
+        except ValueError:
+            data = {}
+
+        if response.status_code >= 400 or data.get("code") not in (0, None):
+            raise ValueError(
+                self._format_response_error(
+                    self._build_error_details(
+                        response=response,
+                        response_text=response_text,
+                        response_json=data,
+                    )
+                )
+            )
+
+        file_token = data.get("data", {}).get("file_token")
+        if not file_token:
+            raise ValueError(
+                f"Feishu upload response missing file_token: {data}"
+            )
+
+        return file_token
+
     def _sdk_available(self) -> bool:
-        return lark is not None
+        return True
 
     def _get_sdk_client(self):
         """
@@ -604,72 +760,56 @@ class FeishuBitableIssueHandler:
         ):
             raise ValueError("Feishu SDK is unavailable")
 
-        parent_node_candidates = [
-            parent_node,
-            self.app_token,
-            f"{self.app_token}_{self._resolve_table_id()}",
-        ]
+        if not parent_node:
+            raise ValueError(
+                "Feishu attachment upload requires a parent folder token"
+            )
 
-        last_error: Exception | None = None
-        for candidate in [item for item in parent_node_candidates if item]:
-            try:
-                request = (
-                    UploadAllFileRequest.builder()
-                    .request_body(
-                        UploadAllFileRequestBody.builder()
-                        .file_name(file_name)
-                        .parent_type(parent_type)
-                        .parent_node(candidate)
-                        .size(len(file_bytes))
-                        .file(file_obj)
-                        .build()
-                    )
+        try:
+            file_obj.seek(0)
+            request = (
+                UploadAllFileRequest.builder()
+                .request_body(
+                    UploadAllFileRequestBody.builder()
+                    .file_name(file_name)
+                    .parent_type(parent_type)
+                    .parent_node(parent_node)
+                    .size(len(file_bytes))
+                    .file(file_obj)
                     .build()
                 )
-                response = client.drive.v1.file.upload_all(
-                    request,
-                    self._get_sdk_request_option(),
-                )
-                if not response.success():
-                    last_error = ValueError(
-                        self._format_sdk_response_error(
-                            response,
-                            (
-                                "Feishu upload failed for "
-                                f"{file_name} with parent_node={candidate}"
-                            ),
-                        )
+                .build()
+            )
+            response = client.drive.v1.file.upload_all(
+                request,
+                self._get_sdk_request_option(),
+            )
+            if not response.success():
+                raise ValueError(
+                    self._format_sdk_response_error(
+                        response,
+                        (
+                            "Feishu upload failed for "
+                            f"{file_name} with parent_node={parent_node}"
+                        ),
                     )
-                    logger.warning(
-                        "Feishu upload failed for %s with parent_node=%s: %s",
-                        file_name,
-                        candidate,
-                        last_error,
-                    )
-                    continue
-
-                file_token = (
-                    response.data.file_token if response.data else None
-                )
-                if not file_token:
-                    last_error = ValueError(
-                        f"Feishu upload response missing file_token: {response}"
-                    )
-                    continue
-
-                return file_token
-            except Exception as exc:
-                last_error = exc
-                logger.warning(
-                    "Feishu upload failed for %s with parent_node=%s: %s",
-                    file_name,
-                    candidate,
-                    exc,
                 )
 
-        raise ValueError(
-            f"Failed to upload file to Feishu: {file_name}. Last error: {last_error}"
-        )
+            file_token = response.data.file_token if response.data else None
+            if not file_token:
+                raise ValueError(
+                    f"Feishu upload response missing file_token: {response}"
+                )
+
+            return file_token
+        except Exception as exc:
+            logger.warning(
+                "Feishu upload failed for %s with parent_node=%s: %s",
+                file_name,
+                parent_node,
+                exc,
+            )
+            raise
 
     def _resolve_table_id(self) -> str:
         """
@@ -710,7 +850,10 @@ class FeishuBitableIssueHandler:
             self._cached_tables = tables
             return tables
 
-        url = f"{self.base_url}{DEFAULT_TABLES_URL.format(app_token=self.app_token)}"
+        url = (
+            f"{self.base_url}"
+            f"{DEFAULT_TABLES_URL.format(app_token=self.app_token)}"
+        )
         response = requests.get(
             url,
             headers={"Authorization": f"Bearer {self._get_access_token()}"},
@@ -781,14 +924,17 @@ class FeishuBitableIssueHandler:
     def _post_with_retry(
         self,
         url: str,
-        payload: Dict[str, Any]
+        payload: Dict[str, Any],
     ) -> Dict[str, Any]:
         """
         Send a Feishu API request with a small retry loop.
         """
         if self._sdk_available():
             table_id = self._resolve_table_id()
-            return self._create_record_via_sdk(table_id, payload.get("fields", {}))
+            return self._create_record_via_sdk(
+                table_id,
+                payload.get("fields", {}),
+            )
 
         last_error: Exception | None = None
         last_error_details: Dict[str, Any] | None = None
@@ -869,10 +1015,7 @@ class FeishuBitableIssueHandler:
             "response_json": response_json,
         }
 
-    def _format_response_error(
-        self,
-        error_details: Dict[str, Any]
-    ) -> str:
+    def _format_response_error(self, error_details: Dict[str, Any]) -> str:
         """
         Format a Feishu API failure for easier debugging.
         """
@@ -912,7 +1055,4 @@ class FeishuBitableIssueHandler:
                 or data.get("recordId")
             )
 
-        return (
-            response_data.get("record_id")
-            or response_data.get("id")
-        )
+        return response_data.get("record_id") or response_data.get("id")

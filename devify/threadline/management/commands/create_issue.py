@@ -1,7 +1,7 @@
 """
 Django management command for creating JIRA issues from emails.
 
-This command directly creates JIRA issues from existing email messages,
+This command directly creates issue records from existing email messages,
 bypassing the full email processing workflow. It's designed for debugging
 and testing the issue creation functionality.
 
@@ -25,7 +25,8 @@ from django.contrib.auth.models import User
 from django.core.management.base import BaseCommand, CommandError
 
 from threadline.models import EmailMessage, Settings
-from threadline.utils.issues.jira_handler import JiraIssueHandler
+from threadline.utils.issues import get_issue_handler
+from threadline.utils.issues.issue_factory import normalize_issue_engine
 
 # Initialize logger for this module
 logger = logging.getLogger(__name__)
@@ -33,13 +34,13 @@ logger = logging.getLogger(__name__)
 
 class Command(BaseCommand):
     """
-    Command for creating JIRA issues from emails.
+    Command for creating external issue records from emails.
 
-    This command directly calls JiraIssueHandler to create issues,
+    This command directly calls the configured issue handler to create issues,
     bypassing the workflow system entirely. It's designed for
     debugging and testing the issue creation functionality.
     """
-    help = "Create JIRA issue from an existing email message"
+    help = "Create an issue record from an existing email message"
 
     def add_arguments(self, parser):
         """
@@ -88,7 +89,7 @@ class Command(BaseCommand):
             logging.getLogger().setLevel(logging.DEBUG)
             logger.info("Debug logging enabled")
 
-        logger.info(f"Creating JIRA issue for email ID={email_id}")
+        logger.info(f"Creating issue for email ID={email_id}")
 
         try:
             # Get the email message
@@ -167,14 +168,14 @@ class Command(BaseCommand):
                 self.stdout.write(f"📝 Title: {summary_title[:50]}...")
                 self.stdout.write(f"📎 Attachments: {len(attachments)} files")
 
-            # Create JIRA issue
-            jira_handler = JiraIssueHandler(issue_config)
+            # Create issue using the configured provider
+            issue_handler = get_issue_handler(issue_config)
 
             logger.info(
-                f"Creating JIRA issue with title: {summary_title[:50]}..."
+                f"Creating issue with title: {summary_title[:50]}..."
             )
 
-            issue_key = jira_handler.create_issue(
+            issue_key = issue_handler.create_issue(
                 issue_data=issue_data,
                 email_data=email_data,
                 attachments=attachments,
@@ -182,61 +183,70 @@ class Command(BaseCommand):
             )
 
             if issue_key:
-                logger.info(f"JIRA issue created successfully: {issue_key}")
-
-                # Upload attachments
-                upload_result = jira_handler.upload_attachments(
-                    issue_key=issue_key,
-                    attachments=attachments
-                )
                 logger.info(
-                    f"Uploaded {upload_result['uploaded_count']} attachments "
-                    f"to JIRA {issue_key}"
+                    f"Issue created successfully: {issue_key}"
                 )
+
+                if issue_config.get("issue_engine", "jira") != (
+                    "feishu_bitable"
+                ):
+                    # Upload attachments for providers that do not do this
+                    # during record creation.
+                    upload_result = issue_handler.upload_attachments(
+                        issue_key=issue_key,
+                        attachments=attachments
+                    )
+                    logger.info(
+                        f"Uploaded {upload_result['uploaded_count']} "
+                        f"attachments for issue {issue_key}"
+                    )
 
                 # Get issue URL
-                issue_url = jira_handler.get_issue_url(issue_key)
+                issue_url = issue_handler.get_issue_url(issue_key)
 
                 self.stdout.write(
                     self.style.SUCCESS(
-                        f"✅ Successfully created JIRA issue: {issue_key}"
+                        f"✅ Successfully created issue: {issue_key}"
                     )
                 )
 
                 if verbose:
-                    self.stdout.write(f"🔗 JIRA URL: {issue_url}")
+                    self.stdout.write(f"🔗 Record URL: {issue_url}")
                     self.stdout.write(f"📋 Issue Key: {issue_key}")
                     self.stdout.write(f"📝 Title: {summary_title}")
 
-                    # Show JIRA configuration details
-                    jira_config = issue_config.get("jira", {})
-                    if "project" in jira_config:
+                    # Show provider configuration details
+                    provider_key = normalize_issue_engine(
+                        issue_config.get("issue_engine", "jira")
+                    )
+                    provider_config = issue_config.get(provider_key, {})
+                    if "project" in provider_config:
                         self.stdout.write(
-                            f"🏗️ Project: {jira_config['project']}"
+                            f"🏗️ Project: {provider_config['project']}"
                         )
-                    if "default_priority" in jira_config:
+                    if "default_priority" in provider_config:
                         self.stdout.write(
-                            f"⚡ Priority: {jira_config['default_priority']}"
+                            f"⚡ Priority: {provider_config['default_priority']}"
                         )
             else:
-                logger.error("JIRA issue creation failed")
+                logger.error("Issue creation failed")
                 self.stdout.write(
                     self.style.ERROR(
-                        f"❌ Failed to create JIRA issue for email "
+                        f"❌ Failed to create issue for email "
                         f"ID={email_id}"
                     )
                 )
-                raise CommandError("JIRA issue creation failed")
+                raise CommandError("Issue creation failed")
 
         except Exception as e:
             logger.error(
-                f"Failed to create JIRA issue for email ID={email_id}: {e}",
+                f"Failed to create issue for email ID={email_id}: {e}",
                 exc_info=True
             )
             self.stdout.write(
                 self.style.ERROR(
-                    f"❌ Failed to create JIRA issue for email "
+                    f"❌ Failed to create issue for email "
                     f"ID={email_id}: {e}"
                 )
             )
-            raise CommandError(f"Failed to create JIRA issue: {e}")
+            raise CommandError(f"Failed to create issue: {e}")

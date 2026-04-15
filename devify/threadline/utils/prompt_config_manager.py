@@ -298,6 +298,15 @@ class PromptConfigManager:
                 f"and language '{lang}'"
             )
 
+        # Preserve the normalized language/scene in the runtime config so
+        # downstream nodes can make locale-sensitive decisions without
+        # having to reload user settings.
+        merged_prompts = {
+            **merged_prompts,
+            "language": lang,
+            "scene": scene,
+        }
+
         logger.info(
             f"Prompt config loaded successfully: "
             f"scene={scene}, language={lang}, "
@@ -505,6 +514,16 @@ class PromptConfigManager:
                         f"To use dynamic language-based prompts, remove "
                         f"legacy prompt fields from prompt_config."
                     )
+                if 'language' not in prompt_config_raw or 'scene' not in prompt_config_raw:
+                    prompt_config_raw = {
+                        **prompt_config_raw,
+                        'language': prompt_config_raw.get(
+                            'language', settings.DEFAULT_LANGUAGE
+                        ),
+                        'scene': prompt_config_raw.get(
+                            'scene', settings.DEFAULT_SCENE
+                        ),
+                    }
                 return prompt_config_raw
 
             # New format: extract scene and language

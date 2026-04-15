@@ -3,7 +3,7 @@ Django management command to initialize threadline settings configuration.
 
 This command initializes threadline settings for a specified user, including:
 - email_config: Email collection configuration
-- issue_config: JIRA issue creation configuration (loaded from YAML)
+- issue_config: Issue creation configuration (loaded from YAML)
 - prompt_config: AI prompt templates
 - webhook_config: Webhook notification settings
 """
@@ -16,6 +16,7 @@ from django.contrib.auth.models import User
 from django.core.management.base import BaseCommand
 
 from threadline.models import Settings
+from threadline.utils.issues.issue_factory import normalize_issue_engine
 from threadline.utils.prompt_config_manager import PromptConfigManager
 
 logger = logging.getLogger(__name__)
@@ -26,7 +27,7 @@ class Command(BaseCommand):
     Management command to initialize threadline settings for users.
 
     This command creates all required settings configurations for a user,
-    loading JIRA configuration from YAML file in conf/threadline/issues/.
+    loading issue configuration from YAML file in conf/threadline/issues/.
     """
 
     help = 'Initialize threadline settings configuration for a user'
@@ -44,10 +45,11 @@ class Command(BaseCommand):
 
     def load_issue_config(self):
         """
-        Load issue configuration from YAML file.
+        Load issue configuration from YAML files.
 
         Returns:
-            dict: Issue configuration dictionary
+            dict: Issue configuration dictionary merged from the common
+                base config plus the engine-specific config.
 
         Raises:
             FileNotFoundError: If config file not found
@@ -61,29 +63,38 @@ class Command(BaseCommand):
             )
         )
 
-        config_file = os.path.join(
-            base_dir,
-            'conf',
-            'threadline',
-            'issues',
-            'jira_config.yaml'
-        )
-
-        if not os.path.exists(config_file):
+        config_dir = os.path.join(base_dir, 'conf', 'threadline', 'issues')
+        common_config_file = os.path.join(config_dir, 'issue_config.yaml')
+        if not os.path.exists(common_config_file):
             self.logger.error(
-                f'Issue config file not found: {config_file}\n'
+                f'Issue config file not found in: {common_config_file}\n'
                 f'Please ensure the configuration file exists.'
             )
             raise FileNotFoundError(
-                f'JIRA configuration file not found: {config_file}'
+                f'Issue configuration file not found in: {common_config_file}'
             )
 
         try:
-            with open(config_file, 'r', encoding='utf-8') as f:
-                config = yaml.safe_load(f)
+            common_config = self._load_yaml_config(common_config_file)
+            engine_name = normalize_issue_engine(
+                common_config.get('issue_engine', 'jira')
+            )
+            engine_config_file = self._get_issue_engine_config_file(
+                config_dir,
+                engine_name,
+            )
+            engine_config = (
+                self._load_yaml_config(engine_config_file)
+                if engine_config_file
+                else {}
+            )
 
+            config = self._deep_merge_dicts(common_config, engine_config)
+            config['issue_engine'] = engine_name
             self.logger.info(
-                f'Loaded JIRA configuration from: {config_file}'
+                'Loaded issue configuration from: %s + %s',
+                common_config_file,
+                engine_config_file or '<none>',
             )
             return config
 
@@ -92,6 +103,53 @@ class Command(BaseCommand):
                 f'Invalid YAML in issue config file: {e}'
             )
             raise ValueError(f'Invalid YAML configuration: {e}')
+
+    def _load_yaml_config(self, file_path):
+        """
+        Load a YAML config file from disk.
+
+        Args:
+            file_path: Absolute config file path.
+
+        Returns:
+            dict: Parsed YAML dictionary or an empty dict when the file has
+                no content.
+        """
+        with open(file_path, 'r', encoding='utf-8') as f:
+            config = yaml.safe_load(f)
+
+        return config or {}
+
+    def _get_issue_engine_config_file(self, config_dir, engine_name):
+        """
+        Return the engine-specific config file path if it exists.
+        """
+        engine_config_files = {
+            'jira': 'jira_config.yaml',
+            'feishu_bitable': 'feishu_bitable_config.yaml',
+        }
+        file_name = engine_config_files.get(engine_name)
+        if not file_name:
+            return None
+
+        config_file = os.path.join(config_dir, file_name)
+        return config_file if os.path.exists(config_file) else None
+
+    def _deep_merge_dicts(self, base, override):
+        """
+        Deep-merge two configuration dictionaries.
+
+        Nested dictionaries are merged recursively. Scalar values in the
+        override config replace the base values.
+        """
+        merged = dict(base or {})
+        for key, value in (override or {}).items():
+            existing = merged.get(key)
+            if isinstance(existing, dict) and isinstance(value, dict):
+                merged[key] = self._deep_merge_dicts(existing, value)
+            else:
+                merged[key] = value
+        return merged
 
     def add_arguments(self, parser):
         """
@@ -229,12 +287,14 @@ class Command(BaseCommand):
             return self.load_issue_config()
         except (FileNotFoundError, ValueError) as e:
             self.logger.error(
-                f'Failed to load JIRA configuration: {e}\n'
+                f'Failed to load issue configuration: {e}\n'
                 f'Skipping issue_config initialization.'
             )
             return {
                 'enable': False,
-                'issue_engine': 'jira'
+                'issue_engine': 'jira',
+                'jira': {},
+                'feishu_bitable': {}
             }
 
     def _build_settings_dict(self, user_prompt_config, issue_config):
@@ -372,7 +432,8 @@ class Command(BaseCommand):
             f'http://localhost:8000/admin/v1/threadline/settings/\n'
             f'2. Update the following configurations:\n'
             f'   • email_config - Your email server details\n'
-            f'   • issue_config - Your issue creation settings\n'
+            f'   • issue_config - Your issue creation settings '
+            f'(JIRA / Feishu Bitable)\n'
             f'   • prompt_config - Customize AI prompts if needed\n'
             f'   • webhook_config - Configure external notifications '
             f'(optional)\n'
@@ -397,8 +458,9 @@ class Command(BaseCommand):
             ),
             (
                 'issue_config',
-                'Optional - JIRA issue creation configuration. Only needed '
-                'if you want to automatically create JIRA issues from emails.'
+                'Optional - Issue creation configuration for JIRA or '
+                'Feishu Bitable. Only needed if you want to create '
+                'records automatically from emails.'
             ),
             (
                 'prompt_config',

@@ -1,0 +1,38 @@
+# Feishu Bitable issue configuration.
+#
+# This file contains Feishu Bitable-specific connection and field mapping
+# settings. Common toggles stay in issue_config.yaml.
+
+feishu_bitable:
+  base_url: "https://open.feishu.cn/open-apis"
+  # Feishu application token for the Bitable base.
+  # Get it from the Bitable URL or via bitable/v1/apps/{app_token}.
+  app_id: "your-app-id"
+  app_secret: "your-app-secret"
+  tenant_access_token: ""
+  app_token: "bascnxxxxxxxxxxxxxxxx"
+  # Target table name in Feishu Bitable.
+  # The code resolves it to table_id by listing tables in the base.
+  default_table_name: "需求转化"
+  table_name: "需求转化"
+  attachment_field_name: "附件"
+  image_field_name: "附件"
+  # Attachment upload target type.
+  # Use "bitable" for embedded Bitable mount nodes.
+  # Use "explorer" only when uploading to a normal Feishu drive folder.
+  attachment_upload_parent_type: "bitable"
+  # The upload parent node token.
+  # For embedded Bitable attachments, copy mount_node_token from the
+  # internal drive-stream URL, or from the attachment download URL after a
+  # successful manual upload.
+  attachment_upload_parent_node: ""
+  # Legacy fallback for drive folder uploads.
+  attachment_upload_parent_folder_token: ""
+  record_url_template: ""
+  field_mappings:
+    任务简述: "title"
+    需求收集管理: "summary_content"
+    备注: "llm_content"
+    优先级: "feishu_priority"
+    状态: "feishu_status"
+    SourceID: "email_id_str"

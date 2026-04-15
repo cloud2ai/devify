@@ -721,22 +721,30 @@ The issue configuration supports multiple engines (JIRA, Feishu Bitable, etc.) w
 | Key                | Type     | Description                                      | Example                      |
 |--------------------|----------|--------------------------------------------------|------------------------------|
 | enable             | boolean  | Whether issue creation is enabled                | true                         |
-| issue_engine       | string   | Issue creation engine type                       | "jira" or "feishu"           |
+| issue_engine       | string   | Issue creation engine type                       | "jira" or "feishu_bitable"   |
 | jira               | object   | JIRA-specific configuration                      | See JIRA config below        |
-| feishu             | object   | Feishu Bitable-specific configuration            | See Feishu config below      |
+| feishu_bitable     | object   | Feishu Bitable-specific configuration            | See Feishu config below      |
 | language           | string   | LLM output language                              | "Chinese" or "English"       |
 | fields             | object   | Field configurations (see below)                 | See JIRA config below        |
+
+**Structure note:**
+- `fields` is the reusable mapping/default field structure. Keep it as the
+  default value definition layer, not as a driver-specific bucket.
+- Engine-specific connection settings live in `jira_config.yaml` or
+  `feishu_bitable_config.yaml`.
 
 #### JIRA Configuration
 
 JIRA issue creation is configured via YAML file at `conf/threadline/issues/jira_config.yaml`.
+`conf/threadline/issues/issue_config.yaml` contains the shared base settings,
+and the initialization command merges it with the engine-specific file.
 All configuration is automatically loaded during settings initialization.
 
 **Configuration Structure:**
 
 ```yaml
 # Basic settings
-enable: true              # Enable/disable issue creation
+enable: true             # Enable/disable issue creation
 issue_engine: jira       # Issue engine type
 language: Chinese        # LLM output language
 
@@ -790,32 +798,48 @@ fields:
 
 #### Feishu Bitable Configuration
 
-Feishu Bitable issue creation is configured via the same `issue_config`
-setting in the database. Switch the engine to `feishu` and provide the
-Feishu-specific connection details and field mappings.
+Feishu Bitable issue creation is configured via `conf/threadline/issues/feishu_bitable_config.yaml`.
+The base `issue_config.yaml` file still carries the shared switches, and the
+initialization command merges in the Feishu Bitable-specific settings when
+`issue_engine` is set to `feishu_bitable`.
 
 ```yaml
 enable: true
-issue_engine: feishu
+issue_engine: feishu_bitable
 language: Chinese
 
-feishu:
+feishu_bitable:
   base_url: "https://open.feishu.cn/open-apis"
+  # Feishu application token for the Bitable base.
+  # Get it from the Bitable URL or via bitable/v1/apps/{app_token}.
   app_id: "your-app-id"
   app_secret: "your-app-secret"
   tenant_access_token: ""
   app_token: "bascnxxxxxxxxxxxxxxxx"
+  # Target table name in Feishu Bitable.
+  # The backend resolves this to table_id by listing tables in the base.
   default_table_name: "需求转化"
   table_name: "需求转化"
   attachment_field_name: "附件"
   image_field_name: "附件"
+  # Upload target type for attachments.
+  # Use "bitable" for embedded Bitable mount nodes.
+  # Use "explorer" only for normal Feishu drive folders.
+  attachment_upload_parent_type: "bitable"
+  # The upload parent node token.
+  # For embedded Bitable attachments, copy mount_node_token from the
+  # internal drive-stream URL, or from the attachment download URL after a
+  # successful manual upload.
+  attachment_upload_parent_node: "mount-node-token-from-feishu"
+  # Legacy fallback for drive folder uploads.
+  attachment_upload_parent_folder_token: "optional-legacy-folder-token"
   field_mappings:
     任务简述: "title"
     需求收集管理: "summary_content"
-    备注: "description"
+    备注: "llm_content"
     优先级: "feishu_priority"
     状态: "feishu_status"
-    SourceID: "email_id"
+    SourceID: "email_id_str"
 ```
 
 **Notes:**
@@ -823,9 +847,17 @@ feishu:
   `app_id` + `app_secret` and let the backend fetch a token on demand.
 - `field_mappings` maps Feishu table field names to the workflow fields
   used by the handler.
-- Attachment upload is handled during record creation when attachments
-  include local `file_path` values; the separate `upload_attachments` hook
-  remains a no-op to avoid duplicate uploads.
+- `attachment_upload_parent_type` controls where the attachment is uploaded.
+  - Use `bitable` for embedded Bitable mounts.
+  - Use `explorer` for a normal Feishu drive folder.
+- `attachment_upload_parent_node` is the value passed to `drive/v1/files/upload_all`.
+  - For embedded Bitable attachments, copy `mount_node_token` from the
+    `internal-api-drive-stream.feishu.cn/...` URL or from a successful manual
+    upload.
+  - For drive-folder uploads, use the folder token.
+- `attachment_upload_parent_folder_token` is only needed as a legacy fallback
+  when you intentionally upload to a standard drive folder.
+- New configs should use `feishu_bitable`.
 
 **JIRA Field Types:**
 
@@ -845,9 +877,11 @@ Fields fall into three categories:
 
 **How to Configure:**
 
-1. Edit `conf/threadline/issues/jira_config.yaml`
-2. Update JIRA credentials and project settings
-3. Add optional LLM-based features
+1. Edit `conf/threadline/issues/issue_config.yaml`
+2. Edit the engine-specific file:
+   - `conf/threadline/issues/jira_config.yaml`
+   - `conf/threadline/issues/feishu_bitable_config.yaml`
+3. Update credentials, table IDs, and field mappings
 4. Run: `python manage.py init_threadline_settings --user username`
 
 **How LLM Prompt System Works:**

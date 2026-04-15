@@ -224,6 +224,8 @@ start_flower() {
 
 start_development() {
     log "Starting Django development server (runserver)..."
+    # Keep nginx-served admin assets available in development mode too.
+    collect_static
     exec python manage.py runserver 0.0.0.0:8000
 }
 

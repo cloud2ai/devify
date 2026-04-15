@@ -1,0 +1,9 @@
+# Common issue configuration.
+#
+# This file intentionally stays small: shared settings live here, while
+# engine-specific settings are loaded from jira_config.yaml or
+# feishu_bitable_config.yaml.
+
+enable: true
+issue_engine: jira
+language: "Chinese"

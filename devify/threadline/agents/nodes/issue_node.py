@@ -10,7 +10,8 @@ from typing import Dict, Any
 
 from threadline.agents.nodes.base_node import BaseLangGraphNode
 from threadline.agents.email_state import EmailState, add_node_error
-from threadline.utils.issues.jira_handler import JiraIssueHandler
+from threadline.utils.issues import get_issue_handler
+from threadline.utils.issues.issue_factory import normalize_issue_engine
 from threadline.utils.issues.jira_utils import build_description_field
 
 logger = logging.getLogger(__name__)
@@ -20,15 +21,15 @@ class IssueNode(BaseLangGraphNode):
     """
     Issue creation node.
 
-    This node handles external issue system (JIRA) integration.
+    This node handles external issue system integration.
     No database operations - all data comes from State.
 
     Responsibilities:
     - Check for required summary content in State
     - Validate issue configuration from State
     - Check if issue already exists in State
-    - Call external issue handler (JIRA API)
-    - Upload attachments to external system
+    - Call the configured external issue handler
+    - Upload attachments when the provider supports it
     - Store JIRA result in State for WorkflowFinalizeNode
     - Skip if issue already exists (unless force mode)
 
@@ -46,7 +47,7 @@ class IssueNode(BaseLangGraphNode):
       - title: Issue title
       - description: Issue description
       - priority: Issue priority
-      - engine: Engine type ('jira', 'github', etc.)
+      - engine: Engine type ('jira', 'feishu_bitable', etc.)
       - metadata: Engine-specific data (varies by engine)
     """
 
@@ -149,50 +150,53 @@ class IssueNode(BaseLangGraphNode):
             EmailState: Updated state with issue_result_data
         """
         issue_config = state.get('issue_config', {})
-        issue_engine = issue_config.get('issue_engine', 'jira')
+        issue_engine = normalize_issue_engine(
+            issue_config.get('issue_engine', 'jira')
+        )
 
-        if issue_engine != 'jira':
-            error_message = f'Unsupported issue engine: {issue_engine}'
+        try:
+            issue_handler = get_issue_handler(issue_config)
+        except ValueError as e:
+            error_message = str(e)
             logger.error(error_message)
             return add_node_error(state, self.node_name, error_message)
 
-        jira_result = self._create_jira_issue(state, issue_config)
+        provider_result = self._create_issue(
+            state, issue_config, issue_handler
+        )
 
-        if not jira_result:
-            error_message = 'JIRA issue creation failed'
+        if not provider_result:
+            error_message = f"{issue_engine} issue creation failed"
             logger.error(error_message)
             return add_node_error(state, self.node_name, error_message)
 
-        issue_key = jira_result.get('issue_key')
+        issue_key = provider_result.get('issue_key')
         logger.info(
-            f"JIRA issue created successfully: {issue_key}"
+            f"{issue_engine} issue created successfully: {issue_key}"
         )
 
         # Prepare engine-agnostic issue result data
-        issue_result = {
-            'external_id': jira_result.get('issue_key'),
-            'issue_url': jira_result.get('issue_url'),
-            'title': jira_result.get('title'),
-            'description': jira_result.get('description'),
-            'priority': jira_result.get('priority'),
-            'engine': 'jira',
-            'metadata': {
-                'project': jira_result.get('project'),
-                'upload_result': jira_result.get('upload_result')
-            }
+        issue_result_data = {
+            'external_id': provider_result.get('issue_key'),
+            'issue_url': provider_result.get('issue_url'),
+            'title': provider_result.get('title'),
+            'description': provider_result.get('description'),
+            'priority': provider_result.get('priority'),
+            'engine': issue_engine,
+            'metadata': provider_result.get('metadata', {})
         }
 
         # Add to state
         updated_state = {
             **state,
-            'issue_result_data': issue_result
+            'issue_result_data': issue_result_data
         }
 
         # Log for debugging
         logger.info(
             f"Returning state with issue_result_data: "
-            f"engine=jira, external_id={issue_result.get('external_id')}, "
-            f"issue_url={issue_result.get('issue_url')}"
+            f"engine={issue_engine}, external_id={issue_result_data.get('external_id')}, "
+            f"issue_url={issue_result_data.get('issue_url')}"
         )
 
         return updated_state
@@ -313,35 +317,27 @@ class IssueNode(BaseLangGraphNode):
             language=language
         )
 
-    def _create_jira_issue(
+    def _create_issue(
         self,
         state: EmailState,
-        issue_config: Dict[str, Any]
+        issue_config: Dict[str, Any],
+        issue_handler: Any
     ) -> Dict[str, Any] | None:
         """
-        Create JIRA issue via API (no database operations).
+        Create an external issue record via the configured provider.
 
-        This method only calls JIRA API using data from State.
+        This method only calls the provider API using data from State.
         Database record creation is handled by WorkflowFinalizeNode.
-
-        TODO: JiraIssueHandler currently requires Issue and EmailMessage
-        objects. This needs to be refactored to accept pure data
-        dictionaries instead. For now, we call methods that expect these
-        objects to exist in State or be constructed from State data.
-
-        The ideal interface should be:
-        - jira_handler.create_issue_from_data(issue_data, attachments, force)
-        - jira_handler.upload_attachments_from_data(issue_key, attachments)
 
         Args:
             state: Current email state containing all necessary data
             issue_config: Issue configuration from State
+            issue_handler: Provider-specific issue handler
 
         Returns:
-            Dict with JIRA result data:
-            - issue_key: JIRA issue key
-            - issue_url: Full URL to JIRA issue
-            - project: JIRA project key
+            Dict with provider result data:
+            - issue_key: External record identifier
+            - issue_url: Full URL to external record
             - title: Issue title
             - description: Issue description
             - priority: Issue priority
@@ -349,20 +345,22 @@ class IssueNode(BaseLangGraphNode):
             None if creation failed
         """
         try:
-            jira_config = issue_config.get('jira')
+            provider_key = normalize_issue_engine(
+                issue_config.get('issue_engine', 'jira')
+            )
+            provider_config = issue_config.get(provider_key, {})
 
-            if not jira_config:
+            if not provider_config:
                 logger.warning(
-                    "JIRA config not found, skipping JIRA creation"
+                    "Provider config not found, skipping issue creation"
                 )
                 return None
 
             # Prepare data for JIRA creation
             issue_data, email_data, language = self._prepare_issue_data(
-                state, jira_config
+                state, provider_config
             )
 
-            jira_handler = JiraIssueHandler(issue_config)
             force = state.get('force', False)
             attachments = state.get('attachments', [])
             email_id = state.get('id')
@@ -370,40 +368,40 @@ class IssueNode(BaseLangGraphNode):
 
             title = issue_data['title']
             logger.info(
-                f"Creating JIRA issue with title: {title[:50]}..."
+                f"Creating issue with title: {title[:50]}..."
             )
 
-            # Create JIRA issue
-            issue_key = jira_handler.create_issue(
+            # Create external issue record
+            issue_key = issue_handler.create_issue(
                 issue_data=issue_data,
                 email_data=email_data,
                 attachments=attachments,
                 force=force
             )
             logger.info(
-                f"[{self.node_name}] Created JIRA issue {issue_key} for "
+                f"[{self.node_name}] Created external record {issue_key} for "
                 f"email {email_id}, user {user_id}"
             )
 
-            # Upload attachments
-            upload_result = jira_handler.upload_attachments(
-                issue_key=issue_key,
-                attachments=attachments
-            )
-            logger.info(
-                f"Uploaded {upload_result['uploaded_count']} attachments "
-                f"to JIRA {issue_key} for email {email_id}"
-            )
+            upload_result = None
+            if provider_key != 'feishu_bitable':
+                # Upload attachments when the provider supports it
+                upload_result = issue_handler.upload_attachments(
+                    issue_key=issue_key,
+                    attachments=attachments
+                )
+                logger.info(
+                    f"Uploaded {upload_result['uploaded_count']} "
+                    f"attachments for external record {issue_key} and "
+                    f"email {email_id}"
+                )
 
             # Build result data
-            issue_url = f"{jira_config['url']}/browse/{issue_key}"
-            project_key = (
-                issue_key.split('-')[0]
-                if '-' in issue_key else None
-            )
+            issue_url = issue_handler.get_issue_url(issue_key)
+            project_key = provider_config.get('project_key')
 
             description = self._build_issue_description(
-                state, jira_config, language
+                state, provider_config, language
             )
 
             return {
@@ -413,16 +411,17 @@ class IssueNode(BaseLangGraphNode):
                 'title': title,
                 'description': description,
                 'priority': issue_data['priority'],
-                'engine': 'jira',
-                'upload_result': upload_result
+                'engine': provider_key,
+                'upload_result': upload_result,
+                'metadata': {
+                    'provider': provider_key,
+                    **(
+                        {'upload_result': upload_result}
+                        if upload_result is not None else {}
+                    ),
+                }
             }
 
-        except AttributeError as e:
-            logger.error(
-                f"JiraIssueHandler interface issue: {e}. "
-                f"Handler needs to be refactored to accept pure data."
-            )
-            return None
         except Exception as e:
-            logger.error(f"JIRA issue creation failed: {e}")
+            logger.error(f"Issue creation failed: {e}")
             return None

@@ -261,7 +261,7 @@ class EmailMessageAdmin(admin.ModelAdmin):
             'classes': ('collapse',)
         }),
         (_('Content (Full)'), {
-            'fields': ('raw_content', 'html_content', 'text_content'),
+            'fields': ('html_content', 'text_content'),
             'classes': ('collapse',)
         }),
         (_('Summary Preview'), {
@@ -378,11 +378,12 @@ class EmailMessageAdmin(admin.ModelAdmin):
     @admin.display(description=_('Raw Content Preview'))
     def raw_content_preview(self, obj):
         """Display truncated raw content."""
-        if not obj.raw_content:
+        raw_content = getattr(obj, 'raw_content', None)
+        if not raw_content:
             return "无内容"
-        content = (obj.raw_content[:500] + '...'
-                  if len(obj.raw_content) > 500
-                  else obj.raw_content)
+        content = (raw_content[:500] + '...'
+                  if len(raw_content) > 500
+                  else raw_content)
         return mark_safe(
             f'<pre style="white-space: pre-wrap; max-height: 200px; '
             f'overflow-y: auto;">{content}</pre>'
