@@ -6,7 +6,7 @@ focusing on storing results and workflow processing data.
 """
 
 from datetime import datetime
-from typing import TypedDict, List, Dict, Any
+from typing import Any, Dict, List, TypedDict
 
 
 class NodeError(TypedDict):
@@ -29,6 +29,7 @@ class EmailAttachmentState(TypedDict, total=False):
     file_path: str
     is_image: bool
     ocr_content: str | None
+    ocr_cleaned_content: str | None
     llm_content: str | None
 
 

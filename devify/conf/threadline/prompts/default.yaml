@@ -108,7 +108,7 @@ common:
     No Additional Commentary
     - Do not include explanations, analysis, or summaries outside of the formatted conversation.
 
-  ocr_prompt: |
+  ocr_cleanup_prompt: |
     Please output in {language}.
 
     Your task is to UNDERSTAND and DESCRIBE the key information from OCR-recognized content using clear, natural language. Analyze the OCR text to extract meaningful information, important data points, and critical details, then present them in a structured and readable format.
@@ -177,6 +177,44 @@ common:
     - If content is technical, provide explanations that make it accessible.
     - Be concise but comprehensive - cover all important points without unnecessary verbosity.
     - When filtering content, apply the principle: "When uncertain, include and describe."
+
+  ocr_prompt: |
+    Please output in {language}.
+
+    Your task is to infer why the user inserted this image into the current conversation.
+
+    Core principle:
+    - Use the conversation context as the primary signal.
+    - Explain what role the image plays in the conversation: what it is trying to support, prove, illustrate, report, or clarify.
+    - Use the image filename as an additional hint for matching the image to the dialogue when helpful.
+    - Keep as much OCR content as possible when it helps explain why the image was inserted.
+    - Remove only clearly irrelevant noise such as decorative fragments, repeated boilerplate, or generic UI chrome that does not help explain the image's purpose.
+
+    Fallback rule:
+    - If the conversation context is weak, ambiguous, or too short to judge the image's purpose confidently, keep the OCR content more completely.
+    - In that case, provide a cautious explanation of the likely purpose and preserve all potentially important text.
+
+    Accuracy rules:
+    - All specific values (numbers, codes, timestamps, IDs) must be preserved exactly as they appear when they support the image's purpose or might be relevant evidence.
+    - Preserve exact numbers, codes, IDs, timestamps, names, labels, error messages, statuses, and technical terms that help explain the image's purpose.
+    - Keep proper nouns and English technical terms in their original form.
+    - Correct only obvious OCR mistakes when the intended text is clear from context.
+    - Mark uncertain text as [unclear].
+    - Do not invent facts, explanations, or conclusions that are not supported by the OCR or the conversation context.
+
+    Content filtering (use extreme caution):
+    - Only omit content that is CLEARLY and OBVIOUSLY irrelevant with 100% certainty.
+    - If you are not fully certain whether a piece of OCR content helps explain why the image was inserted, keep it.
+    - Prefer keeping potentially relevant evidence over aggressive cleanup.
+
+    Output rules:
+    - Produce a clean, readable, structured result in {language}.
+    - Start by stating why the user likely inserted the image into the conversation.
+    - Then reorganize the OCR content into a clearer, more readable form while retaining all important OCR-recognized details that support that explanation.
+    - You may rewrite, regroup, and clean up the OCR content for readability, but do not abstract away or replace key evidence.
+    - Any values, codes, timestamps, IDs, labels, statuses, error messages, and other key evidence that matter to the image's purpose should remain as close to the original OCR wording as possible.
+    - Prefer preserving important evidence over aggressive filtering.
+    - Do not add extra commentary, summaries, or unrelated content.
 
   summary_title_prompt: |
     Please output in {language}.

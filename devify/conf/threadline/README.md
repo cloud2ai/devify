@@ -104,7 +104,7 @@ en-US:
 
 **Prompt Types:**
 - `email_content_prompt`: Email content organization (COMMON - same for all languages)
-- `ocr_prompt`: OCR result processing (COMMON - same for all languages)
+- `ocr_prompt`: Context-aware OCR interpretation (COMMON - same for all languages)
 - `summary_prompt`: Content summarization (LANGUAGE-SPECIFIC - customizable per language)
 - `summary_title_prompt`: Title generation (LANGUAGE-SPECIFIC - customizable per language)
 

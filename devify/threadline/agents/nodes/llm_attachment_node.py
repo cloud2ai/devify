@@ -13,6 +13,8 @@ from threadline.agents.nodes.base_node import BaseLangGraphNode
 
 logger = logging.getLogger(__name__)
 
+OCR_INPUT_CHAR_LIMIT = 8000
+
 
 class LLMAttachmentNode(BaseLangGraphNode):
     """
@@ -36,6 +38,94 @@ class LLMAttachmentNode(BaseLangGraphNode):
 
     def __init__(self):
         super().__init__("llm_attachment_node")
+
+    def _build_ocr_context(self, state: EmailState) -> str | None:
+        """
+        Build OCR context for LLM input.
+
+        Prefer raw conversation text so OCR reasoning uses the original
+        dialogue as context. Only fall back to existing LLM-organized content
+        when no raw text is available.
+        """
+        subject = (
+            state.get('subject')
+            or ''
+        ).strip()
+        sender = (
+            state.get('sender')
+            or ''
+        ).strip()
+        recipients = (
+            state.get('recipients')
+            or ''
+        ).strip()
+        received_at = (
+            state.get('received_at')
+            or ''
+        ).strip()
+
+        conversation_body = (
+            state.get('text_content')
+            or state.get('llm_content')
+            or state.get('html_content')
+            or ''
+        ).strip()
+
+        sections = []
+        if subject:
+            sections.append(f"Subject: {subject}")
+        if sender:
+            sections.append(f"Sender: {sender}")
+        if recipients:
+            sections.append(f"Recipients: {recipients}")
+        if received_at:
+            sections.append(f"Received at: {received_at}")
+        if conversation_body:
+            sections.append(f"Conversation body:\n{conversation_body}")
+
+        if not sections:
+            return None
+
+        return "\n\n".join(sections).strip()
+
+    def _build_ocr_llm_input(
+        self,
+        state: EmailState,
+        attachment: dict,
+        cleaned_ocr_content: str,
+    ) -> str:
+        prompt_parts = []
+        ocr_context = self._build_ocr_context(state)
+        if ocr_context:
+            prompt_parts.append(
+                "Conversation context:\n"
+                f"{ocr_context}"
+            )
+
+        filename = attachment.get('filename') or ''
+        safe_filename = attachment.get('safe_filename') or filename
+        image_refs = []
+        if filename:
+            image_refs.append(f"Original filename: {filename}")
+        if safe_filename and safe_filename != filename:
+            image_refs.append(f"Stored filename: {safe_filename}")
+        if image_refs:
+            prompt_parts.append(
+                "Image reference:\n"
+                + "\n".join(image_refs)
+            )
+
+        prompt_parts.append(
+            "Cleaned OCR content:\n"
+            f"{cleaned_ocr_content}"
+        )
+        llm_input = "\n\n".join(prompt_parts).strip()
+        if len(llm_input) > OCR_INPUT_CHAR_LIMIT:
+            llm_input = (
+                llm_input[:OCR_INPUT_CHAR_LIMIT].rstrip()
+                + "\n\n[Input truncated]"
+            )
+        return llm_input
 
     def can_enter_node(self, state: EmailState) -> bool:
         """
@@ -101,6 +191,7 @@ class LLMAttachmentNode(BaseLangGraphNode):
             logger.error(error_message)
             return add_node_error(state, self.node_name, error_message)
 
+        ocr_cleanup_prompt = prompt_config.get('ocr_cleanup_prompt')
         ocr_prompt = prompt_config.get('ocr_prompt')
         if not ocr_prompt:
             error_message = 'Missing ocr_prompt in prompt_config'
@@ -154,9 +245,56 @@ class LLMAttachmentNode(BaseLangGraphNode):
                     f"with LLM"
                 )
 
+                cleaned_stage_content = (
+                    attachment.get('ocr_cleaned_content', '') or ''
+                ).strip()
+                cleaned_ocr_content = cleaned_stage_content or ocr_content
+
+                if not force and cleaned_stage_content:
+                    logger.info(
+                        f"Reusing cached OCR cleaned content for "
+                        f"{attachment.get('filename')}"
+                    )
+                elif ocr_cleanup_prompt:
+                    try:
+                        cleaned_result, _cleanup_usage = (
+                            LLMTracker.call_and_track(
+                                prompt=ocr_cleanup_prompt,
+                                content=ocr_content,
+                                json_mode=False,
+                                state=state,
+                                node_name=self.node_name
+                            )
+                        )
+                        cleaned_result = (
+                            cleaned_result.strip() if cleaned_result else ''
+                        )
+                        if cleaned_result:
+                            cleaned_ocr_content = cleaned_result
+                            attachment['ocr_cleaned_content'] = (
+                                cleaned_ocr_content
+                            )
+                        logger.info(
+                            f"OCR cleanup completed for "
+                            f"{attachment.get('filename')}"
+                        )
+                    except Exception as cleanup_error:
+                        logger.warning(
+                            f"OCR cleanup failed for "
+                            f"{attachment.get('filename')}: "
+                            f"{cleanup_error}. Falling back to raw OCR."
+                        )
+                attachment['ocr_cleaned_content'] = cleaned_ocr_content
+
+                llm_input = self._build_ocr_llm_input(
+                    state=state,
+                    attachment=attachment,
+                    cleaned_ocr_content=cleaned_ocr_content,
+                )
+
                 llm_result, usage = LLMTracker.call_and_track(
                     prompt=ocr_prompt,
-                    content=ocr_content,
+                    content=llm_input,
                     json_mode=False,
                     state=state,
                     node_name=self.node_name
