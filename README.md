@@ -810,29 +810,34 @@ language: Chinese
 
 feishu_bitable:
   base_url: "https://open.feishu.cn/open-apis"
-  # Feishu application token for the Bitable base.
-  # Get it from the Bitable URL or via bitable/v1/apps/{app_token}.
+  # Feishu app credentials used to access the Bitable API.
+  # Create a Feishu app/bot first, then copy app_id and app_secret here.
   app_id: "your-app-id"
   app_secret: "your-app-secret"
+  # Optional: fill this in if you already have a tenant_access_token.
+  # If left blank, the backend will fetch one from app_id + app_secret.
   tenant_access_token: ""
+  # The Bitable base app_token.
+  # Get it from the Bitable URL, typically the bascnxxxxxxxxxxxxxxxx part.
   app_token: "bascnxxxxxxxxxxxxxxxx"
-  # Target table name in Feishu Bitable.
-  # The backend resolves this to table_id by listing tables in the base.
+  # The target table name inside the Bitable base.
+  # It can be Chinese or English; the backend resolves it to table_id.
   default_table_name: "需求转化"
   table_name: "需求转化"
+  # The field name used for attachments, images, PDFs, and similar files.
+  # Required: this field must already exist in the Bitable table.
   attachment_field_name: "附件"
   image_field_name: "附件"
-  # Upload target type for attachments.
-  # Use "bitable" for embedded Bitable mount nodes.
-  # Use "explorer" only for normal Feishu drive folders.
+  # Attachment upload target type.
+  # The default is bitable, which uploads to an embedded Bitable mount node.
   attachment_upload_parent_type: "bitable"
-  # The upload parent node token.
-  # For embedded Bitable attachments, copy mount_node_token from the
-  # internal drive-stream URL, or from the attachment download URL after a
-  # successful manual upload.
+  # Attachment upload parent_node.
+  # Required: upload or download an attachment in Bitable, then find the
+  # token after mount_node_token= in the internal browser URL.
   attachment_upload_parent_node: "mount-node-token-from-feishu"
-  # Legacy fallback for drive folder uploads.
+  # Legacy fallback for a normal Feishu drive folder. Usually not needed.
   attachment_upload_parent_folder_token: "optional-legacy-folder-token"
+  # Record detail URL template. Usually leave this blank.
   field_mappings:
     任务简述: "title"
     需求收集管理: "summary_content"
@@ -843,20 +848,24 @@ feishu_bitable:
 ```
 
 **Notes:**
+- `app_id` and `app_secret` come from a newly created Feishu app/bot.
 - `tenant_access_token` can be provided directly, or you can supply
   `app_id` + `app_secret` and let the backend fetch a token on demand.
-- `field_mappings` maps Feishu table field names to the workflow fields
-  used by the handler.
-- `attachment_upload_parent_type` controls where the attachment is uploaded.
-  - Use `bitable` for embedded Bitable mounts.
-  - Use `explorer` for a normal Feishu drive folder.
-- `attachment_upload_parent_node` is the value passed to `drive/v1/files/upload_all`.
-  - For embedded Bitable attachments, copy `mount_node_token` from the
-    `internal-api-drive-stream.feishu.cn/...` URL or from a successful manual
-    upload.
-  - For drive-folder uploads, use the folder token.
+- `app_token` comes from the Bitable base URL.
+- `table_name` is the target table name inside the Bitable base and can be
+  Chinese or English.
+- `field_mappings` maps Feishu table field names to the workflow fields used
+  by the handler.
+- `attachment_field_name` must point to an existing field that accepts
+  attachments, images, PDFs, and similar files.
+- `attachment_upload_parent_type` usually stays `bitable`.
+- `attachment_upload_parent_node` is required. For embedded Bitable mounts,
+  copy `mount_node_token` from the browser link after uploading or downloading
+  an attachment, then use the token after `mount_node_token=`.
 - `attachment_upload_parent_folder_token` is only needed as a legacy fallback
-  when you intentionally upload to a standard drive folder.
+  when you intentionally upload to a standard Feishu drive folder.
+- You also need to authorize the robot in the Bitable base from the top-right
+  configuration menu, otherwise the robot cannot write into the base.
 - New configs should use `feishu_bitable`.
 
 **JIRA Field Types:**
