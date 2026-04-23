@@ -8,6 +8,7 @@ services:
       dockerfile: Dockerfile
       args:
         USE_MIRROR: ${USE_MIRROR:-true}
+        DEV_MODE: "1"
     env_file:
       - ./.env
     volumes:
@@ -19,19 +20,21 @@ services:
     networks:
       - devify_network
     depends_on:
-      - mysql
+      mysql:
+        condition: service_healthy
     command: development
     healthcheck:
       test: ["CMD", "curl", "-f", "http://127.0.0.1:8000/health"]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 120s
+      start_period: 300s
 
   devify-worker:
     image: devify:latest
     container_name: devify-worker-dev
     restart: unless-stopped
+    stop_grace_period: 60s
     env_file:
       - ./.env
     volumes:
@@ -45,7 +48,7 @@ services:
       devify-api:
         condition: service_started
       mysql:
-        condition: service_started
+        condition: service_healthy
       redis:
         condition: service_started
     command: celery
@@ -54,6 +57,7 @@ services:
     image: devify:latest
     container_name: devify-scheduler-dev
     restart: unless-stopped
+    stop_grace_period: 30s
     env_file:
       - ./.env
     volumes:
@@ -65,7 +69,7 @@ services:
       devify-api:
         condition: service_started
       mysql:
-        condition: service_started
+        condition: service_healthy
       redis:
         condition: service_started
     command: celery-beat
@@ -84,6 +88,16 @@ services:
       - ./data.dev/logs/mysql:/var/log/mysql
     networks:
       - devify_network
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "mysqladmin ping -h 127.0.0.1 -uroot -p\"$${MYSQL_ROOT_PASSWORD}\" --silent"
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
 
   redis:
     image: redis:alpine
@@ -116,19 +130,19 @@ services:
   devify-ui:
     image: devify-ui:dev
     build:
-      context: ../devify-ui
+      context: ./ui
       dockerfile: Dockerfile.dev
     container_name: devify-ui-dev
     restart: unless-stopped
     volumes:
-      - ../devify-ui/src:/app/src:ro
-      - ../devify-ui/public:/app/public:ro
-      - ../devify-ui/index.html:/app/index.html:ro
-      - ../devify-ui/vite.config.js:/app/vite.config.js:ro
-      - ../devify-ui/tailwind.config.js:/app/tailwind.config.js:ro
-      - ../devify-ui/postcss.config.js:/app/postcss.config.js:ro
-      - ../devify-ui/package.json:/app/package.json:ro
-      - ../devify-ui/node_modules:/app/node_modules
+      - ./ui/src:/app/src:ro
+      - ./ui/public:/app/public:ro
+      - ./ui/index.html:/app/index.html:ro
+      - ./ui/vite.config.js:/app/vite.config.js:ro
+      - ./ui/tailwind.config.js:/app/tailwind.config.js:ro
+      - ./ui/postcss.config.js:/app/postcss.config.js:ro
+      - ./ui/package.json:/app/package.json:ro
+      - ./ui/node_modules:/app/node_modules
     networks:
       - devify_network
     depends_on:

@@ -1,0 +1,192 @@
+/* Import highlight.js theme for code syntax highlighting */
+@import 'highlight.js/styles/monokai-sublime.css';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    font-family: 'Inter', system-ui, sans-serif;
+  }
+
+  body {
+    @apply bg-gray-50 text-gray-900;
+  }
+
+  /* Force light background for select, option, and input elements to prevent dark mode issues */
+  select,
+  select option,
+  input[type="text"],
+  input[type="email"],
+  input[type="password"],
+  input[type="number"],
+  input[type="date"],
+  input[type="datetime-local"],
+  input[type="time"],
+  input[type="search"],
+  input[type="tel"],
+  input[type="url"],
+  input[type="color"],
+  input[type="file"],
+  input[type="range"],
+  textarea {
+    background-color: #ffffff !important;
+    color: #1f2937 !important;
+  }
+
+  /* Checkbox and radio buttons - ensure they have proper background */
+  input[type="checkbox"],
+  input[type="radio"] {
+    background-color: #ffffff !important;
+    border-color: #d1d5db !important;
+    accent-color: #2563eb !important;
+  }
+
+  input[type="checkbox"]:checked,
+  input[type="radio"]:checked {
+    background-color: #2563eb !important;
+    border-color: #2563eb !important;
+  }
+
+  input[type="checkbox"]:disabled,
+  input[type="radio"]:disabled {
+    background-color: #f9fafb !important;
+    border-color: #e5e7eb !important;
+    opacity: 0.5 !important;
+  }
+
+  select:disabled,
+  select:disabled option,
+  input:disabled,
+  input[readonly],
+  textarea:disabled {
+    background-color: #f9fafb !important;
+    color: #6b7280 !important;
+  }
+
+  input[type="date"]:readonly,
+  input[type="datetime-local"]:readonly {
+    background-color: #f9fafb !important;
+    color: #1f2937 !important;
+  }
+}
+
+@layer components {
+  .btn {
+    @apply inline-flex items-center justify-center px-4 py-2 text-sm font-medium rounded-lg border transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  .btn-primary {
+    @apply btn bg-primary-600 text-white border-primary-600 hover:bg-primary-700 hover:border-primary-700 focus:ring-primary-500;
+  }
+
+  .btn-secondary {
+    @apply btn bg-white text-gray-700 border-gray-300 hover:bg-gray-50 hover:border-gray-400 focus:ring-primary-500;
+  }
+
+  .btn-danger {
+    @apply btn bg-red-600 text-white border-red-600 hover:bg-red-700 hover:border-red-700 focus:ring-red-500;
+  }
+
+  .input {
+    @apply block w-full px-3 py-2 text-sm border border-gray-300 rounded-lg shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  .input-error {
+    @apply input border-red-300 focus:ring-red-500 focus:border-red-500;
+  }
+
+  .card {
+    @apply bg-white rounded-lg shadow-sm border border-gray-200;
+  }
+
+  .card-header {
+    @apply px-6 py-4 border-b border-gray-200;
+  }
+
+  .card-body {
+    @apply px-6 py-4;
+  }
+
+  .card-footer {
+    @apply px-6 py-4 border-t border-gray-200 bg-gray-50;
+  }
+
+  .line-clamp-2 {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    word-break: break-word;
+  }
+
+  .break-words {
+    word-break: break-word;
+    overflow-wrap: break-word;
+  }
+}
+
+/* Vue DatePicker custom theme */
+.dp__theme_light {
+  --dp-font-family: 'Inter', system-ui, sans-serif;
+  --dp-font-size: 0.85rem;
+  --dp-border-radius: 0.625rem;
+  --dp-border-color: #e5e7eb;
+  --dp-text-color: #1f2937;
+  --dp-primary-color: #2563eb;
+  --dp-primary-text-color: #ffffff;
+  --dp-hover-color: #eff6ff;
+  --dp-hover-text-color: #1d4ed8;
+  --dp-primary-disabled-color: #bfdbfe;
+  --dp-secondary-color: #f3f4f6;
+  --dp-menu-border-color: #e5e7eb;
+  --dp-success-color: #16a34a;
+  --dp-icon-color: #6b7280;
+}
+
+.dp__menu {
+  @apply shadow-xl border border-gray-200 rounded-xl;
+}
+
+.dp__input {
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: 0.875rem;
+  border-radius: 0.5rem;
+  padding: 0.45rem 0.75rem;
+}
+
+.bdtp-compact {
+  @apply flex items-center rounded-md border border-gray-300 bg-white pr-0;
+  min-height: 1.25rem;
+}
+
+.bdtp-compact .dp__main {
+  width: 100%;
+}
+
+.bdtp-compact .dp__input_wrap {
+  @apply flex items-center w-full min-h-[1.25rem] px-1.5;
+}
+
+.bdtp-compact .dp__input {
+  @apply font-medium text-xs leading-4 p-0 bg-transparent border-none shadow-none focus:ring-0 focus:outline-none;
+  height: 1.25rem;
+  line-height: 1.25rem;
+}
+
+.bdtp-compact .dp__input_icon {
+  display: none !important;
+}
+
+.bdtp-compact .dp__action_row {
+  @apply px-3 py-2;
+}
+
+.dp__range_between {
+  background: rgba(37, 99, 235, 0.1);
+}
+
+.dp__today {
+  border-color: rgba(37, 99, 235, 0.7);
+}

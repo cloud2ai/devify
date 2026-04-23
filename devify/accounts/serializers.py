@@ -431,6 +431,8 @@ class UserDetailsSerializer(serializers.ModelSerializer):
         read_only=True,
         help_text=_("Authentication method and related information")
     )
+    is_staff = serializers.BooleanField(read_only=True)
+    is_superuser = serializers.BooleanField(read_only=True)
 
     class Meta:
         model = User
@@ -443,7 +445,9 @@ class UserDetailsSerializer(serializers.ModelSerializer):
             'display_name',
             'virtual_email',
             'profile',
-            'auth_info'
+            'auth_info',
+            'is_staff',
+            'is_superuser',
         ]
         read_only_fields = [
             'id',
@@ -452,7 +456,9 @@ class UserDetailsSerializer(serializers.ModelSerializer):
             'virtual_email',
             'profile',
             'auth_info',
-            'display_name'
+            'display_name',
+            'is_staff',
+            'is_superuser',
         ]
 
     def get_display_name(self, obj):

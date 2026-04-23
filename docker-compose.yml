@@ -8,6 +8,7 @@ services:
       dockerfile: Dockerfile
       args:
         USE_MIRROR: ${USE_MIRROR:-false}
+        DEV_MODE: "0"
     env_file:
       - ./.env
     volumes:
@@ -18,7 +19,8 @@ services:
     networks:
       - devify_network
     depends_on:
-      - mysql
+      mysql:
+        condition: service_healthy
     command: gunicorn
     healthcheck:
       test: ["CMD", "curl", "-f", "http://127.0.0.1:8000/health"]
@@ -31,6 +33,7 @@ services:
     image: devify:latest
     container_name: devify-worker
     restart: unless-stopped
+    stop_grace_period: 60s
     env_file:
       - ./.env
     volumes:
@@ -42,7 +45,7 @@ services:
       devify-api:
         condition: service_started
       mysql:
-        condition: service_started
+        condition: service_healthy
       redis:
         condition: service_started
     command: celery
@@ -51,6 +54,7 @@ services:
     image: devify:latest
     container_name: devify-scheduler
     restart: unless-stopped
+    stop_grace_period: 30s
     env_file:
       - ./.env
     volumes:
@@ -61,7 +65,7 @@ services:
       devify-api:
         condition: service_started
       mysql:
-        condition: service_started
+        condition: service_healthy
       redis:
         condition: service_started
     command: celery-beat
@@ -69,7 +73,7 @@ services:
   devify-ui:
     image: devify-ui:latest
     build:
-      context: ../devify-ui
+      context: ./ui
       dockerfile: Dockerfile
     container_name: devify-ui
     restart: unless-stopped
@@ -125,6 +129,16 @@ services:
       - ./data/logs/mysql:/var/log/mysql
     networks:
       - devify_network
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "mysqladmin ping -h 127.0.0.1 -uroot -p\"$${MYSQL_ROOT_PASSWORD}\" --silent"
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
 
   redis:
     image: redis:alpine

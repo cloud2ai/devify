@@ -1,12 +1,12 @@
 import logging
 from typing import Any, Dict, Optional, Tuple
 
+from agentcore_metering.adapters.django import (
+    LLMTracker as AgentcoreLLMTracker,
+)
 from django.conf import settings
 from django.utils import timezone
-
-from devtoolbox.llm.azure_openai_provider import AzureOpenAIConfig
-from devtoolbox.llm.service import LLMService
-
+from threadline.utils.agentcore_bridge import ensure_default_llm_config
 from threadline.utils.llm import parse_json_response
 
 logger = logging.getLogger(__name__)
@@ -30,7 +30,8 @@ class LLMTracker:
         json_mode: bool = False,
         max_retries: int = 0,
         state: Optional[Dict] = None,
-        node_name: str = 'unknown'
+        node_name: str = "unknown",
+        model_uuid: Optional[str] = None,
     ) -> Tuple[Any, Dict[str, Any]]:
         """
         Call LLM API with automatic usage tracking
@@ -70,138 +71,103 @@ class LLMTracker:
         if not prompt:
             raise ValueError("Prompt cannot be empty")
 
-        llm_config = AzureOpenAIConfig(**settings.AZURE_OPENAI_CONFIG)
-        llm_service = LLMService(llm_config)
-
         messages = [{"role": "system", "content": prompt}]
         if content:
             messages.append({"role": "user", "content": content})
 
-        max_tokens = settings.AZURE_OPENAI_CONFIG['max_tokens']
-        temperature = settings.AZURE_OPENAI_CONFIG['temperature']
-        model = settings.AZURE_OPENAI_CONFIG.get('model', 'gpt-4')
+        return LLMTracker.call_messages_and_track(
+            messages=messages,
+            json_mode=json_mode,
+            max_retries=max_retries,
+            state=state,
+            node_name=node_name,
+            model_uuid=model_uuid,
+        )
 
-        chat_kwargs = {
-            'messages': messages,
-            'max_tokens': max_tokens,
-            'temperature': temperature
-        }
+    @staticmethod
+    def call_messages_and_track(
+        messages: list,
+        json_mode: bool = False,
+        max_retries: int = 0,
+        state: Optional[Dict] = None,
+        node_name: str = "unknown",
+        model_uuid: Optional[str] = None,
+    ) -> Tuple[Any, Dict[str, Any]]:
+        """
+        Call LLM API with prebuilt messages and automatic usage tracking.
 
-        if json_mode:
-            try:
-                chat_kwargs['response_format'] = {"type": "json_object"}
-            except TypeError:
-                pass
-
-        chat_kwargs['raw_response'] = True
+        This variant is used for multimodal inputs where the user message
+        needs to contain both text and image blocks.
+        """
+        if not messages:
+            raise ValueError("Messages cannot be empty")
 
         try:
-            response_obj = llm_service.chat(**chat_kwargs)
+            ensure_default_llm_config()
 
-            if response_obj is None:
-                raise ValueError("LLM service returned None response")
+            response_content, usage = AgentcoreLLMTracker.call_and_track(
+                messages=messages,
+                json_mode=json_mode,
+                node_name=node_name,
+                state=state,
+                model_uuid=model_uuid,
+                json_attempts=max(1, int(max_retries) + 1),
+            )
 
-            response_content = None
-            usage = None
-
-            actual_model = model
-            if hasattr(response_obj, 'response_metadata'):
-                actual_model = response_obj.response_metadata.get(
-                    'model_name', model
-                )
-
-            if hasattr(response_obj, 'content'):
-                response_content = response_obj.content
-
-                if hasattr(response_obj, 'usage_metadata'):
-                    usage_meta = response_obj.usage_metadata
-                    input_tokens = usage_meta.get('input_tokens', 0)
-                    output_tokens = usage_meta.get('output_tokens', 0)
-                    total_tokens = usage_meta.get('total_tokens', 0)
-
-                    usage = {
-                        'model': actual_model,
-                        'prompt_tokens': input_tokens,
-                        'completion_tokens': output_tokens,
-                        'total_tokens': total_tokens,
-                    }
-
-                    if 'input_token_details' in usage_meta:
-                        details = usage_meta['input_token_details']
-                        usage['cached_tokens'] = details.get(
-                            'cache_read', 0
-                        )
-
-                    if 'output_token_details' in usage_meta:
-                        details = usage_meta['output_token_details']
-                        reasoning = details.get('reasoning', 0)
-                        usage['reasoning_tokens'] = reasoning
-
-                # Parse JSON if json_mode is enabled
-                # TODO(Ray): Remove old call_llm function and move json parser
-                #            here
-                if json_mode and isinstance(response_content, str):
-                    try:
-                        response_content = parse_json_response(
-                            response_content
-                        )
-                        logger.debug(
-                            f"Parsed JSON response in {node_name}"
-                        )
-                    except Exception as e:
-                        logger.warning(
-                            f"Failed to parse JSON response in "
-                            f"{node_name}: {e}. Returning raw string."
-                        )
-            else:
-                response_content = str(response_obj)
-
-            if not usage:
-                error_msg = (
-                    f"Unable to extract usage from API response "
-                    f"in {node_name}. "
-                    f"This should not happen with OpenAI API."
-                )
-                logger.error(error_msg)
-                raise ValueError(error_msg)
+            if json_mode and isinstance(response_content, str):
+                try:
+                    response_content = parse_json_response(response_content)
+                    logger.debug(f"Parsed JSON response in {node_name}")
+                except Exception as e:
+                    logger.warning(
+                        "Failed to parse JSON response in %s: %s. "
+                        "Returning raw string.",
+                        node_name,
+                        e,
+                    )
 
             if state is not None and settings.ENABLE_COST_TRACKING:
                 tracking_data = {
-                    'node': node_name,
-                    'model': usage['model'],
-                    'input_tokens': usage['prompt_tokens'],
-                    'output_tokens': usage['completion_tokens'],
-                    'total_tokens': usage['total_tokens'],
-                    'cached_tokens': usage.get('cached_tokens', 0),
-                    'reasoning_tokens': usage.get('reasoning_tokens', 0),
-                    'success': True,
-                    'error': None,
-                    'timestamp': timezone.now().isoformat()
+                    "node": node_name,
+                    "model": usage["model"],
+                    "input_tokens": usage["prompt_tokens"],
+                    "output_tokens": usage["completion_tokens"],
+                    "total_tokens": usage["total_tokens"],
+                    "cached_tokens": usage.get("cached_tokens", 0),
+                    "reasoning_tokens": usage.get("reasoning_tokens", 0),
+                    "success": True,
+                    "error": None,
+                    "timestamp": timezone.now().isoformat(),
                 }
-                state.setdefault('llm_calls', []).append(tracking_data)
+                state.setdefault("llm_calls", []).append(tracking_data)
 
             logger.info(
-                f"LLM call succeeded in {node_name}: "
-                f"{usage['total_tokens']} tokens "
-                f"(prompt={usage['prompt_tokens']}, "
-                f"completion={usage['completion_tokens']})"
+                "LLM call succeeded in %s: %s tokens "
+                "(prompt=%s, completion=%s)",
+                node_name,
+                usage["total_tokens"],
+                usage["prompt_tokens"],
+                usage["completion_tokens"],
             )
 
             return response_content, usage
 
         except Exception as e:
-            logger.error(f"LLM call failed in {node_name}: {e}")
+            logger.error("LLM call failed in %s: %s", node_name, e)
 
+            model = str(model_uuid) if model_uuid else "unknown"
             if state is not None and settings.ENABLE_COST_TRACKING:
-                state.setdefault('llm_calls', []).append({
-                    'node': node_name,
-                    'model': model,
-                    'input_tokens': 0,
-                    'output_tokens': 0,
-                    'total_tokens': 0,
-                    'success': False,
-                    'error': str(e),
-                    'timestamp': timezone.now().isoformat()
-                })
+                state.setdefault("llm_calls", []).append(
+                    {
+                        "node": node_name,
+                        "model": model,
+                        "input_tokens": 0,
+                        "output_tokens": 0,
+                        "total_tokens": 0,
+                        "success": False,
+                        "error": str(e),
+                        "timestamp": timezone.now().isoformat(),
+                    }
+                )
 
             raise

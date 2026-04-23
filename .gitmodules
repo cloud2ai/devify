@@ -1,0 +1,9 @@
+[submodule "devify/agentcore/agentcore-metering"]
+	path = devify/agentcore/agentcore-metering
+	url = https://github.com/cloud2ai/agentcore-metering.git
+[submodule "devify/agentcore/agentcore-task"]
+	path = devify/agentcore/agentcore-task
+	url = https://github.com/cloud2ai/agentcore-task.git
+[submodule "devify/agentcore/agentcore-notifier"]
+	path = devify/agentcore/agentcore-notifier
+	url = https://github.com/cloud2ai/agentcore-notifier.git

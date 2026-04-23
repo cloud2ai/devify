@@ -57,19 +57,31 @@ def unit_tests(session):
     )
 
 
-@nox.session(venv_backend="none")
-def api_tests(session):
-    """
-    Run API tests
-    """
-    session.log("🧪 Running API tests")
-
+def _run_threadline_e2e_tests(session):
     session.run(
         "python", "-m", "pytest",
-        "devify/threadline/tests/api/",
+        "devify/threadline/tests/e2e/",
         "-v",
         env={"DJANGO_SETTINGS_MODULE": "devify.core.settings"}
     )
+
+
+@nox.session(venv_backend="none")
+def e2e_tests(session):
+    """
+    Run end-to-end tests
+    """
+    session.log("🧪 Running end-to-end tests")
+    _run_threadline_e2e_tests(session)
+
+
+@nox.session(venv_backend="none")
+def api_tests(session):
+    """
+    Backward-compatible alias for end-to-end tests.
+    """
+    session.log("🧪 Running end-to-end tests (legacy api_tests alias)")
+    _run_threadline_e2e_tests(session)
 
 
 @nox.session(venv_backend="none")

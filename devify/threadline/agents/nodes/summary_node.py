@@ -67,9 +67,9 @@ class SummaryNode(BaseLangGraphNode):
         if not super().can_enter_node(state):
             return False
 
-        force = state.get('force', False)
-        llm_content_raw = state.get('llm_content', '')
-        llm_content = llm_content_raw.strip() if llm_content_raw else ''
+        force = state.get("force", False)
+        llm_content_raw = state.get("llm_content", "")
+        llm_content = llm_content_raw.strip() if llm_content_raw else ""
 
         if not force and not llm_content:
             logger.error(
@@ -80,9 +80,7 @@ class SummaryNode(BaseLangGraphNode):
         return True
 
     def _process_todos(
-        self,
-        todos: List[Dict[str, Any]],
-        received_at: str
+        self, todos: List[Dict[str, Any]], received_at: str
     ) -> List[Dict[str, Any]]:
         """
         Process TODO items: validate and process time information.
@@ -104,7 +102,7 @@ class SummaryNode(BaseLangGraphNode):
             except (ValueError, TypeError) as e:
                 logger.warning(
                     f"Failed to parse received_at '{received_at}': {e}. "
-                    f"Using current time as fallback."
+                    "Using current time as fallback."
                 )
 
         if not base_time:
@@ -115,15 +113,16 @@ class SummaryNode(BaseLangGraphNode):
                 logger.warning(f"Invalid TODO item (not a dict): {todo}")
                 continue
 
-            content = todo.get('content', '').strip()
+            content = todo.get("content", "").strip()
             if not content:
                 logger.warning("Skipping TODO item with empty content")
                 continue
 
             # Process deadline
             deadline_str = (
-                todo.get('deadline', '').strip()
-                if todo.get('deadline') else None
+                todo.get("deadline", "").strip()
+                if todo.get("deadline")
+                else None
             )
             deadline_processed = None
 
@@ -151,10 +150,11 @@ class SummaryNode(BaseLangGraphNode):
 
             # Validate priority
             priority = (
-                todo.get('priority', '').strip().lower()
-                if todo.get('priority') else None
+                todo.get("priority", "").strip().lower()
+                if todo.get("priority")
+                else None
             )
-            if priority and priority not in ['high', 'medium', 'low']:
+            if priority and priority not in ["high", "medium", "low"]:
                 logger.warning(
                     f"Invalid priority '{priority}' for TODO "
                     f"'{content[:50]}...'. Setting to None."
@@ -163,24 +163,25 @@ class SummaryNode(BaseLangGraphNode):
 
             # Clean up other fields
             owner = (
-                todo.get('owner', '').strip()
-                if todo.get('owner') else None
+                todo.get("owner", "").strip() if todo.get("owner") else None
             )
             location = (
-                todo.get('location', '').strip()
-                if todo.get('location') else None
+                todo.get("location", "").strip()
+                if todo.get("location")
+                else None
             )
 
             processed_todo = {
-                'content': content,
-                'owner': owner,
-                'location': location,
-                'priority': priority,
-                'deadline_processed': (
+                "content": content,
+                "owner": owner,
+                "location": location,
+                "priority": priority,
+                "deadline_processed": (
                     deadline_processed.isoformat()
-                    if deadline_processed else None
+                    if deadline_processed
+                    else None
                 ),
-                'deadline_original': deadline_str,
+                "deadline_original": deadline_str,
             }
             processed_todos.append(processed_todo)
 
@@ -196,9 +197,9 @@ class SummaryNode(BaseLangGraphNode):
         Returns:
             str: Formatted context string
         """
-        subject = state.get('subject', '') or ''
-        llm_content = state.get('llm_content', '') or ''
-        user_timezone = state.get('user_timezone') or 'UTC'
+        subject = state.get("subject", "") or ""
+        llm_content = state.get("llm_content", "") or ""
+        user_timezone = state.get("user_timezone") or "UTC"
 
         current_utc = timezone.now()
         current_utc_str = current_utc.isoformat()
@@ -210,19 +211,14 @@ class SummaryNode(BaseLangGraphNode):
                 local_time_str = local_time.isoformat()
             except Exception as exc:
                 logger.warning(
-                    "Failed to convert timezone '%s': %s",
-                    user_timezone,
-                    exc
+                    f"Failed to convert timezone '{user_timezone}': {exc}"
                 )
 
         context_parts = [
             f"Subject: {subject}",
             f"Processing Timestamp (UTC): {current_utc_str}",
             f"User Timezone: {user_timezone}",
-            (
-                f"Processing Timestamp ({user_timezone}): "
-                f"{local_time_str}"
-            ),
+            (f"Processing Timestamp ({user_timezone}): " f"{local_time_str}"),
             (
                 "Important: Dates and times discussed in the following "
                 "content should be interpreted using the provided user "
@@ -237,7 +233,7 @@ class SummaryNode(BaseLangGraphNode):
         self,
         summary_data: Dict[str, Any] | None,
         processed_todos: List[Dict[str, Any]] | None,
-        existing_summary_content: str = ''
+        existing_summary_content: str = "",
     ) -> str:
         """
         Build summary_content from structured data for metadata_node.
@@ -257,8 +253,8 @@ class SummaryNode(BaseLangGraphNode):
         content_parts = []
 
         # Add details section
-        if summary_data and summary_data.get('details'):
-            content_parts.append(summary_data['details'])
+        if summary_data and summary_data.get("details"):
+            content_parts.append(summary_data["details"])
 
         # Add TODO section
         if processed_todos:
@@ -266,32 +262,29 @@ class SummaryNode(BaseLangGraphNode):
             for todo in processed_todos:
                 if not isinstance(todo, dict):
                     continue
-                todo_content = todo.get('content', '')
+                todo_content = todo.get("content", "")
                 if not todo_content:
                     continue
                 todo_parts = [todo_content]
-                if todo.get('owner'):
-                    owner = todo['owner']
+                if todo.get("owner"):
+                    owner = todo["owner"]
                     todo_parts.append(f"Owner: {owner}")
-                if todo.get('deadline_original'):
-                    deadline = todo['deadline_original']
+                if todo.get("deadline_original"):
+                    deadline = todo["deadline_original"]
                     todo_parts.append(f"Deadline: {deadline}")
-                if todo.get('location'):
-                    location = todo['location']
+                if todo.get("location"):
+                    location = todo["location"]
                     todo_parts.append(f"Location: {location}")
-                if todo.get('priority'):
-                    priority = todo['priority']
+                if todo.get("priority"):
+                    priority = todo["priority"]
                     todo_parts.append(f"Priority: {priority}")
                 todo_line = f"- {' | '.join(todo_parts)}"
                 content_parts.append(todo_line)
 
         # Add key processes section
-        if summary_data and summary_data.get('key_process'):
-            key_process_list = summary_data['key_process']
-            if (
-                isinstance(key_process_list, list)
-                and key_process_list
-            ):
+        if summary_data and summary_data.get("key_process"):
+            key_process_list = summary_data["key_process"]
+            if isinstance(key_process_list, list) and key_process_list:
                 content_parts.append("\nKey Processes:")
                 for i, process in enumerate(key_process_list, 1):
                     content_parts.append(f"{i}. {process}")
@@ -300,7 +293,7 @@ class SummaryNode(BaseLangGraphNode):
         return (
             "\n".join(content_parts)
             if content_parts
-            else existing_summary_content or ''
+            else existing_summary_content or ""
         )
 
     def execute_processing(self, state: EmailState) -> EmailState:
@@ -317,20 +310,20 @@ class SummaryNode(BaseLangGraphNode):
         Returns:
             EmailState: Updated state with summary results
         """
-        force = state.get('force', False)
+        force = state.get("force", False)
 
-        prompt_config = state.get('prompt_config')
+        prompt_config = state.get("prompt_config")
         if not prompt_config:
-            error_message = 'No prompt_config found in State'
+            error_message = "No prompt_config found in State"
             logger.error(error_message)
             return add_node_error(state, self.node_name, error_message)
 
-        summary_prompt = prompt_config.get('summary_prompt')
-        summary_title_prompt = prompt_config.get('summary_title_prompt')
+        summary_prompt = prompt_config.get("summary_prompt")
+        summary_title_prompt = prompt_config.get("summary_title_prompt")
         if not summary_prompt or not summary_title_prompt:
             error_message = (
-                'Missing summary_prompt or summary_title_prompt in '
-                'prompt_config'
+                "Missing summary_prompt or summary_title_prompt in "
+                "prompt_config"
             )
             logger.error(error_message)
             return add_node_error(state, self.node_name, error_message)
@@ -342,10 +335,11 @@ class SummaryNode(BaseLangGraphNode):
             "for summary generation"
         )
 
-        summary_data = state.get('summary_data')
-        summary_content = state.get('summary_content', '')
-        summary_title = state.get('summary_title', '')
-        existing_todos = state.get('todos') or []
+        summary_data = state.get("summary_data")
+        summary_content = state.get("summary_content", "")
+        summary_title = state.get("summary_title", "")
+        existing_todos = state.get("todos") or []
+        text_llm_config_uuid = state.get("text_llm_config_uuid")
 
         try:
             # Generate summary_title (still using Markdown mode)
@@ -356,12 +350,13 @@ class SummaryNode(BaseLangGraphNode):
                     content=content,
                     json_mode=False,
                     state=state,
-                    node_name=self.node_name
+                    node_name=self.node_name,
+                    model_uuid=text_llm_config_uuid,
                 )
                 if summary_title_raw:
                     summary_title = summary_title_raw.strip()
                 else:
-                    summary_title = ''
+                    summary_title = ""
 
             # Generate structured summary (JSON mode)
             if not summary_data or force:
@@ -374,22 +369,22 @@ class SummaryNode(BaseLangGraphNode):
                         content=content,
                         json_mode=True,
                         state=state,
-                        node_name=self.node_name
+                        node_name=self.node_name,
+                        model_uuid=text_llm_config_uuid,
                     )
 
                     # Extract structured data
                     summary_data = {
-                        'details': summary_json.get('details', '').strip(),
-                        'key_process': summary_json.get('key_process', [])
+                        "details": summary_json.get("details", "").strip(),
+                        "key_process": summary_json.get("key_process", []),
                     }
 
                     # Process TODOs
-                    raw_todos = summary_json.get('todos', [])
+                    raw_todos = summary_json.get("todos", [])
                     if raw_todos:
-                        received_at = state.get('received_at', '')
+                        received_at = state.get("received_at", "")
                         processed_todos = self._process_todos(
-                            raw_todos,
-                            received_at
+                            raw_todos, received_at
                         )
                         logger.info(
                             f"Processed {len(processed_todos)} TODO items"
@@ -403,7 +398,7 @@ class SummaryNode(BaseLangGraphNode):
                     summary_content = self._build_summary_content(
                         summary_data=summary_data,
                         processed_todos=processed_todos,
-                        existing_summary_content=summary_content
+                        existing_summary_content=summary_content,
                     )
 
                     logger.info("Structured summary generated successfully")
@@ -419,12 +414,13 @@ class SummaryNode(BaseLangGraphNode):
                         content=content,
                         json_mode=False,
                         state=state,
-                        node_name=self.node_name
+                        node_name=self.node_name,
+                        model_uuid=text_llm_config_uuid,
                     )
                     if summary_content_raw:
                         summary_content = summary_content_raw.strip()
                     else:
-                        summary_content = ''
+                        summary_content = ""
                     # Keep existing summary_data if available
                     if not summary_data:
                         summary_data = {}
@@ -438,28 +434,26 @@ class SummaryNode(BaseLangGraphNode):
                     summary_content = self._build_summary_content(
                         summary_data=summary_data,
                         processed_todos=processed_todos,
-                        existing_summary_content=summary_content
+                        existing_summary_content=summary_content,
                     )
 
             return {
                 **state,
-                'summary_data': summary_data,
-                'todos': processed_todos if processed_todos else None,
-                'summary_content': summary_content,
-                'summary_title': summary_title
+                "summary_data": summary_data,
+                "todos": processed_todos if processed_todos else None,
+                "summary_content": summary_content,
+                "summary_title": summary_title,
             }
 
         except Exception as e:
             logger.error(f"Summary generation failed: {e}", exc_info=True)
-            error_message = f'Summary generation failed: {str(e)}'
+            error_message = f"Summary generation failed: {str(e)}"
             updated_state = add_node_error(
-                state,
-                self.node_name,
-                error_message
+                state, self.node_name, error_message
             )
             # Preserve existing data on error
-            updated_state['summary_content'] = summary_content or ''
-            updated_state['summary_title'] = summary_title or ''
-            updated_state['summary_data'] = summary_data or {}
-            updated_state['todos'] = existing_todos if existing_todos else None
+            updated_state["summary_content"] = summary_content or ""
+            updated_state["summary_title"] = summary_title or ""
+            updated_state["summary_data"] = summary_data or {}
+            updated_state["todos"] = existing_todos if existing_todos else None
             return updated_state

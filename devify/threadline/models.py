@@ -13,7 +13,7 @@ from threadline.state_machine import (
     get_initial_email_status,
     can_transition_to,
     get_next_states,
-    EMAIL_STATE_MACHINE
+    EMAIL_STATE_MACHINE,
 )
 
 
@@ -21,43 +21,44 @@ class Settings(models.Model):
     """
     User settings using key-value design with JSON values
     """
+
     user = models.ForeignKey(
         User,
         on_delete=models.CASCADE,
-        verbose_name=_('User'),
-        related_name='settings'
+        verbose_name=_("User"),
+        related_name="settings",
     )
     key = models.CharField(
         max_length=100,
-        verbose_name=_('Setting Key'),
-        help_text=_('Configuration key name')
+        verbose_name=_("Setting Key"),
+        help_text=_("Configuration key name"),
     )
     value = models.JSONField(
-        verbose_name=_('Setting Value'),
-        help_text=_('Configuration value (JSON format)')
+        verbose_name=_("Setting Value"),
+        help_text=_("Configuration value (JSON format)"),
     )
     description = models.CharField(
         max_length=255,
         blank=True,
-        verbose_name=_('Description'),
-        help_text=_('Description of this setting')
+        verbose_name=_("Description"),
+        help_text=_("Description of this setting"),
     )
     is_active = models.BooleanField(
         default=True,
-        verbose_name=_('Active'),
-        help_text=_('Whether this setting is active')
+        verbose_name=_("Active"),
+        help_text=_("Whether this setting is active"),
     )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        verbose_name = _('Setting')
-        verbose_name_plural = _('Settings')
-        ordering = ['user', 'key']
-        unique_together = ['user', 'key']
+        verbose_name = _("Setting")
+        verbose_name_plural = _("Settings")
+        ordering = ["user", "key"]
+        unique_together = ["user", "key"]
         indexes = [
-            models.Index(fields=['user', 'key']),
-            models.Index(fields=['is_active']),
+            models.Index(fields=["user", "key"]),
+            models.Index(fields=["is_active"]),
         ]
 
     def __str__(self):
@@ -66,10 +67,7 @@ class Settings(models.Model):
 
     @classmethod
     def get_user_config(
-        cls,
-        user,
-        config_key: str,
-        required_fields: list = None
+        cls, user, config_key: str, required_fields: list = None
     ):
         """
         Get user's configuration by key and validate required fields.
@@ -92,16 +90,15 @@ class Settings(models.Model):
         """
         try:
             setting = cls.objects.get(
-                user=user,
-                key=config_key,
-                is_active=True
+                user=user, key=config_key, is_active=True
             )
             config_value = setting.value
 
             # Validate required fields if specified
             if required_fields:
                 missing_fields = [
-                    field for field in required_fields
+                    field
+                    for field in required_fields
                     if not config_value.get(field)
                 ]
                 if missing_fields:
@@ -114,16 +111,13 @@ class Settings(models.Model):
 
         except cls.DoesNotExist:
             error_msg = (
-                f"User {user.username} has no active "
-                f"{config_key} setting"
+                f"User {user.username} has no active " f"{config_key} setting"
             )
             raise ValueError(error_msg)
 
     @classmethod
     def get_user_prompt_config(
-        cls,
-        user,
-        required_prompts: list = None
+        cls, user, required_prompts: list = None
     ) -> dict:
         """
         Get user's prompt configuration and validate required prompts.
@@ -138,79 +132,135 @@ class Settings(models.Model):
         Returns:
             dict: Prompt configuration
         """
-        return cls.get_user_config(
-            user,
-            'prompt_config',
-            required_prompts
-        )
+        return cls.get_user_config(user, "prompt_config", required_prompts)
+
+
+class ThreadlineWorkflowConfig(models.Model):
+    """
+    Admin-managed runtime binding for the Threadline workflow.
+
+    The workflow key is fixed to ``threadline``. The row stores the default
+    LLM config and notification channel bindings used by the workflow, while
+    legacy per-user settings remain available as a fallback.
+    """
+
+    workflow_key = models.CharField(
+        max_length=64,
+        unique=True,
+        default="threadline",
+        verbose_name=_("Workflow Key"),
+        help_text=_("Workflow identifier for runtime bindings"),
+    )
+    llm_config_uuid = models.UUIDField(
+        null=True,
+        blank=True,
+        verbose_name=_("LLM Config UUID"),
+        help_text=_("Bound agentcore-metering LLM config UUID"),
+    )
+    image_llm_config_uuid = models.UUIDField(
+        null=True,
+        blank=True,
+        verbose_name=_("Image LLM Config UUID"),
+        help_text=_("Bound multimodal model UUID for image understanding"),
+    )
+    text_llm_config_uuid = models.UUIDField(
+        null=True,
+        blank=True,
+        verbose_name=_("Text LLM Config UUID"),
+        help_text=_("Bound text model UUID for content processing"),
+    )
+    notification_channel_uuid = models.UUIDField(
+        null=True,
+        blank=True,
+        verbose_name=_("Notification Channel UUID"),
+        help_text=_("Bound agentcore-notifier channel UUID"),
+    )
+    task_config = models.JSONField(
+        default=dict,
+        blank=True,
+        verbose_name=_("Task Config"),
+        help_text=_("Threadline-specific runtime configuration payload"),
+    )
+    is_active = models.BooleanField(
+        default=True,
+        verbose_name=_("Active"),
+        help_text=_("Whether this workflow binding is active"),
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = _("Threadline Workflow Config")
+        verbose_name_plural = _("Threadline Workflow Configs")
+        ordering = ["workflow_key"]
+
+    def __str__(self):
+        return f"{self.workflow_key} runtime config"
 
 
 class EmailTask(models.Model):
     """
     Task execution records for various background tasks
     """
+
     class TaskStatus(models.TextChoices):
-        RUNNING = 'running', _('Running')
-        COMPLETED = 'completed', _('Completed')
-        FAILED = 'failed', _('Failed')
-        CANCELLED = 'cancelled', _('Cancelled')
+        RUNNING = "running", _("Running")
+        COMPLETED = "completed", _("Completed")
+        FAILED = "failed", _("Failed")
+        CANCELLED = "cancelled", _("Cancelled")
 
     class TaskType(models.TextChoices):
-        IMAP_FETCH = 'IMAP_EMAIL_FETCH', _('IMAP Email Fetch')
-        HARAKA_FETCH = 'HARAKA_EMAIL_FETCH', _('Haraka Email Fetch')
-        HARAKA_CLEANUP = 'HARAKA_CLEANUP', _('Haraka Cleanup')
-        TASK_CLEANUP = 'TASK_CLEANUP', _('EmailTask Cleanup')
-        STUCK_EMAIL_RESET = 'STUCK_EMAIL_RESET', _('Stuck Email Reset')
+        IMAP_FETCH = "IMAP_EMAIL_FETCH", _("IMAP Email Fetch")
+        HARAKA_FETCH = "HARAKA_EMAIL_FETCH", _("Haraka Email Fetch")
+        EMAIL_WORKFLOW = "EMAIL_WORKFLOW", _("Email Workflow")
+        HARAKA_CLEANUP = "HARAKA_CLEANUP", _("Haraka Cleanup")
+        TASK_CLEANUP = "TASK_CLEANUP", _("EmailTask Cleanup")
+        STUCK_EMAIL_RESET = "STUCK_EMAIL_RESET", _("Stuck Email Reset")
 
     task_type = models.CharField(
         max_length=20,
         choices=TaskType.choices,
-        verbose_name=_('Task Type'),
-        help_text=_('Type of task being executed')
+        verbose_name=_("Task Type"),
+        help_text=_("Type of task being executed"),
     )
     task_id = models.CharField(
         max_length=255,
         blank=True,
-        verbose_name=_('Celery Task ID'),
-        help_text=_('Celery task ID for tracking')
+        verbose_name=_("Celery Task ID"),
+        help_text=_("Celery task ID for tracking"),
     )
     status = models.CharField(
         max_length=20,
         choices=TaskStatus.choices,
         default=TaskStatus.RUNNING,
-        verbose_name=_('Task Status')
+        verbose_name=_("Task Status"),
     )
     started_at = models.DateTimeField(
-        null=True,
-        blank=True,
-        verbose_name=_('Started At')
+        null=True, blank=True, verbose_name=_("Started At")
     )
     completed_at = models.DateTimeField(
-        null=True,
-        blank=True,
-        verbose_name=_('Completed At')
+        null=True, blank=True, verbose_name=_("Completed At")
     )
     error_message = models.TextField(
-        blank=True,
-        verbose_name=_('Error Message')
+        blank=True, verbose_name=_("Error Message")
     )
     details = models.JSONField(
         default=list,
-        verbose_name=_('Execution Details'),
-        help_text=_('Detailed execution log and status information')
+        verbose_name=_("Execution Details"),
+        help_text=_("Detailed execution log and status information"),
     )
 
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        verbose_name = _('Task')
-        verbose_name_plural = _('Tasks')
-        ordering = ['-created_at']
+        verbose_name = _("Task")
+        verbose_name_plural = _("Tasks")
+        ordering = ["-created_at"]
         indexes = [
-            models.Index(fields=['status']),
-            models.Index(fields=['task_type']),
-            models.Index(fields=['created_at']),
-            models.Index(fields=['status', 'created_at']),
+            models.Index(fields=["status"]),
+            models.Index(fields=["task_type"]),
+            models.Index(fields=["created_at"]),
+            models.Index(fields=["status", "created_at"]),
         ]
 
     def __str__(self):
@@ -227,124 +277,109 @@ class EmailMessage(models.Model):
         editable=False,
         db_index=True,
         default=uuid_lib.uuid4,
-        verbose_name=_('UUID'),
-        help_text=_('Unique identifier for external references')
+        verbose_name=_("UUID"),
+        help_text=_("Unique identifier for external references"),
     )
     user = models.ForeignKey(
         User,
         on_delete=models.CASCADE,
-        verbose_name=_('User'),
-        related_name='email_messages'
+        verbose_name=_("User"),
+        related_name="email_messages",
     )
     message_id = models.CharField(
         max_length=255,
-        verbose_name=_('Message ID'),
-        help_text=_('Unique email message ID')
+        verbose_name=_("Message ID"),
+        help_text=_("Unique email message ID"),
     )
-    subject = models.CharField(
-        max_length=500,
-        verbose_name=_('Subject')
-    )
+    subject = models.CharField(max_length=500, verbose_name=_("Subject"))
     sender = models.CharField(
         max_length=500,
-        verbose_name=_('Sender'),
-        help_text=_('Sender email address (supports RFC 5322 format)')
+        verbose_name=_("Sender"),
+        help_text=_("Sender email address (supports RFC 5322 format)"),
     )
     recipients = models.TextField(
-        verbose_name=_('Recipients'),
-        help_text=_('Comma-separated list of recipients')
+        verbose_name=_("Recipients"),
+        help_text=_("Comma-separated list of recipients"),
     )
-    received_at = models.DateTimeField(
-        verbose_name=_('Received At')
-    )
-    html_content = models.TextField(
-        blank=True,
-        verbose_name=_('HTML Content')
-    )
-    text_content = models.TextField(
-        blank=True,
-        verbose_name=_('Text Content')
-    )
+    received_at = models.DateTimeField(verbose_name=_("Received At"))
+    html_content = models.TextField(blank=True, verbose_name=_("HTML Content"))
+    text_content = models.TextField(blank=True, verbose_name=_("Text Content"))
 
     # Summarization results
     summary_title = models.CharField(
-        max_length=500,
-        blank=True,
-        verbose_name=_('Summary Title')
+        max_length=500, blank=True, verbose_name=_("Summary Title")
     )
     summary_content = models.TextField(
-        blank=True,
-        verbose_name=_('Summary Content')
+        blank=True, verbose_name=_("Summary Content")
     )
     summary_priority = models.CharField(
-        max_length=20,
-        blank=True,
-        verbose_name=_('Summary Priority')
+        max_length=20, blank=True, verbose_name=_("Summary Priority")
     )
 
     # Structured metadata for intelligent search and filtering
     metadata = models.JSONField(
         default=dict,
         blank=True,
-        verbose_name=_('Metadata'),
+        verbose_name=_("Metadata"),
         help_text=_(
-            'Structured metadata for intelligent search and filtering'
-        )
+            "Structured metadata for intelligent search and filtering"
+        ),
     )
 
     # Structured summary data (details, key_process)
     summary_data = models.JSONField(
         default=dict,
         blank=True,
-        verbose_name=_('Summary Data'),
+        verbose_name=_("Summary Data"),
         help_text=_(
-            'Structured summary data containing details and key_process. '
-            'TODO items are stored separately in EmailTodo model.'
-        )
+            "Structured summary data containing details and key_process. "
+            "TODO items are stored separately in EmailTodo model."
+        ),
     )
 
     # LLM processed/organized content for this email
     llm_content = models.TextField(
         blank=True,
         null=True,
-        verbose_name=_('LLM Processed Content'),
-        help_text=_('Content organized by large language model')
+        verbose_name=_("LLM Processed Content"),
+        help_text=_("Content organized by large language model"),
     )
 
     # Processing status for each stage of the email workflow
     status = models.CharField(
         max_length=32,
-        choices=[(status.value, status.name.replace('_', ' ').title())
-                 for status in EmailStatus],
+        choices=[
+            (status.value, status.name.replace("_", " ").title())
+            for status in EmailStatus
+        ],
         default=get_initial_email_status(),
         db_index=True,
-        verbose_name=_('Processing Status')
+        verbose_name=_("Processing Status"),
     )
     error_message = models.TextField(
-        blank=True,
-        verbose_name=_('Error Message')
+        blank=True, verbose_name=_("Error Message")
     )
     fetch_retry_count = models.IntegerField(
         default=0,
-        verbose_name=_('Fetch Retry Count'),
+        verbose_name=_("Fetch Retry Count"),
         help_text=_(
-            'Number of times workflow trigger has been retried '
-            'for emails stuck in FETCHED status'
-        )
+            "Number of times workflow trigger has been retried "
+            "for emails stuck in FETCHED status"
+        ),
     )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        verbose_name = _('Email Message')
-        verbose_name_plural = _('Email Messages')
-        ordering = ['-received_at']
+        verbose_name = _("Email Message")
+        verbose_name_plural = _("Email Messages")
+        ordering = ["-received_at"]
         indexes = [
-            models.Index(fields=['user', 'message_id']),
-            models.Index(fields=['user', 'status']),
-            models.Index(fields=['received_at']),
+            models.Index(fields=["user", "message_id"]),
+            models.Index(fields=["user", "status"]),
+            models.Index(fields=["received_at"]),
         ]
-        unique_together = ['user', 'message_id']
+        unique_together = ["user", "message_id"]
 
     def __str__(self):
         return f"{self.subject} - {self.sender}"
@@ -360,16 +395,16 @@ class EmailMessage(models.Model):
             status: New status value
             error_message: Optional error message to save
         """
-        update_fields = ['status']
+        update_fields = ["status"]
         self.status = status
 
         # Clear error_message when transitioning to SUCCESS
         if status == EmailStatus.SUCCESS.value:
-            self.error_message = ''
-            update_fields.append('error_message')
+            self.error_message = ""
+            update_fields.append("error_message")
         elif error_message:
             self.error_message = error_message
-            update_fields.append('error_message')
+            update_fields.append("error_message")
 
         self.save(update_fields=update_fields)
 
@@ -378,9 +413,9 @@ class EmailMessage(models.Model):
         Override save to automatically validate status transitions
         """
         # Skip state machine validation if saving from Django Admin
-        if hasattr(self, '_from_admin'):
+        if hasattr(self, "_from_admin"):
             # Clear the flag and save without validation
-            delattr(self, '_from_admin')
+            delattr(self, "_from_admin")
             super().save(*args, **kwargs)
             return
 
@@ -390,16 +425,13 @@ class EmailMessage(models.Model):
                 old_instance = EmailMessage.objects.get(pk=self.pk)
                 status_changed = old_instance.status != self.status
                 if status_changed and not can_transition_to(
-                    old_instance.status,
-                    self.status,
-                    EMAIL_STATE_MACHINE
+                    old_instance.status, self.status, EMAIL_STATE_MACHINE
                 ):
                     # Get valid next states using the state machine
                     valid_transitions = get_next_states(
-                        old_instance.status,
-                        EMAIL_STATE_MACHINE
+                        old_instance.status, EMAIL_STATE_MACHINE
                     )
-                    transitions_str = ', '.join(valid_transitions)
+                    transitions_str = ", ".join(valid_transitions)
                     error_msg = (
                         f"Invalid email status transition from "
                         f"{old_instance.status} to {self.status}. "
@@ -420,83 +452,83 @@ class EmailAttachment(models.Model):
     Status is now managed by the parent EmailMessage.status field
     for unified workflow control.
     """
+
     uuid = models.UUIDField(
         unique=True,
         editable=False,
         db_index=True,
         default=uuid_lib.uuid4,
-        verbose_name=_('UUID'),
-        help_text=_('Unique identifier for external references')
+        verbose_name=_("UUID"),
+        help_text=_("Unique identifier for external references"),
     )
     user = models.ForeignKey(
         User,
         on_delete=models.CASCADE,
-        verbose_name=_('User'),
-        related_name='attachments'
+        verbose_name=_("User"),
+        related_name="attachments",
     )
     email_message = models.ForeignKey(
         EmailMessage,
         on_delete=models.CASCADE,
-        verbose_name=_('Email Message'),
-        related_name='attachments'
+        verbose_name=_("Email Message"),
+        related_name="attachments",
     )
     filename = models.CharField(
         max_length=255,
-        verbose_name=_('Filename'),
-        help_text=_('Original filename of the attachment')
+        verbose_name=_("Filename"),
+        help_text=_("Original filename of the attachment"),
     )
     safe_filename = models.CharField(
         max_length=255,
-        verbose_name=_('Safe Filename'),
-        help_text=_('Sanitized filename for safe storage')
+        verbose_name=_("Safe Filename"),
+        help_text=_("Sanitized filename for safe storage"),
     )
     content_type = models.CharField(
         max_length=100,
-        verbose_name=_('Content Type'),
-        help_text=_('MIME type of the attachment')
+        verbose_name=_("Content Type"),
+        help_text=_("MIME type of the attachment"),
     )
     file_size = models.IntegerField(
-        verbose_name=_('File Size'),
-        help_text=_('Size of the attachment in bytes')
+        verbose_name=_("File Size"),
+        help_text=_("Size of the attachment in bytes"),
     )
     file_path = models.CharField(
         max_length=500,
-        verbose_name=_('File Path'),
-        help_text=_('Path to the stored attachment file')
+        verbose_name=_("File Path"),
+        help_text=_("Path to the stored attachment file"),
     )
     is_image = models.BooleanField(
         default=False,
-        verbose_name=_('Is Image'),
-        help_text=_('Whether this attachment is an image')
+        verbose_name=_("Is Image"),
+        help_text=_("Whether this attachment is an image"),
     )
 
     ocr_content = models.TextField(
         blank=True,
         null=True,
-        verbose_name=_('OCR Content'),
-        help_text=_('Text content recognized from image attachment')
+        verbose_name=_("OCR Content"),
+        help_text=_("Text content recognized from image attachment"),
     )
     # Content processed/organized by LLM for this attachment
     # such as post-processed OCR result
     llm_content = models.TextField(
         blank=True,
         null=True,
-        verbose_name=_('LLM Processed Content'),
+        verbose_name=_("LLM Processed Content"),
         help_text=_(
-            'Content organized by large language model '
-            'based on OCR result'
-        )
+            "Content organized by large language model " "based on OCR result"
+        ),
     )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        verbose_name = _('Email Attachment')
-        verbose_name_plural = _('Email Attachments')
-        ordering = ['filename']
+        verbose_name = _("Email Attachment")
+        verbose_name_plural = _("Email Attachments")
+        ordering = ["filename"]
         indexes = [
-            models.Index(fields=['user', 'is_image']),
-            models.Index(fields=['email_message']),
+            models.Index(fields=["user", "is_image"]),
+            models.Index(fields=["email_message"]),
         ]
 
     def __str__(self):
@@ -508,65 +540,66 @@ class Issue(models.Model):
     Generic issue model for external system integration.
     Supports multiple engines like Jira, email, Slack, etc.
     """
+
     # User who owns the issue
     user = models.ForeignKey(
         User,
         on_delete=models.CASCADE,
-        verbose_name=_('User'),
-        related_name='issues'
+        verbose_name=_("User"),
+        related_name="issues",
     )
     # Related email message
     email_message = models.ForeignKey(
         EmailMessage,
         on_delete=models.CASCADE,
-        verbose_name=_('Email Message'),
-        related_name='issues'
+        verbose_name=_("Email Message"),
+        related_name="issues",
     )
     # Issue title
     title = models.CharField(
         max_length=255,
-        verbose_name=_('Issue Title'),
-        help_text=_('Title of the issue')
+        verbose_name=_("Issue Title"),
+        help_text=_("Title of the issue"),
     )
     # Issue description
     description = models.TextField(
-        verbose_name=_('Issue Description'),
-        help_text=_('Description of the issue')
+        verbose_name=_("Issue Description"),
+        help_text=_("Description of the issue"),
     )
 
     # Issue priority
     priority = models.CharField(
         max_length=20,
-        verbose_name=_('Issue Priority'),
-        help_text=_('Priority level of the issue')
+        verbose_name=_("Issue Priority"),
+        help_text=_("Priority level of the issue"),
     )
     # Engine type (jira, email, slack, etc.)
     engine = models.CharField(
         max_length=50,
-        verbose_name=_('Engine Type'),
-        help_text=_('External system engine type')
+        verbose_name=_("Engine Type"),
+        help_text=_("External system engine type"),
     )
     # External system ID (e.g., Jira issue key)
     external_id = models.CharField(
         max_length=255,
         blank=True,
         null=True,
-        verbose_name=_('External ID'),
-        help_text=_('ID in external system')
+        verbose_name=_("External ID"),
+        help_text=_("ID in external system"),
     )
     # Direct URL to the issue in external system
     issue_url = models.URLField(
         max_length=500,
         blank=True,
         null=True,
-        verbose_name=_('Issue URL'),
-        help_text=_('Direct link to the issue in external system')
+        verbose_name=_("Issue URL"),
+        help_text=_("Direct link to the issue in external system"),
     )
     # Metadata for engine-specific configuration and data
     metadata = models.JSONField(
         default=dict,
-        verbose_name=_('Metadata'),
-        help_text=_('Engine-specific configuration and data')
+        verbose_name=_("Metadata"),
+        help_text=_("Engine-specific configuration and data"),
     )
     # Created timestamp
     created_at = models.DateTimeField(auto_now_add=True)
@@ -574,13 +607,13 @@ class Issue(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        verbose_name = _('Issue')
-        verbose_name_plural = _('Issues')
-        ordering = ['-created_at']
+        verbose_name = _("Issue")
+        verbose_name_plural = _("Issues")
+        ordering = ["-created_at"]
         indexes = [
-            models.Index(fields=['user', 'email_message']),
-            models.Index(fields=['engine']),
-            models.Index(fields=['external_id']),
+            models.Index(fields=["user", "email_message"]),
+            models.Index(fields=["engine"]),
+            models.Index(fields=["external_id"]),
         ]
 
     def __str__(self):
@@ -599,88 +632,86 @@ class EmailTodo(models.Model):
 
     Supports status tracking, cross-email aggregation, and statistics.
     """
+
     user = models.ForeignKey(
         User,
         on_delete=models.CASCADE,
-        verbose_name=_('User'),
-        related_name='email_todos',
-        help_text=_('User who owns this TODO')
+        verbose_name=_("User"),
+        related_name="email_todos",
+        help_text=_("User who owns this TODO"),
     )
     email_message = models.ForeignKey(
         EmailMessage,
         on_delete=models.CASCADE,
         null=True,
         blank=True,
-        verbose_name=_('Email Message'),
-        related_name='todos',
-        help_text=_('Related email message (null for manually created TODOs)')
+        verbose_name=_("Email Message"),
+        related_name="todos",
+        help_text=_("Related email message (null for manually created TODOs)"),
     )
     content = models.TextField(
-        verbose_name=_('Content'),
-        help_text=_('TODO item content')
+        verbose_name=_("Content"), help_text=_("TODO item content")
     )
     is_completed = models.BooleanField(
         default=False,
-        verbose_name=_('Is Completed'),
-        help_text=_('Whether this TODO is completed')
+        verbose_name=_("Is Completed"),
+        help_text=_("Whether this TODO is completed"),
     )
     completed_at = models.DateTimeField(
         null=True,
         blank=True,
-        verbose_name=_('Completed At'),
-        help_text=_('Timestamp when TODO was marked as completed')
+        verbose_name=_("Completed At"),
+        help_text=_("Timestamp when TODO was marked as completed"),
     )
     priority = models.CharField(
         max_length=20,
         blank=True,
         null=True,
-        verbose_name=_('Priority'),
-        help_text=_('Priority level: high, medium, or low')
+        verbose_name=_("Priority"),
+        help_text=_("Priority level: high, medium, or low"),
     )
     owner = models.CharField(
         max_length=255,
         blank=True,
         null=True,
-        verbose_name=_('Owner'),
-        help_text=_('Person responsible for this TODO')
+        verbose_name=_("Owner"),
+        help_text=_("Person responsible for this TODO"),
     )
     deadline = models.DateTimeField(
         null=True,
         blank=True,
-        verbose_name=_('Deadline'),
-        help_text=_('Deadline for this TODO')
+        verbose_name=_("Deadline"),
+        help_text=_("Deadline for this TODO"),
     )
     location = models.CharField(
         max_length=255,
         blank=True,
         null=True,
-        verbose_name=_('Location'),
-        help_text=_('Location related to this TODO')
+        verbose_name=_("Location"),
+        help_text=_("Location related to this TODO"),
     )
     metadata = models.JSONField(
         default=dict,
         blank=True,
-        verbose_name=_('Metadata'),
-        help_text=_('Additional metadata for this TODO')
+        verbose_name=_("Metadata"),
+        help_text=_("Additional metadata for this TODO"),
     )
     created_at = models.DateTimeField(
-        auto_now_add=True,
-        verbose_name=_('Created At')
+        auto_now_add=True, verbose_name=_("Created At")
     )
     updated_at = models.DateTimeField(
-        auto_now=True,
-        verbose_name=_('Updated At')
+        auto_now=True, verbose_name=_("Updated At")
     )
 
     class Meta:
-        verbose_name = _('Email TODO')
-        verbose_name_plural = _('Email TODOs')
-        ordering = ['-created_at']
+        verbose_name = _("Email TODO")
+        verbose_name_plural = _("Email TODOs")
+        ordering = ["-created_at"]
         indexes = [
-            models.Index(fields=['user', 'is_completed']),
-            models.Index(fields=['email_message']),
-            models.Index(fields=['deadline']),
-            models.Index(fields=['priority']),
+            models.Index(fields=["user", "is_completed"]),
+            models.Index(fields=["email_message"]),
+            models.Index(fields=["deadline"]),
+            models.Index(fields=["priority"]),
         ]
 
     def __str__(self):
@@ -694,7 +725,7 @@ class EmailTodo(models.Model):
         self.is_completed = True
         if not self.completed_at:
             self.completed_at = timezone.now()
-        self.save(update_fields=['is_completed', 'completed_at', 'updated_at'])
+        self.save(update_fields=["is_completed", "completed_at", "updated_at"])
 
     def mark_incomplete(self):
         """
@@ -702,7 +733,7 @@ class EmailTodo(models.Model):
         """
         self.is_completed = False
         self.completed_at = None
-        self.save(update_fields=['is_completed', 'completed_at', 'updated_at'])
+        self.save(update_fields=["is_completed", "completed_at", "updated_at"])
 
 
 class ThreadlineShareLink(models.Model):
@@ -714,66 +745,54 @@ class ThreadlineShareLink(models.Model):
         default=uuid_lib.uuid4,
         unique=True,
         editable=False,
-        verbose_name=_('UUID')
+        verbose_name=_("UUID"),
     )
     email_message = models.ForeignKey(
         EmailMessage,
         on_delete=models.CASCADE,
-        related_name='share_links',
-        verbose_name=_('Email Message')
+        related_name="share_links",
+        verbose_name=_("Email Message"),
     )
     owner = models.ForeignKey(
         User,
         on_delete=models.CASCADE,
-        related_name='threadline_share_links',
-        verbose_name=_('Owner')
+        related_name="threadline_share_links",
+        verbose_name=_("Owner"),
     )
     expires_at = models.DateTimeField(
-        blank=True,
-        null=True,
-        verbose_name=_('Expires At')
+        blank=True, null=True, verbose_name=_("Expires At")
     )
     password_hash = models.CharField(
-        max_length=128,
-        blank=True,
-        verbose_name=_('Password Hash')
+        max_length=128, blank=True, verbose_name=_("Password Hash")
     )
     password = models.CharField(
-        max_length=6,
-        blank=True,
-        verbose_name=_('Password')
+        max_length=6, blank=True, verbose_name=_("Password")
     )
-    is_active = models.BooleanField(
-        default=True,
-        verbose_name=_('Is Active')
-    )
+    is_active = models.BooleanField(default=True, verbose_name=_("Is Active"))
     view_count = models.PositiveIntegerField(
-        default=0,
-        verbose_name=_('View Count')
+        default=0, verbose_name=_("View Count")
     )
     last_viewed_at = models.DateTimeField(
-        blank=True,
-        null=True,
-        verbose_name=_('Last Viewed At')
+        blank=True, null=True, verbose_name=_("Last Viewed At")
     )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        verbose_name = _('Threadline Share Link')
-        verbose_name_plural = _('Threadline Share Links')
-        ordering = ['-created_at']
+        verbose_name = _("Threadline Share Link")
+        verbose_name_plural = _("Threadline Share Links")
+        ordering = ["-created_at"]
         indexes = [
-            models.Index(fields=['uuid']),
-            models.Index(fields=['email_message']),
-            models.Index(fields=['owner']),
-            models.Index(fields=['is_active']),
+            models.Index(fields=["uuid"]),
+            models.Index(fields=["email_message"]),
+            models.Index(fields=["owner"]),
+            models.Index(fields=["is_active"]),
         ]
         constraints = [
             models.UniqueConstraint(
-                fields=['email_message'],
+                fields=["email_message"],
                 condition=Q(is_active=True),
-                name='unique_active_share_per_email'
+                name="unique_active_share_per_email",
             )
         ]
 
@@ -801,7 +820,7 @@ class ThreadlineShareLink(models.Model):
         if not self.is_active:
             return
         self.is_active = False
-        self.save(update_fields=['is_active', 'updated_at'])
+        self.save(update_fields=["is_active", "updated_at"])
 
     def mark_viewed(self):
         """
@@ -809,9 +828,9 @@ class ThreadlineShareLink(models.Model):
         """
         timestamp = timezone.now()
         ThreadlineShareLink.objects.filter(pk=self.pk).update(
-            view_count=F('view_count') + 1,
+            view_count=F("view_count") + 1,
             last_viewed_at=timestamp,
-            updated_at=timestamp
+            updated_at=timestamp,
         )
         self.view_count += 1
         self.last_viewed_at = timestamp
@@ -825,47 +844,44 @@ class EmailAlias(models.Model):
     their account. All aliases must be unique across the system to
     prevent conflicts.
     """
+
     user = models.ForeignKey(
         User,
         on_delete=models.CASCADE,
-        verbose_name=_('User'),
-        related_name='email_aliases',
-        help_text=_('User who owns this email alias')
+        verbose_name=_("User"),
+        related_name="email_aliases",
+        help_text=_("User who owns this email alias"),
     )
     alias = models.CharField(
         max_length=255,
-        verbose_name=_('Alias'),
-        help_text=_('Email alias name (domain is auto-assigned)')
+        verbose_name=_("Alias"),
+        help_text=_("Email alias name (domain is auto-assigned)"),
     )
     is_active = models.BooleanField(
         default=True,
-        verbose_name=_('Active'),
-        help_text=_('Whether this alias is active')
+        verbose_name=_("Active"),
+        help_text=_("Whether this alias is active"),
     )
     created_at = models.DateTimeField(
-        auto_now_add=True,
-        verbose_name=_('Created At')
+        auto_now_add=True, verbose_name=_("Created At")
     )
     updated_at = models.DateTimeField(
-        auto_now=True,
-        verbose_name=_('Updated At')
+        auto_now=True, verbose_name=_("Updated At")
     )
 
     class Meta:
-        verbose_name = _('Email Alias')
-        verbose_name_plural = _('Email Aliases')
-        unique_together = ['alias']
-        ordering = ['-created_at']
+        verbose_name = _("Email Alias")
+        verbose_name_plural = _("Email Aliases")
+        unique_together = ["alias"]
+        ordering = ["-created_at"]
         indexes = [
-            models.Index(fields=['alias']),
-            models.Index(fields=['user', 'is_active']),
-            models.Index(fields=['created_at']),
+            models.Index(fields=["alias"]),
+            models.Index(fields=["user", "is_active"]),
+            models.Index(fields=["created_at"]),
         ]
 
     def __str__(self):
-        email_addr = (
-            f"{self.alias}@{settings.AUTO_ASSIGN_EMAIL_DOMAIN}"
-        )
+        email_addr = f"{self.alias}@{settings.AUTO_ASSIGN_EMAIL_DOMAIN}"
         return f"{email_addr} -> {self.user.username}"
 
     def full_email_address(self):
@@ -881,13 +897,10 @@ class EmailAlias(models.Model):
     def find_user_by_email(cls, email_address):
         """Find user by email address (supports aliases)"""
         try:
-            alias_name, domain = email_address.split('@')
+            alias_name, domain = email_address.split("@")
             if domain != settings.AUTO_ASSIGN_EMAIL_DOMAIN:
                 return None
-            alias_obj = cls.objects.get(
-                alias=alias_name,
-                is_active=True
-            )
+            alias_obj = cls.objects.get(alias=alias_name, is_active=True)
             return alias_obj.user
         except (cls.DoesNotExist, ValueError):
             return None
@@ -898,4 +911,4 @@ class EmailAlias(models.Model):
         queryset = cls.objects.filter(user=user)
         if active_only:
             queryset = queryset.filter(is_active=True)
-        return queryset.order_by('alias')
+        return queryset.order_by("alias")

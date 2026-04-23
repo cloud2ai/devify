@@ -23,6 +23,10 @@ from .password import (
     ConfirmPasswordResetView,
 )
 
+from .token import (
+    CustomTokenRefreshView,
+)
+
 from .user import (
     CustomUserDetailsView,
 )
@@ -45,6 +49,9 @@ __all__ = [
     # Password views
     'SendPasswordResetEmailView',
     'ConfirmPasswordResetView',
+
+    # Token views
+    'CustomTokenRefreshView',
 
     # User views
     'CustomUserDetailsView',

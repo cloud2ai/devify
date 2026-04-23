@@ -1,285 +1,339 @@
+"""Threadline failure notification helpers."""
+
+from __future__ import annotations
+
 import logging
+from typing import Any, Dict, Optional
 
 from celery import shared_task
 from django.utils import timezone
-from django.utils.translation import activate, gettext_lazy as _
+from agentcore_notifier.adapters.django.models import NotificationChannel
+from agentcore_notifier.constants import Provider
+from agentcore_notifier.adapters.django.tasks.send import (
+    send_webhook_notification as agentcore_send_webhook_notification,
+)
 
-from devtoolbox.webhook import Webhook
-from threadline.models import EmailMessage, Settings
-from threadline.state_machine import EmailStatus
+from threadline.models import EmailMessage
+from threadline.services.workflow_config import (
+    resolve_threadline_notification_channel,
+)
 
 logger = logging.getLogger(__name__)
 
-# Status color mapping for notifications (simplified 4-state model)
-STATUS_COLORS = {
-    'FETCHED': 'blue',
-    'PROCESSING': 'blue',
-    'SUCCESS': 'green',
-    'FAILED': 'red',
+THREADLINE_SOURCE_APP = "threadline"
+DEFAULT_NOTIFICATION_LANGUAGE = "zh-hans"
+
+NOTIFICATION_COPY = {
+    "zh-hans": {
+        "email_title": "【Threadline】邮件处理失败",
+        "task_title": "【Threadline】任务失败",
+        "card_title": "线程失败通知",
+        "fields": {
+            "time": "时间",
+            "email_id": "邮件ID",
+            "subject": "主题",
+            "sender": "发件人",
+            "previous_status": "前一状态",
+            "current_status": "当前状态",
+            "task_type": "任务类型",
+            "task_id": "任务ID",
+            "user_id": "用户ID",
+            "cleanup_type": "清理类型",
+            "scene": "场景",
+            "language": "语言",
+            "workflow_error": "流程错误",
+            "error_count": "错误数",
+            "tasks_cleaned": "已清理任务数",
+            "links_deactivated": "已失效链接数",
+            "error": "错误",
+        },
+    },
+    "en": {
+        "email_title": "[Threadline] Email processing failed",
+        "task_title": "[Threadline] Task failed",
+        "card_title": "Threadline Failure Notification",
+        "fields": {
+            "time": "Time",
+            "email_id": "Email ID",
+            "subject": "Subject",
+            "sender": "Sender",
+            "previous_status": "Previous status",
+            "current_status": "Current status",
+            "task_type": "Task type",
+            "task_id": "Task ID",
+            "user_id": "User ID",
+            "cleanup_type": "Cleanup type",
+            "scene": "Scene",
+            "language": "Language",
+            "workflow_error": "Workflow error",
+            "error_count": "Error count",
+            "tasks_cleaned": "Tasks cleaned",
+            "links_deactivated": "Links deactivated",
+            "error": "Error",
+        },
+    },
 }
 
-# Supported webhook providers
-SUPPORTED_PROVIDERS = ['feishu']
+
+def _normalize_notification_language(language: Optional[str]) -> str:
+    if not language:
+        return DEFAULT_NOTIFICATION_LANGUAGE
+    normalized = str(language).strip().lower()
+    if normalized.startswith("en"):
+        return "en"
+    if normalized.startswith("zh"):
+        return "zh-hans"
+    return DEFAULT_NOTIFICATION_LANGUAGE
 
 
-def get_webhook_config(user):
-    """
-    Get webhook configuration from user's Settings key-value store.
-    Returns empty dict if webhook is not properly configured.
-    """
-    try:
-        webhook_setting = user.settings.get(
-            key='webhook_config', is_active=True
-        )
-        webhook_config = webhook_setting.value
-    except Settings.DoesNotExist:
-        logger.debug(f"User {user.username} has no active "
-                     f"webhook_config setting")
-        return {}
+def _get_notification_copy(language: Optional[str]) -> Dict[str, Any]:
+    normalized = _normalize_notification_language(language)
+    return NOTIFICATION_COPY.get(
+        normalized,
+        NOTIFICATION_COPY[DEFAULT_NOTIFICATION_LANGUAGE],
+    )
 
-    # Retrieve all webhook settings from user's webhook_config
-    webhook_url = webhook_config.get('url', '').strip()
-    webhook_events = webhook_config.get('events', [])
-    webhook_timeout = webhook_config.get('timeout', 10)
-    webhook_retries = webhook_config.get('retries', 3)
-    webhook_headers = webhook_config.get('headers', {})
-    webhook_language = webhook_config.get('language', 'zh-hans')
-    provider = webhook_config.get('provider', 'feishu')
 
-    # Check if webhook is properly configured
-    if not webhook_url:
-        logger.debug("Webhook URL is not configured")
-        return {}
+def _normalize_markdown_value(value: Any) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, str):
+        return value.strip().replace("\n", " ")
+    return str(value).strip()
 
-    # Return complete configuration if all checks pass
+
+def _build_markdown_bullet_list(items: Dict[str, Any]) -> str:
+    lines = []
+    for label, value in items.items():
+        normalized = _normalize_markdown_value(value)
+        if not normalized:
+            continue
+        lines.append(f"- **{label}**: {normalized}")
+    return "\n".join(lines)
+
+
+def _build_feishu_interactive_card(
+    title: str,
+    markdown: str,
+    message_prefix: str = "",
+) -> Dict[str, Any]:
+    full_title = (
+        f"{message_prefix} {title}".strip() if message_prefix else title
+    )
     return {
-        'url': webhook_url,
-        'events': webhook_events,
-        'timeout': webhook_timeout,
-        'retries': webhook_retries,
-        'headers': webhook_headers,
-        'language': webhook_language,
-        'provider': provider
+        "msg_type": "interactive",
+        "card": {
+            "config": {
+                "wide_screen_mode": True,
+            },
+            "header": {
+                "title": {
+                    "tag": "plain_text",
+                    "content": full_title,
+                },
+                "template": "red",
+            },
+            "elements": [
+                {
+                    "tag": "div",
+                    "text": {
+                        "tag": "lark_md",
+                        "content": markdown,
+                    },
+                }
+            ],
+        },
     }
 
 
-def build_notification_payload(
-    status, email, old_status=None, new_status=None, language=None
+def _resolve_webhook_notification_channel() -> (
+    tuple[object | None, dict | None]
 ):
-    """
-    Build notification payload with simplified 4-state model.
-    Only payload fields are internationalized.
-    """
-    payload = {
-        "status": status,
-        "timestamp": timezone.now().isoformat(),
-        "email_id": str(email.id),
-        "subject": email.subject,
-        "sender": email.sender,
-        "user": email.user.username if email.user else None,
-        "language": language or 'zh-hans',
+    channel = resolve_threadline_notification_channel()
+    if not channel:
+        return None, None
+    if channel.channel_type != NotificationChannel.TYPE_WEBHOOK:
+        logger.warning(
+            f"Threadline notification channel {channel.uuid} is not "
+            "webhook; skipping"
+        )
+        return None, None
+
+    config = channel.config or {}
+    provider_type = (
+        config.get("provider_type") or config.get("provider") or "feishu"
+    )
+    provider_type = str(provider_type).strip().lower() or "feishu"
+    return channel, {
+        "provider_type": provider_type,
+        "message_prefix": (config.get("message_prefix") or "").strip(),
+        "language": _normalize_notification_language(config.get("language")),
     }
 
-    # Add status transition information if available
-    if old_status and new_status:
-        payload.update({
-            "old_status": old_status,
-            "new_status": new_status,
-            "status_transition": f"{old_status} -> {new_status}"
-        })
 
-    # Simplified message templates for 5-state model
-    if status == EmailStatus.FETCHED.value:
-        payload.update({
-            "message": _(
-                "New email received: {subject}"
-            ).format(subject=email.subject),
-            "stage": _("Email Fetched"),
-            "details": _("From: {sender}").format(sender=email.sender)
-        })
-
-    elif status == EmailStatus.PROCESSING.value:
-        payload.update({
-            "message": _(
-                "Processing email: {subject}"
-            ).format(subject=email.subject),
-            "stage": _("Processing"),
-            "details": _(
-                "Email is being processed through the workflow"
-            )
-        })
-
-    elif status == EmailStatus.SUCCESS.value:
-        # Try to get issue information for SUCCESS (terminal state)
-        try:
-            issues = email.issues.all()
-            if issues.exists():
-                issue = issues.first()
-                payload.update({
-                    "message": _(
-                        "Email processed successfully: {subject}"
-                    ).format(subject=email.subject),
-                    "stage": _("Success"),
-                    "issue_url": issue.issue_url,
-                    "details": _(
-                        "All processing completed | Issue: {url}"
-                    ).format(url=issue.issue_url)
-                })
-            else:
-                payload.update({
-                    "message": _(
-                        "Email processed successfully: {subject}"
-                    ).format(subject=email.subject),
-                    "stage": _("Success"),
-                    "details": _(
-                        "All processing stages completed successfully"
-                    )
-                })
-        except Exception:
-            payload.update({
-                "message": _(
-                    "Email processed successfully: {subject}"
-                ).format(subject=email.subject),
-                "stage": _("Success"),
-                "details": _(
-                    "All processing stages completed successfully"
-                )
-            })
-
-    elif status == EmailStatus.FAILED.value:
-        payload.update({
-            "message": _(
-                "Email processing failed: {subject}"
-            ).format(subject=email.subject),
-            "stage": _("Failed"),
-            "details": _(
-                "Processing failed, can be retried"
-            )
-        })
-
-    else:
-        # Fallback for generic status change
-        payload.update({
-            "message": _(
-                "Status updated: {subject}"
-            ).format(subject=email.subject),
-            "stage": _("Processing"),
-            "details": _(
-                "Status changed from {old_status} to {new_status}"
-            ).format(
-                old_status=old_status,
-                new_status=new_status
-            ) if old_status and new_status else _("Status updated")
-        })
-
-    return payload
-
-
-def build_markdown_payload(status, email, old_status=None,
-                         new_status=None, language=None):
+def build_email_failure_text(
+    email: EmailMessage,
+    old_status: str,
+    new_status: str,
+    language: Optional[str] = None,
+) -> str:
     """
-    Build Markdown card message parameters for Webhook
+    Build a markdown failure summary for an email status transition.
     """
-    if language:
-        activate(language)
-    base_payload = build_notification_payload(
-        status, email, old_status, new_status, language
+    copy = _get_notification_copy(language)
+    details = _build_markdown_bullet_list(
+        {
+            copy["fields"]["time"]: timezone.now().isoformat(),
+            copy["fields"]["email_id"]: email.id,
+            copy["fields"]["subject"]: email.subject,
+            copy["fields"]["sender"]: email.sender,
+            copy["fields"]["previous_status"]: old_status,
+            copy["fields"]["current_status"]: new_status,
+            copy["fields"]["error"]: email.error_message or None,
+        }
     )
-    template_color = STATUS_COLORS.get(status.upper(), "blue")
-    timestamp = timezone.now().strftime('%Y-%m-%d %H:%M:%S')
-    title = _("[AImyChats] Email Processing: {status}").format(status=status)
-    details = base_payload.get('details', _('No details available'))
-    markdown_content = (
-        f"**{_('Time')}:** {timestamp}\n"
-        f"**{_('Subject')}:** {email.subject}\n"
-        f"**{_('Sender')}:** {email.sender}\n"
-        f"**{_('Stage')}:** {base_payload.get('stage', _('Unknown'))}\n"
-        f"**{_('Details')}:** {details}"
+    message = copy["email_title"]
+    return f"**{message}**\n\n{details}" if details else f"**{message}**"
+
+
+def build_task_failure_text(
+    task_type: str,
+    details: Optional[Dict[str, Any]],
+    error_msg: str,
+    language: Optional[str] = None,
+) -> str:
+    """
+    Build a markdown failure summary for a background task.
+    """
+    payload = details or {}
+    copy = _get_notification_copy(language)
+    summary = _build_markdown_bullet_list(
+        {
+            copy["fields"]["time"]: timezone.now().isoformat(),
+            copy["fields"]["task_type"]: task_type,
+            copy["fields"]["task_id"]: payload.get("task_id"),
+            copy["fields"]["email_id"]: payload.get("email_id"),
+            copy["fields"]["user_id"]: payload.get("user_id"),
+            copy["fields"]["cleanup_type"]: payload.get("cleanup_type"),
+            copy["fields"]["scene"]: payload.get("scene"),
+            copy["fields"]["language"]: payload.get("language"),
+            copy["fields"]["workflow_error"]: payload.get("workflow_error"),
+            copy["fields"]["error_count"]: payload.get("error_count"),
+            copy["fields"]["tasks_cleaned"]: payload.get("tasks_cleaned"),
+            copy["fields"]["links_deactivated"]: payload.get(
+                "links_deactivated"
+            ),
+            copy["fields"]["error"]: error_msg,
+        }
     )
-    # Issue URL is already included in details for SUCCESS status
-    return {
-        'title': title,
-        'markdown_content': markdown_content,
-        'template_color': template_color,
-        'wide_screen_mode': True
-    }
+    return (
+        f"**{copy['task_title']}**\n\n{summary}"
+        if summary
+        else f"**{copy['task_title']}**"
+    )
+
+
+def _queue_webhook_notification(
+    text: str,
+    source_type: str,
+    source_id: str,
+    user_id: Optional[int] = None,
+):
+    channel, channel_config = _resolve_webhook_notification_channel()
+    if not channel or not channel_config:
+        logger.warning(
+            "Threadline notification channel is unavailable; skipping"
+        )
+        return None
+
+    provider_type = channel_config["provider_type"]
+    if str(provider_type).strip().lower() != Provider.FEISHU:
+        logger.warning(
+            f"Unsupported Threadline notification provider_type="
+            f"{provider_type}; skipping notification"
+        )
+        return None
+    message_prefix = channel_config.get("message_prefix", "")
+    language = channel_config.get("language", DEFAULT_NOTIFICATION_LANGUAGE)
+    payload = _build_feishu_interactive_card(
+        _get_notification_copy(language)["card_title"],
+        text,
+        message_prefix=message_prefix,
+    )
+    return agentcore_send_webhook_notification.delay(
+        payload=payload,
+        provider_type=provider_type,
+        source_app=THREADLINE_SOURCE_APP,
+        source_type=source_type,
+        source_id=source_id,
+        user_id=user_id,
+        channel_uuid=str(channel.uuid),
+    )
+
 
 @shared_task(bind=True, max_retries=3)
-def send_webhook_notification(self, email_id, old_status, new_status):
+def send_threadline_notification(
+    self,
+    text: str,
+    source_type: str,
+    source_id: str,
+    user_id: Optional[int] = None,
+):
     """
-    Send webhook notification with all business logic centralized here.
-    Only webhook payload is internationalized. Logger messages are English only.
+    Queue a threadline failure notification through the configured channel.
     """
     try:
-        # Step 1.1: Get email object
-        email = EmailMessage.objects.select_related('user').get(id=email_id)
-        # Step 1.2: Get webhook configuration for this user
-        config = get_webhook_config(email.user)
-        if not config:
-            logger.debug(
-                f"Webhook not configured for user {email.user.username}, "
-                f"skipping notification"
-            )
-            return
-        # Step 1.5: Activate language for webhook payload
-        language = config.get('language', 'zh-hans')
-        activate(language)
-        # Step 1.6: Validate provider
-        provider = config.get('provider', 'feishu')
-        if provider not in SUPPORTED_PROVIDERS:
-            logger.error(
-                f"Unsupported webhook provider: {provider}. "
-                f"Supported providers: {SUPPORTED_PROVIDERS}"
-            )
-            return
-        # Step 2: Check if new status matches any configured event
-        configured_events = config.get('events', [])
-        if not configured_events:
-            logger.debug(
-                "No events configured for notification"
-            )
-            return
-        # Step 3: Check if the new status is in configured
-        # events (case-insensitive)
-        configured_events_lower = [
-            event.lower() for event in configured_events]
-        if new_status.lower() not in configured_events_lower:
-            logger.debug(
-                f"Skipping notification for status '{new_status}' "
-                f"not in configured events: {configured_events}"
-            )
-            return
-        # Step 4: Build notification payload and send
-        markdown_params = build_markdown_payload(
-            new_status, email, old_status, new_status, language=language
-        )
-        # Step 5: Send Markdown card message
-        webhook = Webhook(config['url'])
-        if provider == 'feishu':
-            response = webhook.send_feishu_card_message(
-                title=markdown_params['title'],
-                markdown_content=markdown_params['markdown_content'],
-                template_color=markdown_params['template_color'],
-                wide_screen_mode=markdown_params['wide_screen_mode']
-            )
-        else:
-            logger.error(
-                f"Unsupported webhook provider: {provider}. "
-                f"Supported providers: {SUPPORTED_PROVIDERS}"
-            )
-            return
-
-        # Check response if available
-        if response is not None and hasattr(response, 'status_code'):
-            if response.status_code >= 400:
-                raise Exception(
-                    f"Webhook failed: {response.status_code}"
-                )
-        logger.info(
-            f"Webhook notification sent successfully for status: {new_status}"
+        return _queue_webhook_notification(
+            text=text,
+            source_type=source_type,
+            source_id=source_id,
+            user_id=user_id,
         )
     except Exception as exc:
-        logger.error(
-            f"Webhook notification failed: {exc}"
+        logger.error(f"Threadline notification failed: {exc}")
+        self.retry(countdown=60, exc=exc)
+
+
+@shared_task(bind=True, max_retries=3)
+def send_threadline_failure_notification(
+    self,
+    task_type: str,
+    details: Optional[Dict[str, Any]],
+    error_msg: str,
+    user_id: Optional[int] = None,
+):
+    """
+    Build and queue a threadline failure notification.
+    """
+    try:
+        _channel, channel_config = _resolve_webhook_notification_channel()
+        language = (
+            channel_config.get("language")
+            if channel_config
+            else DEFAULT_NOTIFICATION_LANGUAGE
         )
+        text = build_task_failure_text(
+            task_type,
+            details,
+            error_msg,
+            language=language,
+        )
+        source_id = str(
+            (details or {}).get("email_id")
+            or (details or {}).get("task_id")
+            or task_type
+        )
+        resolved_user_id = (
+            user_id
+            if user_id is not None
+            else ((details or {}).get("user_id"))
+        )
+        return _queue_webhook_notification(
+            text=text,
+            source_type=task_type,
+            source_id=source_id,
+            user_id=resolved_user_id,
+        )
+    except Exception as exc:
+        logger.error(f"Threadline failure notification failed: {exc}")
         self.retry(countdown=60, exc=exc)

@@ -21,15 +21,13 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from threadline.models import EmailAlias, Settings
-from threadline.utils.prompt_config_manager import PromptConfigManager
-
 from ..models import Profile
 from ..serializers import (
     CompleteGoogleSetupSerializer,
     SuccessResponseSerializer,
     UserDetailsSerializer,
 )
+from ..services.user_bootstrap import UserBootstrapService
 
 logger = logging.getLogger(__name__)
 
@@ -54,11 +52,7 @@ class CompleteGoogleSetupView(APIView):
         responses={200: SuccessResponseSerializer}
     )
     def post(self, request):
-        """
-        Complete OAuth user setup.
-
-        Handles setup completion for all OAuth providers.
-        """
+        """Complete OAuth user setup for all OAuth providers."""
         user = request.user
 
         try:
@@ -104,85 +98,18 @@ class CompleteGoogleSetupView(APIView):
                 # If user wants password login later, they can set one
                 user.set_unusable_password()
                 user.save()
-
-                profile.registration_completed = True
-                profile.language = language
-                profile.timezone = timezone_str
-                profile.save()
-
-                # EmailAlias may have been created by post_save signal
-                # Use get_or_create to avoid IntegrityError
-                email_alias, alias_created = EmailAlias.objects.get_or_create(
-                    user=user,
-                    alias=username,
-                    defaults={
-                        'is_active': True
-                    }
+                UserBootstrapService.bootstrap_user(
+                    user,
+                    language=language,
+                    timezone_str=timezone_str,
+                    scene=scene,
+                    email_config=(
+                        UserBootstrapService.build_oauth_email_config()
+                    ),
+                    prompt_description='AI prompt configuration',
+                    email_description='Email fetch configuration',
+                    email_alias=username,
                 )
-
-                # Update alias if it already existed
-                if not alias_created:
-                    email_alias.is_active = True
-                    email_alias.save()
-                    logger.info(
-                        f"Updated email alias: "
-                        f"{email_alias.full_email_address()} "
-                        f"(alias was created by signal)"
-                    )
-                else:
-                    logger.info(
-                        f"Created email alias: "
-                        f"{email_alias.full_email_address()}"
-                    )
-
-                config_manager = PromptConfigManager()
-                prompt_config = config_manager.generate_user_config(
-                    language,
-                    scene
-                )
-
-                Settings.objects.create(
-                    user=user,
-                    key='prompt_config',
-                    value=prompt_config,
-                    description='AI prompt configuration',
-                    is_active=True
-                )
-
-                default_email_config = {
-                    'mode': 'auto_assign',
-                    'imap_config': {
-                        'imap_host': '',
-                        'smtp_ssl_port': 465,
-                        'smtp_starttls_port': 587,
-                        'imap_ssl_port': 993,
-                        'username': '',
-                        'password': '',
-                        'use_ssl': True,
-                        'use_starttls': False,
-                        'delete_after_fetch': False
-                    },
-                    'filter_config': {
-                        'filters': [],
-                        'exclude_patterns': [],
-                        'max_age_days': 30
-                    }
-                }
-
-                Settings.objects.create(
-                    user=user,
-                    key='email_config',
-                    value=default_email_config,
-                    description='Email fetch configuration',
-                    is_active=True
-                )
-
-                # Initialize Free Plan subscription and credits
-                if settings.BILLING_ENABLED:
-                    from accounts.services.registration import (
-                        RegistrationService
-                    )
-                    RegistrationService._initialize_free_plan(user)
 
                 logger.info(
                     f"Google user {user.username} completed setup"
@@ -190,8 +117,8 @@ class CompleteGoogleSetupView(APIView):
 
             refresh = RefreshToken.for_user(user)
 
-            # Use UserDetailsSerializer to get complete user info
-            # including virtual_email
+            # Use UserDetailsSerializer to get complete user info,
+            # including virtual_email.
             user_serializer = UserDetailsSerializer(user)
 
             return Response(

@@ -1,0 +1,13 @@
+dist
+.git
+.gitignore
+*.md
+.env
+.env.local
+*.log
+.vscode
+.idea
+.DS_Store
+
+# Note: For dev mode, we need node_modules from host
+# But for production build, we install fresh in container

@@ -293,10 +293,7 @@ class SubscriptionViewSet(viewsets.ModelViewSet):
         if subscription:
             serializer = self.get_serializer(subscription)
             return Response(serializer.data)
-        return Response(
-            {'detail': 'No active subscription'},
-            status=status.HTTP_404_NOT_FOUND
-        )
+        return Response(None)
 
     @action(detail=False, methods=['post'])
     def create_subscription(self, request):

@@ -13,8 +13,9 @@ from django.db import transaction
 from django.utils import timezone
 
 from accounts.models import Profile
-from threadline.models import EmailAlias, Settings
-from threadline.utils.prompt_config_manager import PromptConfigManager
+from threadline.models import EmailAlias
+
+from .user_bootstrap import UserBootstrapService
 
 logger = logging.getLogger(__name__)
 
@@ -252,102 +253,18 @@ class RegistrationService:
                 password=password
             )
             logger.info(f"Created user: {username}")
-
-            # Profile may have been created by post_save signal
-            # Use get_or_create to avoid IntegrityError
-            profile, profile_created = Profile.objects.get_or_create(
-                user=user,
-                defaults={
-                    'registration_completed': True,
-                    'language': language,
-                    'timezone': timezone_str
-                }
-            )
-
-            # Update profile if it already existed (created by signal)
-            if not profile_created:
-                profile.registration_completed = True
-                profile.language = language
-                profile.timezone = timezone_str
-                profile.save()
-                logger.info(
-                    f"Updated profile for user: {username} "
-                    f"(profile was created by signal)"
-                )
-            else:
-                logger.info(f"Created profile for user: {username}")
-
-            # EmailAlias may have been created by post_save signal
-            # Since unique_together = ['alias'], alias is globally unique
-            # Signal creates alias using user.username, which equals
-            # username here
-            try:
-                email_alias = EmailAlias.objects.get(alias=username)
-                # Alias exists, check if it belongs to this user
-                if email_alias.user != user:
-                    # This should not happen in normal flow, but handle it
-                    raise ValueError(
-                        f'Email alias "{username}" already exists '
-                        f'for another user'
-                    )
-                # Alias exists and belongs to this user (created by signal)
-                email_alias.is_active = True
-                email_alias.save()
-                logger.info(
-                    f"Updated email alias for user: {username} "
-                    f"(alias was created by signal)"
-                )
-            except EmailAlias.DoesNotExist:
-                # Alias doesn't exist, create new one
-                # Signal may have failed to create it (e.g., alias conflict)
-                email_alias = EmailAlias.objects.create(
-                    user=user,
-                    alias=username,
-                    is_active=True
-                )
-                logger.info(
-                    f"Created email alias: "
-                    f"{username}@"
-                    f"{settings.AUTO_ASSIGN_EMAIL_DOMAIN}"
-                )
-
-            prompt_manager = PromptConfigManager()
-            prompt_config = prompt_manager.generate_user_config(
+            UserBootstrapService.bootstrap_user(
+                user,
                 language=language,
-                scene=scene
+                timezone_str=timezone_str,
+                scene=scene,
+                email_config=(
+                    UserBootstrapService.build_auto_assign_email_config()
+                ),
+                prompt_description='User prompt configuration',
+                email_description='User email configuration',
+                email_alias=username,
             )
-
-            Settings.objects.create(
-                user=user,
-                key='prompt_config',
-                value=prompt_config,
-                description='User prompt configuration',
-                is_active=True
-            )
-            logger.info(
-                f"Created prompt_config for user: {username} "
-                f"(scene: {scene}, language: {language})"
-            )
-
-            email_config = {
-                'mode': 'auto_assign'
-            }
-
-            Settings.objects.create(
-                user=user,
-                key='email_config',
-                value=email_config,
-                description='User email configuration',
-                is_active=True
-            )
-            logger.info(
-                f"Created email_config for user: {username} "
-                f"(mode: auto_assign)"
-            )
-
-            # Initialize Free Plan subscription and credits
-            if settings.BILLING_ENABLED:
-                RegistrationService._initialize_free_plan(user)
 
             return user
 

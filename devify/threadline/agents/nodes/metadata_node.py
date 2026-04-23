@@ -62,9 +62,9 @@ class MetadataNode(BaseLangGraphNode):
         if not super().can_enter_node(state):
             return False
 
-        force = state.get('force', False)
-        summary_title = state.get('summary_title', '').strip()
-        summary_content = state.get('summary_content', '').strip()
+        force = state.get("force", False)
+        summary_title = state.get("summary_title", "").strip()
+        summary_content = state.get("summary_content", "").strip()
 
         if not force and (not summary_title or not summary_content):
             logger.error(
@@ -89,24 +89,24 @@ class MetadataNode(BaseLangGraphNode):
         Returns:
             EmailState: Updated state with metadata results
         """
-        force = state.get('force', False)
+        force = state.get("force", False)
 
-        prompt_config = state.get('prompt_config')
+        prompt_config = state.get("prompt_config")
         if not prompt_config:
-            error_message = 'No prompt_config found in State'
+            error_message = "No prompt_config found in State"
             logger.error(error_message)
             return add_node_error(state, self.node_name, error_message)
 
-        metadata_prompt = prompt_config.get('metadata_prompt')
+        metadata_prompt = prompt_config.get("metadata_prompt")
         if not metadata_prompt:
-            error_message = 'Missing metadata_prompt in prompt_config'
+            error_message = "Missing metadata_prompt in prompt_config"
             logger.error(error_message)
             return add_node_error(state, self.node_name, error_message)
 
         # Prepare content for metadata extraction
-        summary_title = state.get('summary_title', '')
-        summary_content = state.get('summary_content', '')
-        subject = state.get('subject', '')
+        summary_title = state.get("summary_title", "")
+        summary_content = state.get("summary_content", "")
+        subject = state.get("subject", "")
 
         content = (
             f"Email Subject: {subject}\n"
@@ -114,7 +114,8 @@ class MetadataNode(BaseLangGraphNode):
             f"Summary Content:\n{summary_content}\n"
         )
 
-        existing_metadata = state.get('metadata')
+        existing_metadata = state.get("metadata")
+        text_llm_config_uuid = state.get("text_llm_config_uuid")
 
         try:
             if not existing_metadata or force:
@@ -125,7 +126,8 @@ class MetadataNode(BaseLangGraphNode):
                     content=content,
                     json_mode=True,
                     state=state,
-                    node_name=self.node_name
+                    node_name=self.node_name,
+                    model_uuid=text_llm_config_uuid,
                 )
 
                 try:
@@ -145,13 +147,15 @@ class MetadataNode(BaseLangGraphNode):
                 # Validate and normalize metadata (type checking only, no field requirement)
                 # Ensure common list fields are actually lists
                 common_list_fields = [
-                    'keywords',
-                    'participants',
-                    'locations',
-                    'timeline'
+                    "keywords",
+                    "participants",
+                    "locations",
+                    "timeline",
                 ]
                 for field in common_list_fields:
-                    if field in metadata and not isinstance(metadata[field], list):
+                    if field in metadata and not isinstance(
+                        metadata[field], list
+                    ):
                         logger.warning(
                             f"Metadata field '{field}' is not a list, "
                             f"converting to list"
@@ -169,10 +173,7 @@ class MetadataNode(BaseLangGraphNode):
                     f"{', '.join(list_fields_info) if list_fields_info else 'no list fields'}"
                 )
 
-                return {
-                    **state,
-                    'metadata': metadata
-                }
+                return {**state, "metadata": metadata}
             else:
                 logger.info(
                     "Metadata already exists and force mode is disabled, "
@@ -182,9 +183,5 @@ class MetadataNode(BaseLangGraphNode):
 
         except Exception as e:
             logger.error(f"Metadata extraction failed: {e}", exc_info=True)
-            error_message = f'Metadata extraction failed: {str(e)}'
-            return add_node_error(
-                state,
-                self.node_name,
-                error_message
-            )
+            error_message = f"Metadata extraction failed: {str(e)}"
+            return add_node_error(state, self.node_name, error_message)

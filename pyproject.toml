@@ -42,17 +42,21 @@ dependencies = [
     "beautifulsoup4>=4.12.0",
     "flanker>=0.9.11",
     "email-validator==2.1.1",
+    "Pillow>=10.0.0",
     "python-magic>=0.4.27",
     "django-json-widget>=1.1.1",
     "PyYAML>=6.0",
     "google-auth>=2.23.0",
     "google-auth-oauthlib>=1.1.0",
     "requests>=2.31.0",
+    "jira>=3.5.1",
     "lark-oapi==1.5.3",
-    "devtoolbox[llm,ocr] @ git+https://github.com/cloud2ai/devtoolbox.git",
     "json-repair>=0.25.0",
     "dj-stripe>=2.8.0",
     "stripe>=8.0.0",
+    "agentcore-metering @ git+https://github.com/cloud2ai/agentcore-metering.git",
+    "agentcore-task @ git+https://github.com/cloud2ai/agentcore-task.git",
+    "agentcore-notifier @ git+https://github.com/cloud2ai/agentcore-notifier.git",
 ]
 
 [project.optional-dependencies]
@@ -89,7 +93,11 @@ test = [
 
 [tool.pytest.ini_options]
 DJANGO_SETTINGS_MODULE = "core.settings"
-testpaths = ["devify/threadline/tests", "devify/billing/tests"]
+testpaths = [
+    "devify/accounts/tests",
+    "devify/threadline/tests",
+    "devify/billing/tests",
+]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
@@ -104,6 +112,7 @@ markers = [
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
     "integration: marks tests as integration tests",
     "unit: marks tests as unit tests",
+    "e2e: marks tests as end-to-end tests",
     "functional: marks tests as functional tests",
     "html_parsing: marks tests related to HTML parsing functionality",
     "django_db: marks tests that require database access",

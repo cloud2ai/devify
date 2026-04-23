@@ -59,6 +59,7 @@ class Command(BaseCommand):
     - Force processing options
     - Debug logging
     """
+
     help = (
         "Process emails for users from various sources (auto-detected based "
         "on user configuration)"
@@ -89,23 +90,17 @@ class Command(BaseCommand):
         parser.add_argument(
             "--force",
             action="store_true",
-            help=(
-                "Force processing even if recent task exists"
-            ),
+            help=("Force processing even if recent task exists"),
         )
         parser.add_argument(
             "--debug",
             action="store_true",
-            help=(
-                "Enable debug logging for detailed output"
-            ),
+            help=("Enable debug logging for detailed output"),
         )
         parser.add_argument(
             "--verbose",
             action="store_true",
-            help=(
-                "Enable verbose output"
-            ),
+            help=("Enable verbose output"),
         )
 
     def handle(self, *args, **options):
@@ -136,9 +131,7 @@ class Command(BaseCommand):
                 logger.error(f'User "{options["user"]}" does not exist')
                 raise CommandError(f'User "{options["user"]}" does not exist')
         else:
-            self.process_for_all_users(
-                options["force"], options["verbose"]
-            )
+            self.process_for_all_users(options["force"], options["verbose"])
 
     def process_for_user(self, user, force=False, verbose=False):
         """
@@ -158,9 +151,7 @@ class Command(BaseCommand):
             email_config = user.settings.get(
                 key="email_config", is_active=True
             )
-            logger.info(
-                f"Found email configuration for user {user.username}"
-            )
+            logger.info(f"Found email configuration for user {user.username}")
         except Settings.DoesNotExist as e:
             logger.error(
                 f"Missing email configuration for user "
@@ -199,7 +190,7 @@ class Command(BaseCommand):
 
         This method triggers the complete email processing workflow including:
         - Email parsing and content extraction
-        - OCR processing of image attachments
+        - Multimodal analysis of image attachments
         - LLM processing of content
         - Summary generation
         - JIRA issue creation
@@ -210,7 +201,9 @@ class Command(BaseCommand):
             force: Whether to force processing
             verbose: Whether to enable verbose output
         """
-        logger.info(f"Processing single email ID={email_id} with complete workflow")
+        logger.info(
+            f"Processing single email ID={email_id} with complete workflow"
+        )
 
         try:
             # Get the email message (this will automatically get the user)
@@ -222,12 +215,19 @@ class Command(BaseCommand):
 
         try:
             # Execute the complete email processing workflow
-            from threadline.agents.workflow import execute_email_processing_workflow
-            logger.info(f"Starting complete workflow for email ID={email_id}: {email.subject}")
+            from threadline.agents.workflow import (
+                execute_email_processing_workflow,
+            )
+
+            logger.info(
+                f"Starting complete workflow for email ID={email_id}: {email.subject}"
+            )
             result = execute_email_processing_workflow(email, force=force)
 
-            if result and result.get('success', False):
-                logger.info(f"Successfully completed workflow for email ID={email_id}")
+            if result and result.get("success", False):
+                logger.info(
+                    f"Successfully completed workflow for email ID={email_id}"
+                )
                 self.stdout.write(
                     self.style.SUCCESS(
                         f"✅ Successfully processed email ID={email_id}: {email.subject}"
@@ -235,55 +235,63 @@ class Command(BaseCommand):
                 )
 
                 # Show additional info if verbose
-                workflow_result = result.get('result', {})
+                workflow_result = result.get("result", {})
                 if verbose:
                     # Show summary info
-                    summary_title = workflow_result.get('summary_title')
+                    summary_title = workflow_result.get("summary_title")
                     if summary_title:
                         self.stdout.write(
                             f"   📝 Summary: {summary_title[:50]}..."
                         )
 
                     # Show JIRA issue info
-                    issue_result = workflow_result.get('issue_result_data', {})
+                    issue_result = workflow_result.get("issue_result_data", {})
                     if issue_result:
-                        issue_key = issue_result.get('external_id')
-                        issue_url = issue_result.get('issue_url')
+                        issue_key = issue_result.get("external_id")
+                        issue_url = issue_result.get("issue_url")
                         if issue_key:
-                            self.stdout.write(
-                                f"   📋 JIRA Issue: {issue_key}"
-                            )
+                            self.stdout.write(f"   📋 JIRA Issue: {issue_key}")
                         if issue_url:
-                            self.stdout.write(
-                                f"   🔗 JIRA URL: {issue_url}"
-                            )
+                            self.stdout.write(f"   🔗 JIRA URL: {issue_url}")
 
                         # Show attachment info
-                        metadata = issue_result.get('metadata', {})
-                        upload_result = metadata.get('upload_result', {})
-                        uploaded_count = upload_result.get('uploaded_count', 0)
+                        metadata = issue_result.get("metadata", {})
+                        upload_result = metadata.get("upload_result", {})
+                        uploaded_count = upload_result.get("uploaded_count", 0)
                         if uploaded_count > 0:
                             self.stdout.write(
                                 f"   📎 Attachments: {uploaded_count} uploaded to JIRA"
                             )
 
                         # Show JIRA field processing details
-                        self.stdout.write('   🔧 JIRA Field Processing:')
-                        jira_metadata = issue_result.get('metadata', {})
-                        if 'project' in jira_metadata:
-                            self.stdout.write(f'      Project: {jira_metadata["project"]}')
-                        if 'assignee' in issue_result:
-                            self.stdout.write(f'      Assignee: {issue_result["assignee"]}')
-                        if 'priority' in issue_result:
-                            self.stdout.write(f'      Priority: {issue_result["priority"]}')
+                        self.stdout.write("   🔧 JIRA Field Processing:")
+                        jira_metadata = issue_result.get("metadata", {})
+                        if "project" in jira_metadata:
+                            self.stdout.write(
+                                f'      Project: {jira_metadata["project"]}'
+                            )
+                        if "assignee" in issue_result:
+                            self.stdout.write(
+                                f'      Assignee: {issue_result["assignee"]}'
+                            )
+                        if "priority" in issue_result:
+                            self.stdout.write(
+                                f'      Priority: {issue_result["priority"]}'
+                            )
 
                         # Show LLM processing details
-                        self.stdout.write('   🤖 LLM Processing Details:')
-                        self.stdout.write('      - Field assignment completed')
-                        self.stdout.write('      - Description converted to JIRA Wiki format')
-                        self.stdout.write('      - Attachments processed and uploaded')
+                        self.stdout.write("   🤖 LLM Processing Details:")
+                        self.stdout.write("      - Field assignment completed")
+                        self.stdout.write(
+                            "      - Description converted to JIRA Wiki format"
+                        )
+                        self.stdout.write(
+                            "      - Attachments processed and uploaded"
+                        )
             else:
-                logger.warning(f"Workflow completed with issues for email ID={email_id}")
+                logger.warning(
+                    f"Workflow completed with issues for email ID={email_id}"
+                )
                 self.stdout.write(
                     self.style.WARNING(
                         f"⚠️ Workflow completed with issues for email ID={email_id}: {email.subject}"
@@ -292,8 +300,7 @@ class Command(BaseCommand):
 
         except Exception as e:
             logger.error(
-                f"Failed to process email ID={email_id}: {e}",
-                exc_info=True
+                f"Failed to process email ID={email_id}: {e}", exc_info=True
             )
             self.stdout.write(
                 self.style.ERROR(
@@ -312,14 +319,16 @@ class Command(BaseCommand):
             force: Whether to force processing
             verbose: Whether to enable verbose output
         """
-        logger.info(f'Processing single email ID={email_id} for user: {user.username}')
+        logger.info(
+            f"Processing single email ID={email_id} for user: {user.username}"
+        )
 
         try:
             # Get the email message
             email = EmailMessage.objects.get(id=email_id, user=user)
         except EmailMessage.DoesNotExist:
             raise CommandError(
-                f'Email ID {email_id} not found for user {user.username}'
+                f"Email ID {email_id} not found for user {user.username}"
             )
 
         # Get user settings
@@ -327,16 +336,14 @@ class Command(BaseCommand):
             email_config = user.settings.get(
                 key="email_config", is_active=True
             )
-            logger.info(
-                f"Found email configuration for user {user.username}"
-            )
+            logger.info(f"Found email configuration for user {user.username}")
         except Settings.DoesNotExist as e:
             logger.error(
                 f"Missing email configuration for user "
                 f"{user.username}: {e}"
             )
             raise CommandError(
-                f'Missing email configuration for user {user.username}'
+                f"Missing email configuration for user {user.username}"
             )
 
         # Create EmailProcessor instance
@@ -344,28 +351,27 @@ class Command(BaseCommand):
 
         try:
             # Process the single email
-            logger.info(f'Reprocessing email ID={email_id}: {email.subject}')
+            logger.info(f"Reprocessing email ID={email_id}: {email.subject}")
             result = processor.process_single_email(email, force=force)
 
             if result:
-                logger.info(f'Successfully processed email ID={email_id}')
+                logger.info(f"Successfully processed email ID={email_id}")
                 self.stdout.write(
                     self.style.SUCCESS(
                         f"✅ Successfully processed email ID={email_id}: {email.subject}"
                     )
                 )
             else:
-                logger.info(f'Skipped email ID={email_id}: {email.subject}')
+                logger.info(f"Skipped email ID={email_id}: {email.subject}")
                 self.stdout.write(
                     self.style.WARNING(
-                        f'⚠️ Skipped email ID={email_id}: {email.subject}'
+                        f"⚠️ Skipped email ID={email_id}: {email.subject}"
                     )
                 )
 
         except Exception as e:
             logger.error(
-                f"Failed to process email ID={email_id}: {e}",
-                exc_info=True
+                f"Failed to process email ID={email_id}: {e}", exc_info=True
             )
             self.stdout.write(
                 self.style.ERROR(
@@ -384,16 +390,15 @@ class Command(BaseCommand):
             verbose: Whether to enable verbose output
         """
         users_with_settings = User.objects.filter(
-            settings__key="email_config",
-            settings__is_active=True
+            settings__key="email_config", settings__is_active=True
         ).distinct()
 
         if not users_with_settings.exists():
-            logger.warning('No users with active email settings found')
+            logger.warning("No users with active email settings found")
             return
 
         logger.info(
-            f'Found {users_with_settings.count()} users with email settings'
+            f"Found {users_with_settings.count()} users with email settings"
         )
 
         for user in users_with_settings:
@@ -401,7 +406,7 @@ class Command(BaseCommand):
                 self.process_for_user(user, force, verbose)
             except Exception as e:
                 logger.error(
-                    f'Failed to process emails for user {user.username}: {e}'
+                    f"Failed to process emails for user {user.username}: {e}"
                 )
 
     def _detect_email_source(self, email_config):
@@ -415,43 +420,43 @@ class Command(BaseCommand):
             EmailSource enum (IMAP or FILE)
         """
         # Check email mode first
-        mode = email_config.get('mode', 'custom_imap')
+        mode = email_config.get("mode", "custom_imap")
 
-        if mode == 'auto_assign':
+        if mode == "auto_assign":
             # Auto-assign mode uses file system processing
             logger.info(
-                'Detected auto_assign mode, using file system processing'
+                "Detected auto_assign mode, using file system processing"
             )
             return EmailSource.FILE
 
-        elif mode == 'custom_imap':
+        elif mode == "custom_imap":
             # Custom IMAP mode uses IMAP server processing
-            imap_config = email_config.get('imap_config', {})
-            if ((imap_config.get('imap_host') or imap_config.get('host')) and
-                    imap_config.get('username')):
-                logger.info(
-                    'Detected custom_imap mode with valid IMAP config'
-                )
+            imap_config = email_config.get("imap_config", {})
+            if (
+                imap_config.get("imap_host") or imap_config.get("host")
+            ) and imap_config.get("username"):
+                logger.info("Detected custom_imap mode with valid IMAP config")
                 return EmailSource.IMAP
             else:
                 logger.warning(
-                    'custom_imap mode detected but IMAP config is incomplete'
+                    "custom_imap mode detected but IMAP config is incomplete"
                 )
                 return EmailSource.IMAP  # Still try IMAP as fallback
 
         # Legacy detection for backward compatibility
         # Check for explicit IMAP configuration (without mode)
-        if ('imap_config' in email_config and
-                email_config['imap_config']):
-            imap_config = email_config['imap_config']
-            if ((imap_config.get('host') or imap_config.get('imap_host')) and
-                    imap_config.get('username')):
-                logger.info('Detected IMAP configuration (legacy mode)')
+        if "imap_config" in email_config and email_config["imap_config"]:
+            imap_config = email_config["imap_config"]
+            if (
+                imap_config.get("host") or imap_config.get("imap_host")
+            ) and imap_config.get("username"):
+                logger.info("Detected IMAP configuration (legacy mode)")
                 return EmailSource.IMAP
 
         # Default to IMAP if no clear configuration found
-        logger.warning('No clear email source configuration found, '
-                       'defaulting to IMAP')
+        logger.warning(
+            "No clear email source configuration found, " "defaulting to IMAP"
+        )
         return EmailSource.IMAP
 
     def _check_recent_task(self, user):
@@ -464,18 +469,14 @@ class Command(BaseCommand):
         Returns:
             EmailTask instance if recent task exists, None otherwise
         """
-        return (
-            EmailTask.objects.filter(
-                user=user,
-                status__in=[
-                    EmailTask.TaskStatus.PENDING,
-                    EmailTask.TaskStatus.RUNNING
-                ],
-                created_at__gte=(
-                    timezone.now() - timedelta(minutes=5)
-                )
-            ).first()
-        )
+        return EmailTask.objects.filter(
+            user=user,
+            status__in=[
+                EmailTask.TaskStatus.PENDING,
+                EmailTask.TaskStatus.RUNNING,
+            ],
+            created_at__gte=(timezone.now() - timedelta(minutes=5)),
+        ).first()
 
     def _process_imap_emails(self, user, email_config, force, verbose):
         """
@@ -490,29 +491,29 @@ class Command(BaseCommand):
         try:
             if verbose:
                 self.stdout.write(
-                    f'Processing IMAP emails for user: {user.username}'
+                    f"Processing IMAP emails for user: {user.username}"
                 )
 
             # Execute IMAP email scanning task
             scan_user_emails.run(user.id)
             logger.info(
-                f'Successfully processed IMAP emails for user {user.username}'
+                f"Successfully processed IMAP emails for user {user.username}"
             )
 
             if verbose:
                 self.stdout.write(
                     self.style.SUCCESS(
-                        f'Successfully processed IMAP emails for {user.username}'
+                        f"Successfully processed IMAP emails for {user.username}"
                     )
                 )
         except Exception as e:
             logger.error(
-                f'Failed to process IMAP emails for user {user.username}: {e}'
+                f"Failed to process IMAP emails for user {user.username}: {e}"
             )
             if verbose:
                 self.stdout.write(
                     self.style.ERROR(
-                        f'Failed to process IMAP emails for {user.username}: {e}'
+                        f"Failed to process IMAP emails for {user.username}: {e}"
                     )
                 )
 
@@ -528,15 +529,15 @@ class Command(BaseCommand):
         try:
             if verbose:
                 self.stdout.write(
-                    f'Processing file emails for user: {user.username}'
+                    f"Processing file emails for user: {user.username}"
                 )
 
             # Initialize EmailProcessor with file source for auto_assign mode
             # auto_assign mode uses default file system configuration
             processor = EmailProcessor(
                 source=EmailSource.FILE,
-                parser_type='flanker',
-                email_config=email_config
+                parser_type="flanker",
+                email_config=email_config,
             )
 
             # Process emails using the unified processor
@@ -544,12 +545,12 @@ class Command(BaseCommand):
             for parsed_email in processor.process_emails():
                 processed_count += 1
                 if verbose:
-                    subject = parsed_email.get('subject', 'No Subject')
+                    subject = parsed_email.get("subject", "No Subject")
                     self.stdout.write(f"Processed email: {subject}")
 
             logger.info(
-                f'Successfully processed {processed_count} file emails for '
-                f'user {user.username}'
+                f"Successfully processed {processed_count} file emails for "
+                f"user {user.username}"
             )
 
             if verbose or processed_count > 0:
@@ -561,11 +562,11 @@ class Command(BaseCommand):
                 )
         except Exception as e:
             logger.error(
-                f'Failed to process file emails for user {user.username}: {e}'
+                f"Failed to process file emails for user {user.username}: {e}"
             )
             if verbose:
                 self.stdout.write(
                     self.style.ERROR(
-                        f'Failed to process file emails for {user.username}: {e}'
+                        f"Failed to process file emails for {user.username}: {e}"
                     )
                 )

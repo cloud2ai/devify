@@ -16,6 +16,11 @@ from threadline.agents.nodes.base_node import BaseLangGraphNode
 from threadline.agents.email_state import EmailState
 from threadline.models import EmailMessage, Issue, Settings, EmailTodo
 from threadline.state_machine import EmailStatus
+from threadline.services.workflow_config import (
+    resolve_threadline_image_llm_config,
+    resolve_threadline_llm_config,
+    resolve_threadline_text_llm_config,
+)
 from threadline.utils.prompt_config_manager import PromptConfigManager
 
 logger = logging.getLogger(__name__)
@@ -57,10 +62,10 @@ class WorkflowPrepareNode(BaseLangGraphNode):
         Returns:
             bool: True if node can enter, False otherwise
         """
-        force = state.get('force', False)
+        force = state.get("force", False)
         if force:
-            email_id = state.get('id')
-            user_id = state.get('user_id')
+            email_id = state.get("id")
+            user_id = state.get("user_id")
             logger.info(
                 f"Force mode enabled for email {email_id}, user {user_id}"
             )
@@ -78,16 +83,18 @@ class WorkflowPrepareNode(BaseLangGraphNode):
         Returns:
             EmailState: Updated state after basic validation
         """
-        email_id = state.get('id')
+        email_id = state.get("id")
         if not email_id:
-            raise ValueError('email_id is required in state')
+            raise ValueError("email_id is required in state")
 
         try:
-            self.email = EmailMessage.objects.select_related(
-                'user'
-            ).prefetch_related('attachments').get(id=email_id)
+            self.email = (
+                EmailMessage.objects.select_related("user")
+                .prefetch_related("attachments")
+                .get(id=email_id)
+            )
         except EmailMessage.DoesNotExist:
-            raise ValueError(f'EmailMessage {email_id} not found')
+            raise ValueError(f"EmailMessage {email_id} not found")
 
         logger.info(
             f"[{self.node_name}] EmailMessage loaded: email {email_id}, "
@@ -108,8 +115,8 @@ class WorkflowPrepareNode(BaseLangGraphNode):
         Returns:
             dict: Prompt configuration or None if failed
         """
-        retry_language = state.get('retry_language')
-        retry_scene = state.get('retry_scene')
+        retry_language = state.get("retry_language")
+        retry_scene = state.get("retry_scene")
 
         try:
             prompt_manager = PromptConfigManager()
@@ -130,14 +137,14 @@ class WorkflowPrepareNode(BaseLangGraphNode):
                         scene = retry_scene
                     else:
                         scene = user_config.get(
-                            'scene', django_settings.DEFAULT_SCENE
+                            "scene", django_settings.DEFAULT_SCENE
                         )
 
                     if retry_language:
                         language = retry_language
                     else:
                         language = user_config.get(
-                            'language', django_settings.DEFAULT_LANGUAGE
+                            "language", django_settings.DEFAULT_LANGUAGE
                         )
 
                 logger.info(
@@ -155,9 +162,7 @@ class WorkflowPrepareNode(BaseLangGraphNode):
                     self.email.user
                 )
 
-            logger.info(
-                f"Loaded prompt_config for user {self.email.user_id}"
-            )
+            logger.info(f"Loaded prompt_config for user {self.email.user_id}")
             return prompt_config
         except Exception as e:
             logger.error(
@@ -175,11 +180,9 @@ class WorkflowPrepareNode(BaseLangGraphNode):
         """
         try:
             issue_config = Settings.get_user_config(
-                self.email.user, 'issue_config'
+                self.email.user, "issue_config"
             )
-            logger.info(
-                f"Loaded issue_config for user {self.email.user_id}"
-            )
+            logger.info(f"Loaded issue_config for user {self.email.user_id}")
             return issue_config
         except ValueError as e:
             logger.warning(
@@ -204,7 +207,7 @@ class WorkflowPrepareNode(BaseLangGraphNode):
             )
             if subscription and subscription.plan:
                 max_attachments = subscription.plan.metadata.get(
-                    'max_attachment_count'
+                    "max_attachment_count"
                 )
                 logger.info(
                     f"User {self.email.user_id} subscription plan: "
@@ -228,21 +231,23 @@ class WorkflowPrepareNode(BaseLangGraphNode):
         """
         attachments_data = []
         for att in self.email.attachments.all():
-            attachments_data.append({
-                'id': str(att.id),
-                'filename': att.filename,
-                'safe_filename': att.safe_filename,
-                'content_type': att.content_type,
-                'file_size': att.file_size,
-                'file_path': att.file_path,
-                'is_image': att.is_image,
-                'ocr_content': att.ocr_content or None,
-                'llm_content': att.llm_content or None,
-            })
+            attachments_data.append(
+                {
+                    "id": str(att.id),
+                    "filename": att.filename,
+                    "safe_filename": att.safe_filename,
+                    "content_type": att.content_type,
+                    "file_size": att.file_size,
+                    "file_path": att.file_path,
+                    "is_image": att.is_image,
+                    "ocr_content": att.ocr_content or None,
+                    "llm_content": att.llm_content or None,
+                }
+            )
         return attachments_data
 
     def _load_existing_issue_metadata(
-        self
+        self,
     ) -> tuple[int | None, str | None, dict | None]:
         """
         Load existing issue information for the email.
@@ -250,37 +255,31 @@ class WorkflowPrepareNode(BaseLangGraphNode):
         Returns:
             tuple: (issue_id, issue_url, issue_metadata)
         """
-        existing_issue = Issue.objects.filter(
-            email_message=self.email
-        ).first()
+        existing_issue = Issue.objects.filter(email_message=self.email).first()
 
         if not existing_issue:
             return None, None, None
 
         issue_metadata = {
-            'engine': existing_issue.engine,
-            'external_id': existing_issue.external_id,
-            'title': existing_issue.title,
-            'priority': existing_issue.priority,
+            "engine": existing_issue.engine,
+            "external_id": existing_issue.external_id,
+            "title": existing_issue.title,
+            "priority": existing_issue.priority,
         }
 
-        if existing_issue.engine == 'jira':
-            issue_metadata['key'] = existing_issue.external_id
+        if existing_issue.engine == "jira":
+            issue_metadata["key"] = existing_issue.external_id
             if (
-                existing_issue.external_id and
-                '-' in existing_issue.external_id
+                existing_issue.external_id
+                and "-" in existing_issue.external_id
             ):
-                issue_metadata['project'] = (
-                    existing_issue.external_id.split('-')[0]
-                )
+                issue_metadata["project"] = existing_issue.external_id.split(
+                    "-"
+                )[0]
             else:
-                issue_metadata['project'] = None
+                issue_metadata["project"] = None
 
-        return (
-            existing_issue.id,
-            existing_issue.issue_url,
-            issue_metadata
-        )
+        return (existing_issue.id, existing_issue.issue_url, issue_metadata)
 
     def _load_todos_data(self) -> list:
         """
@@ -291,28 +290,47 @@ class WorkflowPrepareNode(BaseLangGraphNode):
         """
         existing_todos = EmailTodo.objects.filter(
             email_message=self.email
-        ).order_by('created_at')
+        ).order_by("created_at")
 
         todos_data = []
         for todo in existing_todos:
-            todos_data.append({
-                'id': todo.id,
-                'content': todo.content,
-                'is_completed': todo.is_completed,
-                'completed_at': (
-                    todo.completed_at.isoformat()
-                    if todo.completed_at else None
-                ),
-                'priority': todo.priority,
-                'owner': todo.owner,
-                'deadline': (
-                    todo.deadline.isoformat()
-                    if todo.deadline else None
-                ),
-                'location': todo.location,
-                'metadata': todo.metadata or {},
-            })
+            todos_data.append(
+                {
+                    "id": todo.id,
+                    "content": todo.content,
+                    "is_completed": todo.is_completed,
+                    "completed_at": (
+                        todo.completed_at.isoformat()
+                        if todo.completed_at
+                        else None
+                    ),
+                    "priority": todo.priority,
+                    "owner": todo.owner,
+                    "deadline": (
+                        todo.deadline.isoformat() if todo.deadline else None
+                    ),
+                    "location": todo.location,
+                    "metadata": todo.metadata or {},
+                }
+            )
         return todos_data
+
+    def _load_threadline_runtime_bindings(self) -> dict:
+        """
+        Load Threadline admin runtime bindings.
+        """
+        image_llm_config = resolve_threadline_image_llm_config()
+        text_llm_config = resolve_threadline_text_llm_config()
+        llm_config = resolve_threadline_llm_config()
+        return {
+            "image_llm_config_uuid": (
+                str(image_llm_config.uuid) if image_llm_config else None
+            ),
+            "text_llm_config_uuid": (
+                str(text_llm_config.uuid) if text_llm_config else None
+            ),
+            "llm_config_uuid": (str(llm_config.uuid) if llm_config else None),
+        }
 
     def _build_email_state(
         self,
@@ -325,7 +343,7 @@ class WorkflowPrepareNode(BaseLangGraphNode):
         issue_url: str | None,
         issue_metadata: dict | None,
         summary_data: dict | None,
-        todos_data: list
+        todos_data: list,
     ) -> EmailState:
         """
         Build the final EmailState dictionary with all loaded data.
@@ -347,40 +365,44 @@ class WorkflowPrepareNode(BaseLangGraphNode):
         """
         return {
             **state,
-            'id': str(self.email.id),
-            'user_id': str(self.email.user_id),
-            'message_id': self.email.message_id,
-            'subject': self.email.subject,
-            'sender': self.email.sender,
-            'recipients': self.email.recipients,
-            'received_at': (
+            "id": str(self.email.id),
+            "user_id": str(self.email.user_id),
+            "message_id": self.email.message_id,
+            "subject": self.email.subject,
+            "sender": self.email.sender,
+            "recipients": self.email.recipients,
+            "received_at": (
                 self.email.received_at.isoformat()
-                if self.email.received_at else ''
+                if self.email.received_at
+                else ""
             ),
-            'html_content': self.email.html_content,
-            'text_content': self.email.text_content,
-            'attachments': attachments_data,
-            'max_attachments': max_attachments,
-            'summary_title': self.email.summary_title or None,
-            'summary_content': self.email.summary_content or None,
-            'summary_data': summary_data,
-            'todos': todos_data if todos_data else None,
-            'llm_content': self.email.llm_content or None,
-            'metadata': self.email.metadata or None,
-            'issue_id': issue_id,
-            'issue_url': issue_url,
-            'issue_metadata': issue_metadata,
-            'prompt_config': prompt_config,
-            'issue_config': issue_config,
-            'user_timezone': self._get_user_timezone(),
-            'created_at': (
+            "html_content": self.email.html_content,
+            "text_content": self.email.text_content,
+            "attachments": attachments_data,
+            "max_attachments": max_attachments,
+            "summary_title": self.email.summary_title or None,
+            "summary_content": self.email.summary_content or None,
+            "summary_data": summary_data,
+            "todos": todos_data if todos_data else None,
+            "llm_content": self.email.llm_content or None,
+            "metadata": self.email.metadata or None,
+            "issue_id": issue_id,
+            "issue_url": issue_url,
+            "issue_metadata": issue_metadata,
+            "prompt_config": prompt_config,
+            "issue_config": issue_config,
+            **self._load_threadline_runtime_bindings(),
+            "user_timezone": self._get_user_timezone(),
+            "created_at": (
                 self.email.created_at.isoformat()
-                if self.email.created_at else None
+                if self.email.created_at
+                else None
             ),
-            'updated_at': (
+            "updated_at": (
                 self.email.updated_at.isoformat()
-                if self.email.updated_at else None
-            )
+                if self.email.updated_at
+                else None
+            ),
         }
 
     def _get_user_timezone(self) -> str:
@@ -391,42 +413,35 @@ class WorkflowPrepareNode(BaseLangGraphNode):
             str: Timezone string (e.g., 'Asia/Shanghai') or 'UTC'
         """
         default_timezone = getattr(
-            django_settings,
-            'DEFAULT_USER_TIMEZONE',
-            'UTC'
+            django_settings, "DEFAULT_USER_TIMEZONE", "UTC"
         )
 
         user = self.email.user
 
         # Attempt to fetch timezone from user profile
         try:
-            profile = getattr(user, 'profile', None)
-            if profile and getattr(profile, 'timezone', None):
+            profile = getattr(user, "profile", None)
+            if profile and getattr(profile, "timezone", None):
                 return profile.timezone
         except ObjectDoesNotExist:
             pass
         except Exception as exc:
             logger.warning(
-                "Failed to load timezone from profile for user %s: %s",
-                user.id,
-                exc
+                f"Failed to load timezone from profile for user {user.id}: "
+                f"{exc}"
             )
 
         # Fallback to subscription settings if available
         try:
-            settings_timezone = Settings.get_user_config(
-                user,
-                'timezone'
-            )
+            settings_timezone = Settings.get_user_config(user, "timezone")
             if isinstance(settings_timezone, str) and settings_timezone:
                 return settings_timezone
         except ValueError:
             pass
         except Exception as exc:
             logger.warning(
-                "Failed to load timezone from Settings for user %s: %s",
-                user.id,
-                exc
+                f"Failed to load timezone from Settings for user {user.id}: "
+                f"{exc}"
             )
 
         return default_timezone
@@ -446,7 +461,7 @@ class WorkflowPrepareNode(BaseLangGraphNode):
             EmailState: Updated state with all email data and configurations
         """
         self.email.set_status(EmailStatus.PROCESSING.value)
-        force = state.get('force', False)
+        force = state.get("force", False)
         logger.info(
             f"[{self.node_name}] Status set to PROCESSING for "
             f"email {self.email.id}, user {self.email.user_id}, "
@@ -473,7 +488,7 @@ class WorkflowPrepareNode(BaseLangGraphNode):
             issue_url,
             issue_metadata,
             summary_data,
-            todos_data
+            todos_data,
         )
 
         logger.info(
@@ -504,30 +519,30 @@ class WorkflowPrepareNode(BaseLangGraphNode):
             ValueError: If critical fields are missing
         """
         # Handle missing subject with default value
-        if not state.get('subject'):
-            email_id = state.get('id')
+        if not state.get("subject"):
+            email_id = state.get("id")
             logger.warning(
                 f"EmailMessage {email_id} has no subject, "
                 f"using default value '(No Subject)'"
             )
-            state = {**state, 'subject': '(No Subject)'}
+            state = {**state, "subject": "(No Subject)"}
 
-        if not state.get('sender'):
+        if not state.get("sender"):
             raise ValueError(
                 f"EmailMessage {state.get('id')} missing sender - "
                 f"required for processing"
             )
 
-        if not state.get('message_id'):
+        if not state.get("message_id"):
             raise ValueError(
                 f"EmailMessage {state.get('id')} missing message_id - "
                 f"required for processing"
             )
 
-        text_content = state.get('text_content', '')
-        html_content = state.get('html_content', '')
-        email_id = state.get('id')
-        user_id = state.get('user_id')
+        text_content = state.get("text_content", "")
+        html_content = state.get("html_content", "")
+        email_id = state.get("id")
+        user_id = state.get("user_id")
 
         if not text_content and not html_content:
             logger.warning(

@@ -15,7 +15,7 @@ project_root = Path(__file__).resolve().parent.parent.parent.parent
 sys.path.insert(0, str(project_root))
 
 # Set Django settings module
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'devify.core.settings')
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "devify.core.settings")
 
 # Configure Django
 django.setup()
@@ -28,15 +28,6 @@ from rest_framework.test import APIClient
 # Import fixtures from the fixtures directory
 from .fixtures.conftest import *
 from .fixtures.factories import *
-
-
-# Additional shared fixtures can be defined here
-@pytest.fixture(scope="session")
-def django_db_setup():
-    """
-    Setup test database configuration
-    """
-    pass
 
 
 @pytest.fixture

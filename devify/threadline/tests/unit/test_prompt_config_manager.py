@@ -38,7 +38,8 @@ scenarios:
         (prompts_dir / "default.yaml").write_text(
             """
 common:
-  summary_prompt: "Summarize in {language}"
+  summary_prompt: "Summarize in {language}. Ignore image analysis marked as irrelevant/noise. Keep diagnostic details."
+  image_intent_prompt: "Describe why the image was inserted in {language}. Keep the response fully in {language}. If you use headings or labels, write them in {language}. Mark logos or unrelated images as irrelevant/noise. Preserve error text and surrounding conversation context. Keep the original language of key image text whenever possible. Do not translate quoted image text unless explicitly necessary."
 """.strip(),
             encoding="utf-8",
         )
@@ -70,5 +71,23 @@ common:
 
         assert config["language"] == "zh-CN"
         assert config["scene"] == "chat"
-        assert config["summary_prompt"] == "Summarize in Chinese"
-        assert config["email_content_prompt"] == "Respond in Chinese"
+        assert config["summary_prompt"].startswith("Summarize in ")
+        assert "irrelevant/noise" in config["summary_prompt"]
+        assert "Keep diagnostic details" in config["summary_prompt"]
+        assert config["image_intent_prompt"].startswith(
+            "Describe why the image was inserted in "
+        )
+        assert "Keep the response fully in" in config["image_intent_prompt"]
+        assert "irrelevant/noise" in config["image_intent_prompt"]
+        assert "Preserve error text" in config["image_intent_prompt"]
+        assert "Keep the original language" in config["image_intent_prompt"]
+        assert (
+            "surrounding conversation context" in config["image_intent_prompt"]
+        )
+        assert "key image text" in config["image_intent_prompt"]
+        assert (
+            "Do not translate quoted image text"
+            in config["image_intent_prompt"]
+        )
+        assert "headings or labels" in config["image_intent_prompt"]
+        assert config["email_content_prompt"].startswith("Respond in ")

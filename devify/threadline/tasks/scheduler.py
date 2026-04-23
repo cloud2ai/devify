@@ -8,12 +8,14 @@ from threadline.models import EmailMessage, EmailTask
 from threadline.state_machine import EmailStatus
 from threadline.tasks.email_fetch import imap_email_fetch, haraka_email_fetch
 from threadline.tasks.email_workflow import process_email_workflow
-from threadline.tasks.cleanup import (EmailCleanupManager,
-                                      EmailTaskCleanupManager,
-                                      ShareLinkCleanupManager)
+from threadline.tasks.cleanup import (
+    EmailCleanupManager,
+    EmailTaskCleanupManager,
+    ShareLinkCleanupManager,
+)
 from threadline.utils.task_cleanup import cleanup_stale_tasks
 from threadline.utils.task_lock import prevent_duplicate_task
-from threadline.utils.task_tracer import TaskTracer
+from threadline.utils.task_tracer import TaskTracer, use_task_tracer
 from django.conf import settings
 
 logger = logging.getLogger(__name__)
@@ -22,8 +24,9 @@ logger = logging.getLogger(__name__)
 # Both FETCHED and PROCESSING states can get stuck
 STUCK_EMAIL_STATUSES = [
     EmailStatus.FETCHED.value,
-    EmailStatus.PROCESSING.value
+    EmailStatus.PROCESSING.value,
 ]
+
 
 @shared_task
 @prevent_duplicate_task("email_fetch", timeout=settings.TASK_TIMEOUT_MINUTES)
@@ -44,14 +47,32 @@ def schedule_email_fetch():
     4. Task lock mechanism (TASK_TIMEOUT_MINUTES timeout)
     5. Error handling and monitoring
     """
+    tracer = TaskTracer(
+        "EMAIL_FETCH_SCHEDULER",
+        module="threadline",
+        track_legacy=False,
+    )
     try:
-        logger.info("Starting unified email fetch scheduling")
+        tracer.create_task(
+            {
+                "started_at": timezone.now().isoformat(),
+                "status": "starting",
+            }
+        )
+        tracer.append_task(
+            "SCHEDULE_START",
+            "Email fetch scheduler started",
+            {"started_at": timezone.now().isoformat()},
+        )
+        logger.info(
+            f"{tracer.context_summary()} Starting unified email fetch scheduling"
+        )
 
         # Clean up stale tasks for IMAP and Haraka fetch
         cleanup_stale_tasks(
             task_types=[
                 EmailTask.TaskType.IMAP_FETCH,
-                EmailTask.TaskType.HARAKA_FETCH
+                EmailTask.TaskType.HARAKA_FETCH,
             ]
         )
 
@@ -59,24 +80,53 @@ def schedule_email_fetch():
         # Processing will be triggered automatically when each completes
         imap_result = imap_email_fetch.delay()
         haraka_result = haraka_email_fetch.delay()
+        tracer.append_task(
+            "SCHEDULE_DISPATCH",
+            "Email fetch jobs dispatched",
+            {
+                "imap_task_id": imap_result.id,
+                "haraka_task_id": haraka_result.id,
+            },
+        )
 
-        logger.info(f"IMAP email fetch task started: {imap_result.id}")
-        logger.info(f"Haraka email fetch task started: {haraka_result.id}")
+        logger.info(
+            f"{tracer.context_summary({'task_id': imap_result.id})} IMAP email fetch task started: {imap_result.id}"
+        )
+        logger.info(
+            f"{tracer.context_summary({'task_id': haraka_result.id})} Haraka email fetch task started: {haraka_result.id}"
+        )
+        tracer.complete_task(
+            {
+                "imap_task_id": imap_result.id,
+                "haraka_task_id": haraka_result.id,
+                "status": "scheduled",
+                "completed_at": timezone.now().isoformat(),
+            }
+        )
 
         return {
             "imap_task_id": imap_result.id,
             "haraka_task_id": haraka_result.id,
-            "status": "scheduled"
+            "status": "scheduled",
         }
 
     except Exception as exc:
-        logger.error(f"Email fetch scheduling failed: {exc}")
+        tracer.append_task(
+            "SCHEDULE_ERROR",
+            f"Email fetch scheduling failed: {exc}",
+            {"error": str(exc)},
+        )
+        tracer.fail_task({"error": str(exc)}, str(exc))
+        logger.error(
+            f"{tracer.context_summary()} Email fetch scheduling failed: {exc}"
+        )
         raise
 
 
 @shared_task
 @prevent_duplicate_task(
-    "stuck_email_reset", timeout=settings.TASK_TIMEOUT_MINUTES)
+    "stuck_email_reset", timeout=settings.TASK_TIMEOUT_MINUTES
+)
 def schedule_reset_stuck_emails(timeout_minutes=30):
     """
     Scan and handle emails stuck in FETCHED or PROCESSING state.
@@ -95,21 +145,39 @@ def schedule_reset_stuck_emails(timeout_minutes=30):
     """
     cleanup_stale_tasks(
         timeout_minutes=settings.TASK_TIMEOUT_MINUTES,
-        task_types=EmailTask.TaskType.STUCK_EMAIL_RESET
+        task_types=EmailTask.TaskType.STUCK_EMAIL_RESET,
     )
 
     tracer = TaskTracer(EmailTask.TaskType.STUCK_EMAIL_RESET)
-    tracer.create_task({
-        'timeout_minutes': timeout_minutes,
-        'started': timezone.now().isoformat()
-    })
+    tracer.create_task(
+        {
+            "timeout_minutes": timeout_minutes,
+            "started": timezone.now().isoformat(),
+        }
+    )
+    tracer.append_task(
+        "CLEANUP_START",
+        "Stuck email reset started",
+        {
+            "timeout_minutes": timeout_minutes,
+            "started": timezone.now().isoformat(),
+        },
+    )
 
     try:
         now = timezone.now()
 
         stuck_emails = EmailMessage.objects.filter(
             status__in=STUCK_EMAIL_STATUSES,
-            updated_at__lt=now - timedelta(minutes=timeout_minutes)
+            updated_at__lt=now - timedelta(minutes=timeout_minutes),
+        )
+        tracer.append_task(
+            "CLEANUP_SCAN",
+            "Loaded stuck emails for evaluation",
+            {
+                "stuck_count": stuck_emails.count(),
+                "timeout_minutes": timeout_minutes,
+            },
         )
 
         fetched_retry_count = 0
@@ -131,15 +199,13 @@ def schedule_reset_stuck_emails(timeout_minutes=30):
                         "workflow trigger"
                     )
                     email.save(
-                        update_fields=['fetch_retry_count', 'error_message']
+                        update_fields=["fetch_retry_count", "error_message"]
                     )
 
                     process_email_workflow.delay(str(email.id))
                     fetched_retry_count += 1
 
-                    logger.info(
-                        f"Re-triggered workflow for email {email.id}"
-                    )
+                    logger.info(f"Re-triggered workflow for email {email.id}")
 
                 else:
                     logger.error(
@@ -155,7 +221,7 @@ def schedule_reset_stuck_emails(timeout_minutes=30):
                         f"Email stuck in FETCHED status after retry. "
                         f"Possible Celery worker issue - check worker logs"
                     )
-                    email.save(update_fields=['status', 'error_message'])
+                    email.save(update_fields=["status", "error_message"])
 
                     fetched_failed_count += 1
 
@@ -185,14 +251,14 @@ def schedule_reset_stuck_emails(timeout_minutes=30):
                 # no bypass needed
                 email.status = EmailStatus.FAILED.value
                 email.error_message = combined_error
-                email.save(update_fields=['status', 'error_message'])
+                email.save(update_fields=["status", "error_message"])
 
                 processing_failed_count += 1
 
         total_handled = (
-            fetched_retry_count +
-            fetched_failed_count +
-            processing_failed_count
+            fetched_retry_count
+            + fetched_failed_count
+            + processing_failed_count
         )
 
         if total_handled > 0:
@@ -202,25 +268,43 @@ def schedule_reset_stuck_emails(timeout_minutes=30):
                 f"{fetched_failed_count} FETCHED failed, "
                 f"{processing_failed_count} PROCESSING failed"
             )
+        tracer.append_task(
+            "CLEANUP_COMPLETE",
+            "Stuck email reset finished",
+            {
+                "fetched_retry_count": fetched_retry_count,
+                "fetched_failed_count": fetched_failed_count,
+                "processing_failed_count": processing_failed_count,
+                "total_handled": total_handled,
+                "completed_at": timezone.now().isoformat(),
+            },
+        )
 
-        tracer.complete_task({
-            'fetched_retry_count': fetched_retry_count,
-            'fetched_failed_count': fetched_failed_count,
-            'processing_failed_count': processing_failed_count,
-            'total_handled': total_handled,
-            'completed_at': timezone.now().isoformat()
-        })
+        tracer.complete_task(
+            {
+                "fetched_retry_count": fetched_retry_count,
+                "fetched_failed_count": fetched_failed_count,
+                "processing_failed_count": processing_failed_count,
+                "total_handled": total_handled,
+                "completed_at": timezone.now().isoformat(),
+            }
+        )
 
         return {
-            'fetched_retry_count': fetched_retry_count,
-            'fetched_failed_count': fetched_failed_count,
-            'processing_failed_count': processing_failed_count,
-            'total_handled': total_handled,
-            'status': 'completed'
+            "fetched_retry_count": fetched_retry_count,
+            "fetched_failed_count": fetched_failed_count,
+            "processing_failed_count": processing_failed_count,
+            "total_handled": total_handled,
+            "status": "completed",
         }
 
     except Exception as exc:
-        tracer.fail_task({'error': str(exc)}, str(exc))
+        tracer.append_task(
+            "CLEANUP_ERROR",
+            f"Stuck email reset failed: {exc}",
+            {"error": str(exc)},
+        )
+        tracer.fail_task({"error": str(exc)}, str(exc))
         logger.error(f"Stuck email reset failed: {exc}")
         raise
 
@@ -234,17 +318,28 @@ def schedule_haraka_cleanup():
     This task schedules the cleanup of Haraka email files from all directories.
     It runs independently of the main email processing workflow.
     """
+    tracer = TaskTracer(
+        "HARAKA_CLEANUP",
+        module="threadline",
+    )
     try:
-        logger.info("Starting Haraka email files cleanup scheduler")
+        with use_task_tracer(tracer):
+            logger.info(
+                f"{tracer.context_summary()} Starting Haraka email files cleanup scheduler"
+            )
+            cleanup_manager = EmailCleanupManager()
+            result = cleanup_manager.cleanup_haraka_files()
 
-        cleanup_manager = EmailCleanupManager()
-        result = cleanup_manager.cleanup_haraka_files()
-
-        logger.info(f"Haraka cleanup completed: {result}")
+        logger.info(
+            f"{tracer.context_summary()} Haraka cleanup completed: {result}"
+        )
         return result
 
     except Exception as exc:
-        logger.error(f"Haraka cleanup scheduling failed: {exc}")
+        tracer.fail_task({"error": str(exc)}, str(exc))
+        logger.error(
+            f"{tracer.context_summary()} Haraka cleanup scheduling failed: {exc}"
+        )
         raise
 
 
@@ -257,17 +352,28 @@ def schedule_email_task_cleanup():
     This task schedules the cleanup of old EmailTask records.
     It runs independently of the main email processing workflow.
     """
+    tracer = TaskTracer(
+        "TASK_CLEANUP",
+        module="threadline",
+    )
     try:
-        logger.info("Starting EmailTask cleanup scheduler")
+        with use_task_tracer(tracer):
+            logger.info(
+                f"{tracer.context_summary()} Starting EmailTask cleanup scheduler"
+            )
+            task_cleanup_manager = EmailTaskCleanupManager()
+            result = task_cleanup_manager.cleanup_email_tasks()
 
-        task_cleanup_manager = EmailTaskCleanupManager()
-        result = task_cleanup_manager.cleanup_email_tasks()
-
-        logger.info(f"EmailTask cleanup completed: {result}")
+        logger.info(
+            f"{tracer.context_summary()} EmailTask cleanup completed: {result}"
+        )
         return result
 
     except Exception as exc:
-        logger.error(f"EmailTask cleanup scheduling failed: {exc}")
+        tracer.fail_task({"error": str(exc)}, str(exc))
+        logger.error(
+            f"{tracer.context_summary()} EmailTask cleanup scheduling failed: {exc}"
+        )
         raise
 
 
@@ -279,15 +385,26 @@ def schedule_share_link_cleanup():
 
     Deactivates expired share links to ensure stale URLs are not accessible.
     """
+    tracer = TaskTracer(
+        "SHARE_LINK_CLEANUP",
+        module="threadline",
+    )
     try:
-        logger.info("Starting share link cleanup scheduler")
+        with use_task_tracer(tracer):
+            logger.info(
+                f"{tracer.context_summary()} Starting share link cleanup scheduler"
+            )
+            cleanup_manager = ShareLinkCleanupManager()
+            result = cleanup_manager.cleanup_expired_share_links()
 
-        cleanup_manager = ShareLinkCleanupManager()
-        result = cleanup_manager.cleanup_expired_share_links()
-
-        logger.info(f"Share link cleanup completed: {result}")
+        logger.info(
+            f"{tracer.context_summary()} Share link cleanup completed: {result}"
+        )
         return result
 
     except Exception as exc:
-        logger.error(f"Share link cleanup scheduling failed: {exc}")
+        tracer.fail_task({"error": str(exc)}, str(exc))
+        logger.error(
+            f"{tracer.context_summary()} Share link cleanup scheduling failed: {exc}"
+        )
         raise

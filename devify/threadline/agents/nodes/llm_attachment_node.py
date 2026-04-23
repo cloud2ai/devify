@@ -47,28 +47,16 @@ class LLMAttachmentNode(BaseLangGraphNode):
         dialogue as context. Only fall back to existing LLM-organized content
         when no raw text is available.
         """
-        subject = (
-            state.get('subject')
-            or ''
-        ).strip()
-        sender = (
-            state.get('sender')
-            or ''
-        ).strip()
-        recipients = (
-            state.get('recipients')
-            or ''
-        ).strip()
-        received_at = (
-            state.get('received_at')
-            or ''
-        ).strip()
+        subject = (state.get("subject") or "").strip()
+        sender = (state.get("sender") or "").strip()
+        recipients = (state.get("recipients") or "").strip()
+        received_at = (state.get("received_at") or "").strip()
 
         conversation_body = (
-            state.get('text_content')
-            or state.get('llm_content')
-            or state.get('html_content')
-            or ''
+            state.get("text_content")
+            or state.get("llm_content")
+            or state.get("html_content")
+            or ""
         ).strip()
 
         sections = []
@@ -97,28 +85,19 @@ class LLMAttachmentNode(BaseLangGraphNode):
         prompt_parts = []
         ocr_context = self._build_ocr_context(state)
         if ocr_context:
-            prompt_parts.append(
-                "Conversation context:\n"
-                f"{ocr_context}"
-            )
+            prompt_parts.append("Conversation context:\n" f"{ocr_context}")
 
-        filename = attachment.get('filename') or ''
-        safe_filename = attachment.get('safe_filename') or filename
+        filename = attachment.get("filename") or ""
+        safe_filename = attachment.get("safe_filename") or filename
         image_refs = []
         if filename:
             image_refs.append(f"Original filename: {filename}")
         if safe_filename and safe_filename != filename:
             image_refs.append(f"Stored filename: {safe_filename}")
         if image_refs:
-            prompt_parts.append(
-                "Image reference:\n"
-                + "\n".join(image_refs)
-            )
+            prompt_parts.append("Image reference:\n" + "\n".join(image_refs))
 
-        prompt_parts.append(
-            "Cleaned OCR content:\n"
-            f"{cleaned_ocr_content}"
-        )
+        prompt_parts.append("Cleaned OCR content:\n" f"{cleaned_ocr_content}")
         llm_input = "\n\n".join(prompt_parts).strip()
         if len(llm_input) > OCR_INPUT_CHAR_LIMIT:
             llm_input = (
@@ -144,9 +123,9 @@ class LLMAttachmentNode(BaseLangGraphNode):
         if not super().can_enter_node(state):
             return False
 
-        attachments = state.get('attachments', [])
+        attachments = state.get("attachments", [])
         has_ocr_content = any(
-            att.get('is_image') and att.get('ocr_content', '').strip()
+            att.get("is_image") and att.get("ocr_content", "").strip()
             for att in attachments
         )
 
@@ -175,8 +154,8 @@ class LLMAttachmentNode(BaseLangGraphNode):
         Returns:
             EmailState: Updated state with LLM results
         """
-        attachments = state.get('attachments', [])
-        force = state.get('force', False)
+        attachments = state.get("attachments", [])
+        force = state.get("force", False)
         updated_attachments = []
 
         image_count = 0
@@ -185,21 +164,22 @@ class LLMAttachmentNode(BaseLangGraphNode):
         limit_skipped_count = 0
         failed_attachments = []
 
-        prompt_config = state.get('prompt_config')
+        prompt_config = state.get("prompt_config")
         if not prompt_config:
-            error_message = 'No prompt_config found in State'
+            error_message = "No prompt_config found in State"
             logger.error(error_message)
             return add_node_error(state, self.node_name, error_message)
+        image_llm_config_uuid = state.get("image_llm_config_uuid")
 
-        ocr_cleanup_prompt = prompt_config.get('ocr_cleanup_prompt')
-        ocr_prompt = prompt_config.get('ocr_prompt')
+        ocr_cleanup_prompt = prompt_config.get("ocr_cleanup_prompt")
+        ocr_prompt = prompt_config.get("ocr_prompt")
         if not ocr_prompt:
-            error_message = 'Missing ocr_prompt in prompt_config'
+            error_message = "Missing ocr_prompt in prompt_config"
             logger.error(error_message)
             return add_node_error(state, self.node_name, error_message)
 
         for attachment in attachments:
-            if not attachment.get('is_image'):
+            if not attachment.get("is_image"):
                 logger.info(
                     f"Non-image attachment {attachment.get('filename')} "
                     f"skipped LLM processing"
@@ -208,29 +188,29 @@ class LLMAttachmentNode(BaseLangGraphNode):
                 continue
 
             # Skip attachments that exceeded plan limit
-            if attachment.get('skip_reason') == 'PLAN_LIMIT_EXCEEDED':
+            if attachment.get("skip_reason") == "PLAN_LIMIT_EXCEEDED":
                 logger.info(
                     f"Attachment {attachment.get('filename')} skipped due to "
                     f"plan limit, will not process with LLM"
                 )
-                attachment['llm_content'] = ''
+                attachment["llm_content"] = ""
                 updated_attachments.append(attachment)
                 limit_skipped_count += 1
                 continue
 
-            ocr_content = attachment.get('ocr_content', '').strip()
+            ocr_content = attachment.get("ocr_content", "").strip()
             if not ocr_content:
                 logger.warning(
                     f"Attachment {attachment.get('filename')} has no OCR "
                     f"content, skipping LLM processing"
                 )
-                attachment['llm_content'] = ''
+                attachment["llm_content"] = ""
                 updated_attachments.append(attachment)
                 continue
 
             image_count += 1
 
-            if not force and attachment.get('llm_content'):
+            if not force and attachment.get("llm_content"):
                 logger.info(
                     f"Attachment {attachment.get('filename')} already "
                     f"has LLM content, skipping in normal mode"
@@ -246,7 +226,7 @@ class LLMAttachmentNode(BaseLangGraphNode):
                 )
 
                 cleaned_stage_content = (
-                    attachment.get('ocr_cleaned_content', '') or ''
+                    attachment.get("ocr_cleaned_content", "") or ""
                 ).strip()
                 cleaned_ocr_content = cleaned_stage_content or ocr_content
 
@@ -263,15 +243,16 @@ class LLMAttachmentNode(BaseLangGraphNode):
                                 content=ocr_content,
                                 json_mode=False,
                                 state=state,
-                                node_name=self.node_name
+                                node_name=self.node_name,
+                                model_uuid=image_llm_config_uuid,
                             )
                         )
                         cleaned_result = (
-                            cleaned_result.strip() if cleaned_result else ''
+                            cleaned_result.strip() if cleaned_result else ""
                         )
                         if cleaned_result:
                             cleaned_ocr_content = cleaned_result
-                            attachment['ocr_cleaned_content'] = (
+                            attachment["ocr_cleaned_content"] = (
                                 cleaned_ocr_content
                             )
                         logger.info(
@@ -284,7 +265,7 @@ class LLMAttachmentNode(BaseLangGraphNode):
                             f"{attachment.get('filename')}: "
                             f"{cleanup_error}. Falling back to raw OCR."
                         )
-                attachment['ocr_cleaned_content'] = cleaned_ocr_content
+                attachment["ocr_cleaned_content"] = cleaned_ocr_content
 
                 llm_input = self._build_ocr_llm_input(
                     state=state,
@@ -297,18 +278,19 @@ class LLMAttachmentNode(BaseLangGraphNode):
                     content=llm_input,
                     json_mode=False,
                     state=state,
-                    node_name=self.node_name
+                    node_name=self.node_name,
+                    model_uuid=image_llm_config_uuid,
                 )
-                llm_content = llm_result.strip() if llm_result else ''
+                llm_content = llm_result.strip() if llm_result else ""
 
                 if llm_content:
-                    attachment['llm_content'] = llm_content
+                    attachment["llm_content"] = llm_content
                     logger.info(
                         f"LLM processing successful for "
                         f"{attachment.get('filename')}"
                     )
                 else:
-                    attachment['llm_content'] = ''
+                    attachment["llm_content"] = ""
                     logger.warning(
                         f"LLM processing completed for "
                         f"{attachment.get('filename')} - "
@@ -322,12 +304,14 @@ class LLMAttachmentNode(BaseLangGraphNode):
                     f"LLM processing failed for "
                     f"{attachment.get('filename')}: {e}"
                 )
-                attachment['llm_content'] = ''
-                failed_attachments.append({
-                    'id': attachment.get('id'),
-                    'filename': attachment.get('filename'),
-                    'error': str(e)
-                })
+                attachment["llm_content"] = ""
+                failed_attachments.append(
+                    {
+                        "id": attachment.get("id"),
+                        "filename": attachment.get("filename"),
+                        "error": str(e),
+                    }
+                )
 
             updated_attachments.append(attachment)
 
@@ -342,21 +326,20 @@ class LLMAttachmentNode(BaseLangGraphNode):
             f"{limit_skipped_count} over limit"
         )
 
-        updated_state = {
-            **state,
-            'attachments': updated_attachments
-        }
+        updated_state = {**state, "attachments": updated_attachments}
 
         if failed_attachments:
-            failed_files = ', '.join([
-                f"{item['filename']}({item['error']})"
-                for item in failed_attachments
-            ])
+            failed_files = ", ".join(
+                [
+                    f"{item['filename']}({item['error']})"
+                    for item in failed_attachments
+                ]
+            )
             logger.warning(
-                f'LLM Attachment processing failed for '
-                f'{len(failed_attachments)} '
-                f'attachments: {failed_files}. These attachments will be '
-                f'skipped but workflow will continue.'
+                f"LLM Attachment processing failed for "
+                f"{len(failed_attachments)} "
+                f"attachments: {failed_files}. These attachments will be "
+                f"skipped but workflow will continue."
             )
 
         return updated_state

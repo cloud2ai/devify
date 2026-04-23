@@ -3,17 +3,18 @@ import os
 import shutil
 import tempfile
 
-
-from devtoolbox.api_clients.jira_client import JiraClient
+from threadline.utils.issues.jira_client import JiraClient
 
 
 logger = logging.getLogger(__name__)
+
 
 class JiraHandler:
     """
     Handler for JIRA operations, such as creating issues and
     uploading attachments.
     """
+
     def __init__(self, jira_url, username, password):
         """
         Initialize JiraHandler with connection info and create JiraClient.
@@ -22,9 +23,7 @@ class JiraHandler:
         self.username = username
         self.password = password
         self.client = JiraClient(
-            jira_url=jira_url,
-            username=username,
-            password=password
+            jira_url=jira_url, username=username, password=password
         )
 
     def create_issue(
@@ -40,7 +39,7 @@ class JiraHandler:
         fix_versions=None,
         epic_link=None,
         epic_name=None,
-        sprint=None
+        sprint=None,
     ):
         """
         Create a JIRA issue using the provided parameters.
@@ -58,16 +57,12 @@ class JiraHandler:
                 fix_versions=fix_versions,
                 epic_link=epic_link,
                 epic_name=epic_name,
-                sprint=sprint
+                sprint=sprint,
             )
             logger.info(f"Successfully created issue: {issue_key}")
             return issue_key
         except Exception as e:
-            logger.error(
-                "Failed to create issue: %s",
-                str(e),
-                exc_info=True
-            )
+            logger.error(f"Failed to create issue: {str(e)}", exc_info=True)
             raise
 
     def upload_attachment(self, issue_key, file_path, filename=None):
@@ -92,12 +87,11 @@ class JiraHandler:
                 upload_path = file_path
 
             attachment_info = self.client.add_attachment(
-                issue=issue_key,
-                file_path=upload_path
+                issue=issue_key, file_path=upload_path
             )
             logger.info(
-                f"Successfully uploaded attachment {filename or actual_filename} "
-                f"to issue {issue_key}"
+                f"Successfully uploaded attachment "
+                f"{filename or actual_filename} to issue {issue_key}"
             )
 
             # Clean up temporary file if created
@@ -114,10 +108,9 @@ class JiraHandler:
             return attachment_info
         except Exception as e:
             logger.error(
-                "Failed to upload attachment %s to issue %s: %s",
-                filename or os.path.basename(file_path),
-                issue_key,
-                str(e),
-                exc_info=True
+                f"Failed to upload attachment "
+                f"{filename or os.path.basename(file_path)} to issue "
+                f"{issue_key}: {str(e)}",
+                exc_info=True,
             )
             raise

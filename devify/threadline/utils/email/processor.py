@@ -33,7 +33,6 @@ from typing import Any, Dict, Generator, List, Optional, Union
 from django.conf import settings
 
 from .clients.imap import IMAPClient
-from .parsers.enhanced import EmailFlankerParser
 from .parsers.legacy import EmailParser
 
 logger = logging.getLogger(__name__)
@@ -41,12 +40,14 @@ logger = logging.getLogger(__name__)
 
 class EmailSource(Enum):
     """Email source types"""
+
     IMAP = "imap"
     FILE = "file"
 
 
 class ParserType(Enum):
     """Email parser types"""
+
     LEGACY = "legacy"
     FLANKER = "flanker"
 
@@ -69,7 +70,7 @@ class EmailProcessor:
         email_config: Optional[Dict] = None,
         attachment_dir: str = settings.TMP_EMAIL_ATTACHMENT_DIR,
         file_config: Optional[Dict] = None,
-        user_context: Optional[str] = None
+        user_context: Optional[str] = None,
     ):
         """
         Initialize unified email processor.
@@ -114,8 +115,9 @@ class EmailProcessor:
     def _init_parser(self):
         """Initialize email parser based on parser type"""
         if self.parser_type == ParserType.FLANKER:
-            self.email_parser = EmailFlankerParser(
-                self.attachment_dir)
+            from .parsers.enhanced import EmailFlankerParser
+
+            self.email_parser = EmailFlankerParser(self.attachment_dir)
             logger.info("Using EmailFlankerParser (enhanced)")
         else:
             self.email_parser = EmailParser(self.attachment_dir)
@@ -125,14 +127,12 @@ class EmailProcessor:
         """Initialize email source components"""
         if self.source == EmailSource.IMAP:
             # Extract IMAP and filter configs from unified structure
-            self.imap_config = self.email_config.get('imap_config', {})
-            self.filter_config = self.email_config.get(
-                'filter_config', {}
-            )
+            self.imap_config = self.email_config.get("imap_config", {})
+            self.filter_config = self.email_config.get("filter_config", {})
             self.imap_client = IMAPClient(
                 self.imap_config,
                 self.filter_config,
-                user_context=self.user_context
+                user_context=self.user_context,
             )
             logger.info("Initialized IMAP client")
 
@@ -186,7 +186,8 @@ class EmailProcessor:
             for raw_email_data in self.imap_client.scan_emails():
                 # Parse email data using email parser
                 parsed_email = self.email_parser.parse_from_bytes(
-                    raw_email_data)
+                    raw_email_data
+                )
 
                 if parsed_email:
                     # Yield immediately to avoid accumulating all emails
@@ -228,27 +229,22 @@ class EmailProcessor:
 
                     # Parse email content
                     parsed_email = self.email_parser.parse_from_string(
-                        email_data['raw_content'])
+                        email_data["raw_content"]
+                    )
 
                     if parsed_email:
                         # Add metadata to parsed result
-                        parsed_email['uuid'] = uuid
-                        parsed_email['metadata'] = email_data['metadata']
+                        parsed_email["uuid"] = uuid
+                        parsed_email["metadata"] = email_data["metadata"]
 
                         # Override recipients with meta file data
                         # (more reliable)
-                        if 'to' in email_data['metadata']:
-                            meta_recipients = email_data['metadata'][
-                                'to'
-                            ]
+                        if "to" in email_data["metadata"]:
+                            meta_recipients = email_data["metadata"]["to"]
                             if isinstance(meta_recipients, list):
-                                parsed_email['recipients'] = (
-                                    meta_recipients
-                                )
+                                parsed_email["recipients"] = meta_recipients
                             elif isinstance(meta_recipients, str):
-                                parsed_email['recipients'] = [
-                                    meta_recipients
-                                ]
+                                parsed_email["recipients"] = [meta_recipients]
 
                         # Move files to processed directory after
                         # successful parsing
@@ -256,7 +252,7 @@ class EmailProcessor:
 
                         # Yield immediately to avoid accumulating all
                         # emails
-                    # in memory
+                        # in memory
                         yield parsed_email
                     else:
                         logger.warning(f"Failed to parse email {uuid}")
@@ -327,13 +323,15 @@ class EmailProcessor:
         """
         try:
             if not os.path.exists(self.inbox_dir):
-                logger.warning(f"Inbox directory does not exist: "
-                             f"{self.inbox_dir}")
+                logger.warning(
+                    f"Inbox directory does not exist: " f"{self.inbox_dir}"
+                )
                 return []
 
             # Find all .meta files in inbox
-            meta_files = [f for f in os.listdir(self.inbox_dir)
-                         if f.endswith('.meta')]
+            meta_files = [
+                f for f in os.listdir(self.inbox_dir) if f.endswith(".meta")
+            ]
 
             if not meta_files:
                 return []
@@ -341,8 +339,8 @@ class EmailProcessor:
             # Extract UUIDs and verify both files exist
             valid_uuids = []
             for meta_file in meta_files:
-                uuid = meta_file.replace('.meta', '')
-                eml_file = os.path.join(self.inbox_dir, f'{uuid}.eml')
+                uuid = meta_file.replace(".meta", "")
+                eml_file = os.path.join(self.inbox_dir, f"{uuid}.eml")
 
                 if os.path.exists(eml_file):
                     valid_uuids.append(uuid)
@@ -360,34 +358,30 @@ class EmailProcessor:
         Load email data from inbox files.
         """
         try:
-            meta_file = os.path.join(self.inbox_dir, f'{uuid}.meta')
-            eml_file = os.path.join(self.inbox_dir, f'{uuid}.eml')
+            meta_file = os.path.join(self.inbox_dir, f"{uuid}.meta")
+            eml_file = os.path.join(self.inbox_dir, f"{uuid}.eml")
 
             # Verify files exist
             if not os.path.exists(meta_file):
-                logger.error(
-                    f"Missing meta file for {uuid}: {meta_file}"
-                )
+                logger.error(f"Missing meta file for {uuid}: {meta_file}")
                 return None
             if not os.path.exists(eml_file):
-                logger.error(
-                    f"Missing eml file for {uuid}: {eml_file}"
-                )
+                logger.error(f"Missing eml file for {uuid}: {eml_file}")
                 return None
 
             # Load metadata
-            with open(meta_file, 'r', encoding='utf-8') as f:
+            with open(meta_file, "r", encoding="utf-8") as f:
                 metadata = json.load(f)
 
             # Load raw email content
-            with open(eml_file, 'r', encoding='utf-8') as f:
+            with open(eml_file, "r", encoding="utf-8") as f:
                 raw_content = f.read()
 
             return {
-                'metadata': metadata,
-                'raw_content': raw_content,
-                'eml_file': eml_file,
-                'meta_file': meta_file
+                "metadata": metadata,
+                "raw_content": raw_content,
+                "eml_file": eml_file,
+                "meta_file": meta_file,
             }
 
         except Exception as e:
@@ -416,10 +410,10 @@ class EmailProcessor:
             # Ensure destination directory exists
             os.makedirs(to_dir, exist_ok=True)
 
-            src_eml = os.path.join(from_dir, f'{uuid}.eml')
-            src_meta = os.path.join(from_dir, f'{uuid}.meta')
-            dst_eml = os.path.join(to_dir, f'{uuid}.eml')
-            dst_meta = os.path.join(to_dir, f'{uuid}.meta')
+            src_eml = os.path.join(from_dir, f"{uuid}.eml")
+            src_meta = os.path.join(from_dir, f"{uuid}.meta")
+            dst_eml = os.path.join(to_dir, f"{uuid}.eml")
+            dst_meta = os.path.join(to_dir, f"{uuid}.meta")
 
             files_moved = 0
             errors = []
@@ -438,9 +432,7 @@ class EmailProcessor:
                     logger.error(error_msg)
                     errors.append(error_msg)
             else:
-                logger.warning(
-                    f"Missing eml file for {uuid}: {src_eml}"
-                )
+                logger.warning(f"Missing eml file for {uuid}: {src_eml}")
 
             # Move .meta file if exists
             if os.path.exists(src_meta):
@@ -456,9 +448,7 @@ class EmailProcessor:
                     logger.error(error_msg)
                     errors.append(error_msg)
             else:
-                logger.warning(
-                    f"Missing meta file for {uuid}: {src_meta}"
-                )
+                logger.warning(f"Missing meta file for {uuid}: {src_meta}")
 
             # Log summary
             if files_moved > 0:
@@ -493,8 +483,8 @@ class EmailProcessor:
             True if at least one file was deleted successfully, False otherwise
         """
         try:
-            eml_file = os.path.join(from_dir, f'{uuid}.eml')
-            meta_file = os.path.join(from_dir, f'{uuid}.meta')
+            eml_file = os.path.join(from_dir, f"{uuid}.eml")
+            meta_file = os.path.join(from_dir, f"{uuid}.meta")
 
             files_deleted = 0
             errors = []
@@ -517,7 +507,9 @@ class EmailProcessor:
                 try:
                     os.remove(meta_file)
                     files_deleted += 1
-                    logger.debug(f"Successfully deleted meta file: {meta_file}")
+                    logger.debug(
+                        f"Successfully deleted meta file: {meta_file}"
+                    )
                 except Exception as e:
                     error_msg = f"Failed to delete meta file for {uuid}: {e}"
                     logger.error(error_msg)
@@ -546,27 +538,28 @@ class EmailProcessor:
         """
         Move email files from inbox to processed directory.
         """
-        success = self._move_files_safely(uuid, self.inbox_dir,
-                                          self.processed_dir)
+        success = self._move_files_safely(
+            uuid, self.inbox_dir, self.processed_dir
+        )
         if success:
             logger.info(f"Moved email {uuid} to processed directory")
         else:
-            logger.warning(f"Failed to move email {uuid} to "
-                           f"processed directory")
+            logger.warning(
+                f"Failed to move email {uuid} to " f"processed directory"
+            )
         return success
 
     def move_to_failed(self, uuid: str) -> bool:
         """
         Move email files from inbox to failed directory.
         """
-        success = self._move_files_safely(uuid, self.inbox_dir,
-                                          self.failed_dir)
+        success = self._move_files_safely(
+            uuid, self.inbox_dir, self.failed_dir
+        )
         if success:
             logger.info(f"Moved failed email {uuid} to failed directory")
         else:
-            logger.warning(
-                f"Failed to move email {uuid} to failed directory"
-            )
+            logger.warning(f"Failed to move email {uuid} to failed directory")
         return success
 
     def delete_from_processed(self, uuid: str) -> bool:
@@ -593,9 +586,7 @@ class EmailProcessor:
         if self.source == EmailSource.IMAP:
             return self.imap_client.connect()
         else:
-            logger.warning(
-                "Connect method only available for IMAP source"
-            )
+            logger.warning("Connect method only available for IMAP source")
             return False
 
     def disconnect(self):
@@ -606,9 +597,7 @@ class EmailProcessor:
         if self.source == EmailSource.IMAP:
             self.imap_client.disconnect()
         else:
-            logger.warning(
-                "Disconnect method only available for IMAP source"
-            )
+            logger.warning("Disconnect method only available for IMAP source")
 
     def __enter__(self):
         """

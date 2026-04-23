@@ -95,13 +95,16 @@ import os
 import time
 from typing import Any, Dict, List
 
-from devtoolbox.api_clients.jira_client import JiraClient
-
 from ..llm import call_llm
+from .jira_client import JiraClient
 from .jira_utils import (
-    build_summary_field, get_grouped_configs, preprocess_api_data,
-    build_description_field, build_field_prompt, remove_emoji,
-    DEFAULT_LANGUAGE
+    build_summary_field,
+    get_grouped_configs,
+    preprocess_api_data,
+    build_description_field,
+    build_field_prompt,
+    remove_emoji,
+    DEFAULT_LANGUAGE,
 )
 
 logger = logging.getLogger(__name__)
@@ -178,11 +181,11 @@ class JiraIssueHandler:
         self.client = JiraClient(
             jira_url=self.jira_url,
             username=self.username,
-            password=self.api_token
+            password=self.api_token,
         )
 
-        # Expose native JIRA client for direct access to all methods
-        self.native_client = self.client.client
+        # Expose client for direct access to all supported methods
+        self.native_client = self.client
 
     def get_issue_url(self, issue_key: str) -> str:
         """
@@ -210,12 +213,12 @@ class JiraIssueHandler:
 
         for attempt in range(MAX_RETRIES):
             try:
-                components = self.native_client.project_components(
-                    project_key
+                components = self.native_client.project_components(project_key)
+                component_names = [comp["name"] for comp in components]
+                logger.info(
+                    f"Found {len(component_names)} "
+                    f"components in {project_key}"
                 )
-                component_names = [comp.name for comp in components]
-                logger.info(f"Found {len(component_names)} "
-                            f"components in {project_key}")
                 return component_names
 
             except Exception as e:
@@ -266,8 +269,8 @@ class JiraIssueHandler:
                 while True:
                     issues = self.native_client.search_issues(
                         jql_query,
-                        startAt=start_at,
-                        maxResults=max_results_per_page
+                        max_results=max_results_per_page,
+                        start_at=start_at,
                     )
 
                     if not issues:
@@ -296,14 +299,10 @@ class JiraIssueHandler:
 
                 # Log first few epic keys for debugging
                 if epic_list:
-                    epic_keys = [
-                        epic['key'] for epic in epic_list[:5]
-                    ]
+                    epic_keys = [epic["key"] for epic in epic_list[:5]]
                     logger.debug(f"Epic keys: {epic_keys}")
                 else:
-                    logger.warning(
-                        f"No epics found with provided JQL query"
-                    )
+                    logger.warning(f"No epics found with provided JQL query")
 
                 return epic_list
 
@@ -317,17 +316,17 @@ class JiraIssueHandler:
                 else:
                     logger.error(
                         f"Failed to fetch epics after {MAX_RETRIES} "
-                        f"attempts", exc_info=True
+                        f"attempts",
+                        exc_info=True,
                     )
                     return []
-
 
     def create_issue(
         self,
         issue_data: Dict[str, Any],
         email_data: Dict[str, Any],
         attachments: List[Dict[str, Any]],
-        force: bool = False
+        force: bool = False,
     ) -> str:
         """
         Create a JIRA issue from pure data dictionaries (no ORM objects).
@@ -369,7 +368,7 @@ class JiraIssueHandler:
                 force=force,
                 summary_data=summary_data,
                 todos=todos,
-                language=language
+                language=language,
             )
 
             # ========================================
@@ -390,7 +389,7 @@ class JiraIssueHandler:
                 force=force,
                 summary_data=summary_data,
                 todos=todos,
-                language=language
+                language=language,
             )
 
             # Merge all field data
@@ -414,9 +413,15 @@ class JiraIssueHandler:
             extra_fields = {}
             for key, value in jira_fields.items():
                 if key not in [
-                    "project", "summary", "issuetype", "description",
-                    "assignee", "priority", "components",
-                    "customfield_10014", "epic_link"
+                    "project",
+                    "summary",
+                    "issuetype",
+                    "description",
+                    "assignee",
+                    "priority",
+                    "components",
+                    "customfield_10014",
+                    "epic_link",
                 ]:
                     extra_fields[key] = value
 
@@ -439,7 +444,7 @@ class JiraIssueHandler:
                 components=components,
                 epic_link=epic_link,
                 labels=labels if labels else None,
-                **extra_fields  # Pass any remaining extra fields
+                **extra_fields,  # Pass any remaining extra fields
             )
 
             logger.info(
@@ -451,13 +456,12 @@ class JiraIssueHandler:
         except Exception as e:
             logger.error(
                 f"Failed to create JIRA issue for '{summary_title}...': {e}",
-                exc_info=True
+                exc_info=True,
             )
             raise
 
     def _extract_labels_from_metadata(
-        self,
-        email_data: Dict[str, Any]
+        self, email_data: Dict[str, Any]
     ) -> List[str]:
         """
         Extract JIRA labels from email metadata.
@@ -487,13 +491,13 @@ class JiraIssueHandler:
                 for item in value:
                     if item:
                         # Remove spaces and emojis for JIRA label compatibility
-                        label = str(item).replace(' ', '')
+                        label = str(item).replace(" ", "")
                         label = remove_emoji(label)
                         labels.append(label)
             # Handle other values (e.g., category, scene)
             else:
                 # Remove spaces and emojis for JIRA label compatibility
-                label = str(value).replace(' ', '')
+                label = str(value).replace(" ", "")
                 label = remove_emoji(label)
                 labels.append(label)
 
@@ -509,7 +513,7 @@ class JiraIssueHandler:
         force: bool,
         summary_data: Dict[str, Any] | None = None,
         todos: List[Dict[str, Any]] | None = None,
-        language: str = 'en'
+        language: str = "en",
     ) -> Dict[str, Any]:
         """
         Process static fields and return a simple key-value dictionary.
@@ -545,16 +549,18 @@ class JiraIssueHandler:
                 jira_fields[jira_field] = build_summary_field(
                     summary=summary_title,
                     prefix=summary_config.get("prefix", "[AI]"),
-                    add_timestamp=summary_config.get("add_timestamp", False)
+                    add_timestamp=summary_config.get("add_timestamp", False),
                 )
                 logger.info(f"Generated summary: {jira_fields[jira_field]}")
 
             # Special handling for description field
             elif field_name == "description":
                 description_config = self.fields_config.get(
-                    "description_config", {})
+                    "description_config", {}
+                )
                 convert_to_jira_wiki = description_config.get(
-                    "convert_to_jira_wiki", True)
+                    "convert_to_jira_wiki", True
+                )
 
                 jira_fields[jira_field] = build_description_field(
                     summary_content=summary_content,
@@ -563,7 +569,7 @@ class JiraIssueHandler:
                     convert_to_jira_wiki=convert_to_jira_wiki,
                     summary_data=summary_data,
                     todos=todos,
-                    language=language
+                    language=language,
                 )
 
         logger.info(f"Processed {len(jira_fields)} static fields")
@@ -593,30 +599,35 @@ class JiraIssueHandler:
                 if field_name == "components":
                     # Fetch components and store in llm_fields
                     components = self._fetch_components(
-                        self.default_project_key)
+                        self.default_project_key
+                    )
                     self._save_api_data(field_name, components)
 
                 elif field_name == "epic_link":
                     # Fetch epics and store in llm_fields
                     jql_filter = field_config.get("jql_filter")
                     epics = self._fetch_epics(
-                        self.default_project_key, jql_filter)
+                        self.default_project_key, jql_filter
+                    )
                     self._save_api_data(field_name, epics)
 
                 else:
                     # Handle other API fields - configuration error
                     raise ValueError(
                         f"Unknown API field: {field_name}. "
-                        f"Check configuration.")
+                        f"Check configuration."
+                    )
 
             except Exception as e:
-                logger.warning(f"Failed to fetch API data for "
-                               f"{field_name}: {e}")
+                logger.warning(
+                    f"Failed to fetch API data for " f"{field_name}: {e}"
+                )
                 default_value = field_config.get("default", [])
                 self._save_api_data(field_name, default_value)
 
-        logger.info(f"Stage 2 completed: {len(api_fields)} API fields "
-                    f"processed")
+        logger.info(
+            f"Stage 2 completed: {len(api_fields)} API fields " f"processed"
+        )
 
     def _save_api_data(self, field_name: str, api_data: Any) -> None:
         """
@@ -648,7 +659,7 @@ class JiraIssueHandler:
         summary_title: str,
         summary_content: str,
         llm_content: str,
-        llm_fields: Dict[str, Any]
+        llm_fields: Dict[str, Any],
     ) -> str:
         """
         Build LLM prompt for field analysis.
@@ -678,19 +689,14 @@ class JiraIssueHandler:
             allow_values = field_config.get("allow_values", [])
 
             prompt = build_field_prompt(
-                field_config,
-                allow_values,
-                self.language,
-                field_name
+                field_config, allow_values, self.language, field_name
             )
             field_instructions.append(f"- {jira_field}: {prompt}")
 
         if not json_schema:
             return ""
 
-        json_schema_str = json.dumps(
-            json_schema, indent=2, ensure_ascii=False
-        )
+        json_schema_str = json.dumps(json_schema, indent=2, ensure_ascii=False)
         instructions_text = "\n".join(field_instructions)
 
         # Orgnize summary content for JIRA fields generate
@@ -713,9 +719,7 @@ from configuration."""
         return prompt
 
     def _validate_llm_response(
-        self,
-        llm_response: Dict[str, Any],
-        llm_fields: Dict[str, Any]
+        self, llm_response: Dict[str, Any], llm_fields: Dict[str, Any]
     ) -> Dict[str, Any]:
         """
         Validate and map LLM response to field names.
@@ -744,9 +748,8 @@ from configuration."""
             value = llm_response[jira_field]
 
             # Check if value is empty
-            is_empty = (
-                not value or
-                (isinstance(value, str) and not value.strip())
+            is_empty = not value or (
+                isinstance(value, str) and not value.strip()
             )
 
             # Handle empty or invalid values
@@ -780,15 +783,17 @@ from configuration."""
                     if default_value:
                         logger.warning(
                             f"LLM returned invalid value '{value}' for "
-                            f"{jira_field}. Available options: {allow_values}. "
-                            f"Using default value: {default_value}"
+                            f"{jira_field}. Available options: "
+                            f"{allow_values}. Using default value: "
+                            f"{default_value}"
                         )
                         value = default_value
                     else:
                         logger.warning(
                             f"LLM returned invalid value '{value}' for "
-                            f"{jira_field}. Available options: {allow_values}. "
-                            f"Default not configured, skipping field."
+                            f"{jira_field}. Available options: "
+                            f"{allow_values}. Default not configured, "
+                            f"skipping field."
                         )
                         continue
 
@@ -815,7 +820,7 @@ from configuration."""
         force: bool,
         summary_data: Dict[str, Any] | None = None,
         todos: List[Dict[str, Any]] | None = None,
-        language: str = 'en'
+        language: str = "en",
     ) -> Dict[str, Any]:
         """
         Stage 3: Process LLM fields using AI analysis.
@@ -850,7 +855,7 @@ from configuration."""
             summary_title=summary_title,
             summary_content=summary_content,
             llm_content=llm_content,
-            llm_fields=llm_fields
+            llm_fields=llm_fields,
         )
         logger.debug(f"LLM prompt: {prompt}")
 
@@ -862,7 +867,7 @@ from configuration."""
                 prompt=prompt,
                 content=summary_content,
                 json_mode=True,
-                max_retries=3
+                max_retries=3,
             )
 
             if not llm_response or not isinstance(llm_response, dict):
@@ -870,7 +875,8 @@ from configuration."""
                 validated_data = {}
             else:
                 validated_data = self._validate_llm_response(
-                    llm_response, llm_fields)
+                    llm_response, llm_fields
+                )
         except Exception as e:
             logger.error(f"LLM processing failed: {e}")
             validated_data = {}
@@ -881,14 +887,14 @@ from configuration."""
         # Note: summary and description are processed in static fields stage
         # Only LLM-selected fields are processed here
 
-        logger.info(f"Stage 3 completed: {len(validated_data)} "
-                    f"LLM fields processed")
+        logger.info(
+            f"Stage 3 completed: {len(validated_data)} "
+            f"LLM fields processed"
+        )
         return validated_data
 
     def upload_attachments(
-        self,
-        issue_key: str,
-        attachments: List[Dict[str, Any]]
+        self, issue_key: str, attachments: List[Dict[str, Any]]
     ) -> Dict[str, int]:
         """
         Upload attachments to JIRA issue from pure data (no ORM objects).
@@ -926,9 +932,7 @@ from configuration."""
 
                 # Only process image attachments
                 if not is_image:
-                    logger.debug(
-                        f"Skipping non-image attachment: {filename}"
-                    )
+                    logger.debug(f"Skipping non-image attachment: {filename}")
                     skipped_count += 1
                     continue
 
@@ -937,14 +941,10 @@ from configuration."""
                     f"(type: {content_type}, size: {file_size} bytes)"
                 )
 
-                logger.debug(
-                    f"Attachment fields: {list(attachment.keys())}"
-                )
+                logger.debug(f"Attachment fields: {list(attachment.keys())}")
 
                 if not os.path.exists(file_path):
-                    logger.warning(
-                        f"Attachment file not found: {file_path}"
-                    )
+                    logger.warning(f"Attachment file not found: {file_path}")
                     skipped_count += 1
                     continue
 
@@ -967,8 +967,7 @@ from configuration."""
                 if should_upload:
                     try:
                         self.client.add_attachment(
-                            issue=issue_key,
-                            file_path=file_path
+                            issue=issue_key, file_path=file_path
                         )
                         uploaded_count += 1
                         logger.info(
@@ -986,9 +985,7 @@ from configuration."""
                         f"Skipped attachment {filename} ({skip_reason})"
                     )
         except Exception as e:
-            logger.error(
-                f"Error uploading attachments to {issue_key}: {e}"
-            )
+            logger.error(f"Error uploading attachments to {issue_key}: {e}")
 
         logger.info(
             f"Attachment upload completed for {issue_key}: "
@@ -997,5 +994,5 @@ from configuration."""
 
         return {
             "uploaded_count": uploaded_count,
-            "skipped_count": skipped_count
+            "skipped_count": skipped_count,
         }

@@ -16,6 +16,7 @@ from django.utils import translation
 
 from .models import Subscription, UserCredits
 from .services.credits_service import CreditsService
+from threadline.utils.task_tracer import TaskTracer
 
 logger = logging.getLogger(__name__)
 
@@ -31,56 +32,99 @@ def renew_expired_credits():
     For Free Plan users: Resets to free tier credits (no payment required)
     For Paid Plan users: Only if subscription is still active
     """
-    now = timezone.now()
-
-    # Find all users with expired credit periods and active subscriptions
-    expired_credits = UserCredits.objects.filter(
-        period_end__lte=now,
-        is_active=True,
-        subscription__isnull=False,
-        subscription__status='active'
-    ).select_related('user', 'subscription', 'subscription__plan')
-
-    renewed_count = 0
-    failed_count = 0
-
-    logger.info(
-        f"Starting credit renewal check. "
-        f"Found {expired_credits.count()} expired credit periods."
+    tracer = TaskTracer(
+        "RENEW_EXPIRED_CREDITS",
+        module="billing",
+        track_legacy=False,
+    )
+    started_at = timezone.now().isoformat()
+    tracer.create_task({
+        "status": "starting",
+        "started_at": started_at,
+    })
+    tracer.append_task(
+        "TASK_START",
+        "Billing credit renewal started",
+        {"started_at": started_at},
     )
 
-    for credits in expired_credits:
-        try:
-            user_id = credits.user.id
-            plan_name = credits.subscription.plan.name
+    try:
+        now = timezone.now()
 
-            # Reset credits for new period
-            CreditsService.reset_period_credits(user_id)
+        # Find all users with expired credit periods and active subscriptions
+        expired_credits = UserCredits.objects.filter(
+            period_end__lte=now,
+            is_active=True,
+            subscription__isnull=False,
+            subscription__status='active'
+        ).select_related('user', 'subscription', 'subscription__plan')
 
-            renewed_count += 1
-            logger.info(
-                f"Renewed credits for user {credits.user.username} "
-                f"(Plan: {plan_name})"
-            )
+        renewed_count = 0
+        failed_count = 0
 
-        except Exception as e:
-            failed_count += 1
-            logger.error(
-                f"Failed to renew credits for user "
-                f"{credits.user.username}: {e}",
-                exc_info=True
-            )
+        logger.info(
+            f"Starting credit renewal check. "
+            f"Found {expired_credits.count()} expired credit periods."
+        )
 
-    logger.info(
-        f"Credit renewal completed. "
-        f"Renewed: {renewed_count}, Failed: {failed_count}"
-    )
+        for credits in expired_credits:
+            try:
+                user_id = credits.user.id
+                plan_name = credits.subscription.plan.name
 
-    return {
-        'renewed': renewed_count,
-        'failed': failed_count,
-        'total_checked': expired_credits.count()
-    }
+                # Reset credits for new period
+                CreditsService.reset_period_credits(user_id)
+
+                renewed_count += 1
+                logger.info(
+                    f"Renewed credits for user {credits.user.username} "
+                    f"(Plan: {plan_name})"
+                )
+
+            except Exception as e:
+                failed_count += 1
+                logger.error(
+                    f"Failed to renew credits for user "
+                    f"{credits.user.username}: {e}",
+                    exc_info=True
+                )
+
+        logger.info(
+            f"Credit renewal completed. "
+            f"Renewed: {renewed_count}, Failed: {failed_count}"
+        )
+        completed_at = timezone.now().isoformat()
+        tracer.append_task(
+            "TASK_COMPLETE",
+            "Billing credit renewal finished",
+            {
+                "renewed": renewed_count,
+                "failed": failed_count,
+                "total_checked": expired_credits.count(),
+                "completed_at": completed_at,
+            },
+        )
+        tracer.complete_task({
+            'renewed': renewed_count,
+            'failed': failed_count,
+            'total_checked': expired_credits.count(),
+            'completed_at': completed_at
+        })
+
+        return {
+            'renewed': renewed_count,
+            'failed': failed_count,
+            'total_checked': expired_credits.count()
+        }
+    except Exception as exc:
+        logger.error(f"Credit renewal task failed: {exc}", exc_info=True)
+        tracer.append_task(
+            "TASK_ERROR",
+            f"Billing credit renewal failed: {exc}",
+            {"error": str(exc)},
+        )
+        tracer.fail_task({"error": str(exc)}, str(exc))
+        raise
 
 
 @shared_task(name='billing.tasks.downgrade_failed_paid_subscriptions')
@@ -103,87 +147,133 @@ def downgrade_failed_paid_subscriptions():
     from datetime import timedelta
     from billing.models import Plan, PaymentProvider
 
-    now = timezone.now()
-    grace_period_days = 7
-    cutoff_time = now - timedelta(days=grace_period_days)
-
-    # Find paid subscriptions that are past_due for too long
-    past_due_subs = Subscription.objects.filter(
-        status='past_due',
-        updated_at__lte=cutoff_time,
-        plan__slug__in=['starter', 'standard', 'pro']
-    ).select_related('user', 'plan')
-
-    downgraded_count = 0
-    failed_count = 0
-
-    logger.info(
-        f"Checking for past_due paid subscriptions. "
-        f"Found {past_due_subs.count()} candidates."
+    tracer = TaskTracer(
+        "DOWNGRADE_FAILED_PAID_SUBSCRIPTIONS",
+        module="billing",
+        track_legacy=False,
+    )
+    started_at = timezone.now().isoformat()
+    tracer.create_task({
+        "status": "starting",
+        "started_at": started_at,
+    })
+    tracer.append_task(
+        "TASK_START",
+        "Billing downgrade task started",
+        {"started_at": started_at},
     )
 
-    for subscription in past_due_subs:
-        try:
-            user = subscription.user
-            old_plan = subscription.plan.name
+    try:
+        now = timezone.now()
+        grace_period_days = 7
+        cutoff_time = now - timedelta(days=grace_period_days)
 
-            # Cancel old subscription
-            subscription.status = 'canceled'
-            subscription.auto_renew = False
-            subscription.save()
+        # Find paid subscriptions that are past_due for too long
+        past_due_subs = Subscription.objects.filter(
+            status='past_due',
+            updated_at__lte=cutoff_time,
+            plan__slug__in=['starter', 'standard', 'pro']
+        ).select_related('user', 'plan')
 
-            # Create Free Plan subscription
-            free_plan = Plan.objects.get(slug='free')
-            payment_provider = PaymentProvider.objects.get(name='stripe')
+        downgraded_count = 0
+        failed_count = 0
 
-            period_days = free_plan.metadata.get('period_days', 30)
-            period_end = now + timedelta(days=period_days)
-            base_credits = free_plan.metadata.get('credits_per_period', 10)
+        logger.info(
+            f"Checking for past_due paid subscriptions. "
+            f"Found {past_due_subs.count()} candidates."
+        )
 
-            new_subscription = Subscription.objects.create(
-                user=user,
-                plan=free_plan,
-                provider=payment_provider,
-                status='active',
-                current_period_start=now,
-                current_period_end=period_end,
-                auto_renew=False
-            )
+        for subscription in past_due_subs:
+            try:
+                user = subscription.user
+                old_plan = subscription.plan.name
 
-            # Update user credits
-            # Use CreditsService to handle duplicate records
-            user_credits = CreditsService.get_user_credits(user.id)
-            user_credits.subscription = new_subscription
-            user_credits.base_credits = base_credits
-            user_credits.consumed_credits = 0
-            user_credits.period_start = now
-            user_credits.period_end = period_end
-            user_credits.save()
+                # Cancel old subscription
+                subscription.status = 'canceled'
+                subscription.auto_renew = False
+                subscription.save()
 
-            downgraded_count += 1
-            logger.info(
-                f"Downgraded user {user.username} from {old_plan} "
-                f"to Free Plan (payment failed)"
-            )
+                # Create Free Plan subscription
+                free_plan = Plan.objects.get(slug='free')
+                payment_provider = PaymentProvider.objects.get(name='stripe')
 
-        except Exception as e:
-            failed_count += 1
-            logger.error(
-                f"Failed to downgrade subscription for "
-                f"{subscription.user.username}: {e}",
-                exc_info=True
-            )
+                period_days = free_plan.metadata.get('period_days', 30)
+                period_end = now + timedelta(days=period_days)
+                base_credits = free_plan.metadata.get('credits_per_period', 10)
 
-    logger.info(
-        f"Paid subscription downgrade completed. "
-        f"Downgraded: {downgraded_count}, Failed: {failed_count}"
-    )
+                new_subscription = Subscription.objects.create(
+                    user=user,
+                    plan=free_plan,
+                    provider=payment_provider,
+                    status='active',
+                    current_period_start=now,
+                    current_period_end=period_end,
+                    auto_renew=False
+                )
 
-    return {
-        'downgraded': downgraded_count,
-        'failed': failed_count,
-        'total_checked': past_due_subs.count()
-    }
+                # Update user credits
+                # Use CreditsService to handle duplicate records
+                user_credits = CreditsService.get_user_credits(user.id)
+                user_credits.subscription = new_subscription
+                user_credits.base_credits = base_credits
+                user_credits.consumed_credits = 0
+                user_credits.period_start = now
+                user_credits.period_end = period_end
+                user_credits.save()
+
+                downgraded_count += 1
+                logger.info(
+                    f"Downgraded user {user.username} from {old_plan} "
+                    f"to Free Plan (payment failed)"
+                )
+
+            except Exception as e:
+                failed_count += 1
+                logger.error(
+                    f"Failed to downgrade subscription for "
+                    f"{subscription.user.username}: {e}",
+                    exc_info=True
+                )
+
+        logger.info(
+            f"Paid subscription downgrade completed. "
+            f"Downgraded: {downgraded_count}, Failed: {failed_count}"
+        )
+        completed_at = timezone.now().isoformat()
+        tracer.append_task(
+            "TASK_COMPLETE",
+            "Billing downgrade task finished",
+            {
+                "downgraded": downgraded_count,
+                "failed": failed_count,
+                "total_checked": past_due_subs.count(),
+                "completed_at": completed_at,
+            },
+        )
+        tracer.complete_task({
+            'downgraded': downgraded_count,
+            'failed': failed_count,
+            'total_checked': past_due_subs.count(),
+            'completed_at': completed_at
+        })
+
+        return {
+            'downgraded': downgraded_count,
+            'failed': failed_count,
+            'total_checked': past_due_subs.count()
+        }
+    except Exception as exc:
+        logger.error(
+            f"Paid subscription downgrade task failed: {exc}",
+            exc_info=True
+        )
+        tracer.append_task(
+            "TASK_ERROR",
+            f"Billing downgrade task failed: {exc}",
+            {"error": str(exc)},
+        )
+        tracer.fail_task({"error": str(exc)}, str(exc))
+        raise
 
 
 def _get_user_language(user):

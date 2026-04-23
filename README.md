@@ -80,7 +80,7 @@ This repository contains the **open source self-hosted edition** of Devify (comm
 
 **External Services Required:**
 - Azure OpenAI API (for LLM)
-- Azure Document Intelligence (for OCR)
+- Multimodal model endpoint for image understanding
 - SMTP server (for notifications, e.g., Gmail)
 
 **SSL/HTTPS:** Use reverse proxy (Nginx Proxy Manager, Traefik, or Caddy) for HTTPS support.
@@ -370,10 +370,6 @@ MYSQL_PASSWORD=your_password
 # Azure OpenAI
 AZURE_OPENAI_API_KEY=your_api_key
 AZURE_OPENAI_API_BASE=https://your-endpoint.openai.azure.com/
-
-# Azure OCR
-AZURE_DOCUMENT_INTELLIGENCE_KEY=your_key
-AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT=https://your-endpoint.cognitiveservices.azure.com/
 
 # Email for notifications
 EMAIL_HOST=smtp.gmail.com
@@ -1299,33 +1295,34 @@ The foundational framework of this project is based on the
 [django-starter-template](https://github.com/xiaoquqi/django-starter-template)
 project, which provides a robust and modular Django REST API structure.
 
-Core features of this project leverage components from the
-[devtoolbox](https://github.com/cloud2ai/devtoolbox) project, including:
+Core features of this project are implemented directly in this repository,
+including:
 
 - **LLM Service**: For AI-powered content summarization and processing.
-- **OCR Service**: For document and image text extraction.
+- **Multimodal Image Understanding**: For direct image analysis without a
+  separate OCR dependency.
 - **JIRA Clients**: For seamless integration and automation with JIRA.
 
-For more details on the architecture and advanced usage, please refer to the
-above repositories.
+For more details on the architecture and advanced usage, refer to the
+relevant modules under `devify/threadline/`.
 
 ## LangGraph Workflow Architecture
 
-The email processing workflow is built on **LangGraph**, using a StateGraph pattern with 7 specialized nodes:
+The email processing workflow is built on **LangGraph**, using a StateGraph pattern with 6 specialized nodes:
 
 ### Workflow Nodes
 
 ```
-START → WorkflowPrepare → OCR → LLMAttachment → LLMEmail → Summary → Issue → WorkflowFinalize → END
+START → WorkflowPrepare → ImageIntent → LLMEmail → Summary → Metadata → Issue → WorkflowFinalize → END
 ```
 
 | Node | Responsibility | Database Access |
 |------|----------------|-----------------|
 | **WorkflowPrepareNode** | Load email data, attachments, and user configurations into State | Read-only |
-| **OCRNode** | Process image attachments and extract text using Azure Document Intelligence | No database access |
-| **LLMAttachmentNode** | Process OCR content with LLM to organize and structure text | No database access |
-| **LLMEmailNode** | Process email content with LLM, merge with attachment OCR content | No database access |
+| **ImageIntentNode** | Process image attachments with multimodal LLM analysis | No database access |
+| **LLMEmailNode** | Process email content with LLM, merge with attachment insights | No database access |
 | **SummaryNode** | Generate comprehensive summary and title for issue creation | No database access |
+| **MetadataNode** | Extract structured metadata from the summary | No database access |
 | **IssueNode** | Create issue in external systems (JIRA) via API | No database access |
 | **WorkflowFinalizeNode** | Atomically sync all results to database and update status | Write-only |
 
@@ -1363,10 +1360,11 @@ threadline/
 │       ├── base_node.py            # Base class for all nodes
 │       ├── workflow_prepare.py     # Data loading node
 │       ├── workflow_finalize.py    # Data persistence node
-│       ├── ocr_node.py             # OCR processing
-│       ├── llm_attachment_node.py  # LLM for attachments
+│       ├── image_intent_node.py    # Multimodal image processing
+│       ├── llm_attachment_node.py  # LLM for attachment organization
 │       ├── llm_email_node.py       # LLM for email content
 │       ├── summary_node.py         # Summary generation
+│       ├── metadata_node.py        # Metadata extraction
 │       └── issue_node.py           # Issue creation
 └── tasks/
     ├── email_workflow.py           # Celery task wrapper for workflow
@@ -1386,8 +1384,8 @@ flowchart TD
     D -->|Yes| E[Extract Images]
     D -->|No| F[Process Text Content]
 
-    E --> G[OCR Processing]
-    G --> H[OCR Content Extraction]
+    E --> G[Multimodal Image Analysis]
+    G --> H[Image Insight Extraction]
 
     F --> I[Text Content Organization]
     H --> I
@@ -1417,10 +1415,10 @@ flowchart TD
 2. **Email Collection**: System fetches emails from configured mailboxes (IMAP/Haraka)
 3. **Workflow Trigger**: Each email triggers a LangGraph workflow execution
 4. **Data Preparation**: WorkflowPrepareNode loads email data, attachments, and user configs into State
-5. **OCR Processing**: OCRNode extracts text from image attachments using Azure Document Intelligence
-6. **LLM Attachment Processing**: LLMAttachmentNode processes OCR content with LLM for structure and clarity
-7. **LLM Email Processing**: LLMEmailNode processes email text, merges with attachment OCR content
-8. **Summary Generation**: SummaryNode generates comprehensive summary and title for issue creation
+5. **Image Understanding**: ImageIntentNode analyzes image attachments directly with a multimodal LLM
+6. **LLM Email Processing**: LLMEmailNode processes email text and incorporates attachment insights
+7. **Summary Generation**: SummaryNode generates comprehensive summary and title for issue creation
+8. **Metadata Extraction**: MetadataNode extracts structured metadata from the summary
 9. **Issue Creation**: IssueNode creates JIRA issue with organized content (if enabled)
 10. **Data Persistence**: WorkflowFinalizeNode atomically saves all results to database
 11. **Status Update**: Email status automatically set to SUCCESS or FAILED based on workflow result
@@ -1428,11 +1426,11 @@ flowchart TD
 ### Key Features
 
 - **Multi-source Input**: Supports various communication platforms via email forwarding
-- **Image Processing**: Automatic OCR extraction from screenshots and documents
+- **Image Processing**: Direct multimodal analysis of screenshots and documents
 - **Three-stage LLM Processing**:
-  - Stage 1: Organize attachment OCR content
+  - Stage 1: Analyze attachment images directly
   - Stage 2: Process and structure email content
-  - Stage 3: Generate comprehensive summary and title
+  - Stage 3: Generate comprehensive summary, metadata, and title
 - **Automated Issue Creation**: Direct integration with JIRA and other issue tracking systems
 - **Attachment Handling**: Preserves and uploads original files to JIRA issues
 - **Stateful Workflow**: LangGraph manages internal state with Redis checkpointing for recovery

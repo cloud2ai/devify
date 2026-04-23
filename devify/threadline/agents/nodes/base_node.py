@@ -14,8 +14,9 @@ from threadline.agents.email_state import (
     EmailState,
     add_node_error,
     has_node_errors,
-    get_node_errors_by_name
+    get_node_errors_by_name,
 )
+from threadline.utils.task_tracer import get_current_task_tracer
 
 logger = logging.getLogger(__name__)
 
@@ -59,11 +60,18 @@ class BaseLangGraphNode(ABC):
             EmailState: Updated email state
         """
         try:
-            logger.info(f"[{self.node_name}] Starting processing")
+            prefix = self._task_context_prefix()
+            logger.info(f"{prefix}[{self.node_name}] Starting processing")
+            self._record_task_step("NODE_START", f"{self.node_name} started")
 
             if not self.can_enter_node(state):
                 logger.warning(
-                    f"[{self.node_name}] Cannot enter due to existing errors"
+                    f"{prefix}[{self.node_name}] Cannot enter due to existing errors"
+                )
+                self._record_task_step(
+                    "NODE_SKIP",
+                    f"{self.node_name} skipped due to existing errors",
+                    level="WARNING",
                 )
                 return state
 
@@ -73,13 +81,33 @@ class BaseLangGraphNode(ABC):
 
             state = self.after_processing(state)
 
-            logger.info(f"[{self.node_name}] Processing completed")
+            logger.info(f"{prefix}[{self.node_name}] Processing completed")
+            self._record_task_step(
+                "NODE_COMPLETE",
+                f"{self.node_name} completed",
+            )
             return state
 
         except Exception as e:
-            logger.error(f"[{self.node_name}] Error occurred: {e}")
+            prefix = self._task_context_prefix()
+            logger.error(f"{prefix}[{self.node_name}] Error occurred: {e}")
             logger.exception(e)
+            self._record_task_step(
+                "NODE_ERROR",
+                f"{self.node_name} failed: {e}",
+                level="ERROR",
+                exception=str(e),
+            )
             return self._handle_error(e, state)
+
+    def _task_context_prefix(self) -> str:
+        tracer = get_current_task_tracer()
+        if not tracer:
+            return ""
+        context = tracer.context_summary()
+        if not context:
+            return ""
+        return f"[{context}] "
 
     def can_enter_node(self, state: EmailState) -> bool:
         """
@@ -142,9 +170,7 @@ class BaseLangGraphNode(ABC):
         """
         return state
 
-    def _handle_error(
-        self, error: Exception, state: EmailState
-    ) -> EmailState:
+    def _handle_error(self, error: Exception, state: EmailState) -> EmailState:
         """
         Handle errors that occur during node processing.
 
@@ -162,3 +188,22 @@ class BaseLangGraphNode(ABC):
 
         logger.error(f"[{self.node_name}] Node failed: {error}")
         return state
+
+    def _record_task_step(
+        self,
+        action: str,
+        message: str,
+        level: str = "INFO",
+        **data: Any,
+    ) -> None:
+        tracer = get_current_task_tracer()
+        if not tracer:
+            return
+
+        payload = {"level": level, **data}
+        try:
+            tracer.append_task(action, message, payload)
+        except Exception:
+            logger.debug(
+                f"[{self.node_name}] Failed to record task step {action}"
+            )

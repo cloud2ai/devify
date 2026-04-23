@@ -1,11 +1,15 @@
 import logging
-from django.core.management.base import BaseCommand
+
 from django.contrib.auth.models import User
-from django.utils import timezone
-from threadline.models import EmailMessage, EmailTask
+from django.core.management.base import BaseCommand
+
+from threadline.models import EmailMessage
+from threadline.services.workflow_config import (
+    resolve_threadline_notification_channel,
+)
 from threadline.tasks.notifications import (
-    get_webhook_config,
-    send_webhook_notification
+    build_email_failure_text,
+    send_threadline_notification,
 )
 
 logger = logging.getLogger(__name__)
@@ -13,42 +17,35 @@ logger = logging.getLogger(__name__)
 
 class Command(BaseCommand):
     help = (
-        'Test webhook configuration by sending a test notification '
-        'with specified status'
+        "Test the configured Threadline notification channel by sending "
+        "a synthetic failure notification"
     )
 
     def add_arguments(self, parser):
         parser.add_argument(
-            '--user',
+            "--user",
             type=str,
             required=True,
-            help='Username to test webhook configuration for'
+            help="Username to test the notification channel for",
         )
         parser.add_argument(
-            '--email-id',
+            "--email-id",
             type=int,
             required=True,
-            help='Email ID to use in test notification'
+            help="Email ID to use in the test notification",
         )
         parser.add_argument(
-            '--status',
+            "--status",
             type=str,
             required=True,
             help=(
-                'Status for testing. Available values: '
-                'fetched, ocr_processing, ocr_failed, ocr_success, '
-                'llm_email_processing, llm_email_success, llm_email_failed, '
-                'llm_summary_processing, llm_summary_success, '
-                'llm_summary_failed, issue_processing, issue_success, '
-                'issue_failed, completed'
-            )
+                "Simulated status for the test payload. The command sends a "
+                "failure notification through the configured channel."
+            ),
         )
 
     def handle(self, *args, **options):
-        """
-        Test webhook configuration and send a test notification.
-        """
-        username = options['user']
+        username = options["user"]
 
         try:
             user = User.objects.get(username=username)
@@ -56,27 +53,18 @@ class Command(BaseCommand):
             logger.error(f'User "{username}" does not exist.')
             return
 
-        # Get webhook configuration for this user
-        config = get_webhook_config(user)
-
-        logger.info("=== Webhook Configuration ===")
-        if config:
-            for key, value in config.items():
-                logger.info(f"{key}: {value}")
+        channel = resolve_threadline_notification_channel()
+        if channel:
+            logger.info("=== Threadline Notification Channel ===")
+            logger.info(f"uuid: {channel.uuid}")
+            logger.info(f"type: {channel.channel_type}")
+            logger.info(f"name: {channel.name}")
         else:
-            logger.warning("No valid webhook configuration found")
-
-        # Check if webhook is properly configured
-        if not config:
-            logger.error("Webhook is not properly configured!")
             logger.warning(
-                f"Please configure webhook settings for user '{username}' "
-                f"in Django Admin Settings."
+                "No configured Threadline notification channel found"
             )
-            return
 
-                                # Check if the specified email exists
-        email_id = options['email_id']
+        email_id = options["email_id"]
         try:
             email = EmailMessage.objects.get(id=email_id, user=user)
             logger.info(f"Found email with ID: {email_id}")
@@ -84,28 +72,36 @@ class Command(BaseCommand):
             logger.info(f"Email sender: {email.sender}")
             logger.info(f"Current email status: {email.status}")
         except EmailMessage.DoesNotExist:
-            logger.error(f"Email with ID {email_id} does "
-                         f"not exist for user {username}")
+            logger.error(
+                f"Email with ID {email_id} does not exist for user "
+                f"{username}"
+            )
             return
 
-        # Send test notification
-        status = options['status']
-
-        logger.info(f"=== Sending Test Notification ===")
+        simulated_status = options["status"]
+        language = (channel.config or {}).get("language") if channel else None
+        logger.info("=== Sending Test Notification ===")
         logger.info(f"User: {username}")
         logger.info(f"Email ID: {email_id}")
-        logger.info(f"Status transition: {email.status} -> {status}")
-        logger.info(f"Webhook URL: {config['url']}")
+        logger.info(
+            f"Simulated status transition: {email.status} -> "
+            f"{simulated_status}"
+        )
 
         try:
-            # Send test notification synchronously for testing
-            result = send_webhook_notification.run(
-                email_id,
+            failure_text = build_email_failure_text(
+                email,
                 email.status,
-                status
+                simulated_status,
+                language=language,
+            )
+            result = send_threadline_notification.run(
+                failure_text,
+                "manual_test",
+                f"email:{email.id}",
+                user_id=user.id,
             )
 
-            logger.info("Test notification sent successfully!")
-
-        except Exception as e:
-            logger.error(f"Failed to send test notification: {e}")
+            logger.info(f"Test notification sent successfully: {result}")
+        except Exception as exc:
+            logger.error(f"Failed to send test notification: {exc}")

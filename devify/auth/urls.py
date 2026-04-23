@@ -15,6 +15,7 @@ from accounts.views import (
     CompleteRegistrationView,
     ConfirmPasswordResetView,
     CustomUserDetailsView,
+    CustomTokenRefreshView,
     GetAvailableScenesView,
     SendPasswordResetEmailView,
     SendRegistrationEmailView,
@@ -36,6 +37,11 @@ urlpatterns = [
         'api/v1/auth/logout',
         LogoutView.as_view(),
         name='rest_logout'
+    ),
+    path(
+        'api/v1/auth/token/refresh',
+        CustomTokenRefreshView.as_view(),
+        name='rest_token_refresh'
     ),
     # Get or update user details
     path(

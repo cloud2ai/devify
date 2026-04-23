@@ -8,6 +8,7 @@ token validation, and registration completion.
 import logging
 
 from django.contrib.auth.models import User
+from django.db import transaction
 from django.utils.translation import gettext_lazy as _
 
 from drf_spectacular.types import OpenApiTypes
@@ -480,33 +481,28 @@ class CompleteRegistrationView(APIView):
         )
 
         try:
-            # Store old user and profile references before creating new user
-            old_user = profile.user
-            old_profile = profile
+            # Keep token cleanup and user replacement in one outer transaction
+            # so any failure during recreation rolls back the destructive steps.
+            with transaction.atomic():
+                old_user = profile.user
+                old_profile = profile
 
-            # Clear registration token to prevent reuse
-            old_profile.registration_token = None
-            old_profile.registration_token_expires = None
-            old_profile.save()
+                old_profile.registration_token = None
+                old_profile.registration_token_expires = None
+                old_profile.save()
 
-            # Delete old temporary user first to free up the email
-            # This must be done before creating new user
-            # Note: create_user_with_config has @transaction.atomic decorator
-            # so it will handle its own transaction
-            old_profile.delete()
-            old_user.delete()
+                # Delete the temporary registration user before recreating it
+                old_profile.delete()
+                old_user.delete()
 
-            # Create new user with complete configuration
-            # This will check if email exists, but we just deleted old user
-            # so the check should pass
-            user = RegistrationService.create_user_with_config(
-                email=email,
-                password=password,
-                username=username,
-                scene=scene,
-                language=language,
-                timezone_str=timezone_str
-            )
+                user = RegistrationService.create_user_with_config(
+                    email=email,
+                    password=password,
+                    username=username,
+                    scene=scene,
+                    language=language,
+                    timezone_str=timezone_str
+                )
 
             refresh = RefreshToken.for_user(user)
 

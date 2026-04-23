@@ -2,13 +2,36 @@ import json
 import logging
 from typing import Any, Dict, Optional
 
-from devtoolbox.llm.azure_openai_provider import AzureOpenAIConfig
-from devtoolbox.llm.service import LLMService
+import litellm
 from json_repair import repair_json
 
-from django.conf import settings
+from agentcore_metering.adapters.django.services.runtime_config import (
+    get_litellm_params,
+)
 
 logger = logging.getLogger(__name__)
+
+
+def _extract_llm_content(response: Any) -> str:
+    choices = getattr(response, "choices", None) or []
+    if not choices:
+        raise ValueError("LLM response did not include any choices")
+
+    first_choice = choices[0]
+    message = getattr(first_choice, "message", None) or {}
+    content = getattr(message, "content", None)
+    if content is None and isinstance(message, dict):
+        content = message.get("content")
+
+    if content is None:
+        content = getattr(first_choice, "delta", None)
+        if content is not None and hasattr(content, "content"):
+            content = content.content
+
+    if content is None:
+        raise ValueError("LLM response did not include message content")
+
+    return str(content)
 
 
 def parse_json_response(response: str) -> Dict[str, Any]:
@@ -69,8 +92,7 @@ def parse_json_response(response: str) -> Dict[str, Any]:
         response = repaired_response
     except Exception as e:
         raise ValueError(
-            f"JSON repair failed: {e}. "
-            f"Response preview: {response[:200]}"
+            f"JSON repair failed: {e}. " f"Response preview: {response[:200]}"
         ) from e
 
     try:
@@ -100,7 +122,7 @@ def call_llm(
     prompt: str,
     content: Optional[str] = None,
     json_mode: bool = False,
-    max_retries: int = 0
+    max_retries: int = 0,
 ):
     """
     Call LLM with optional JSON response format and retry logic.
@@ -119,21 +141,20 @@ def call_llm(
 
     Raises:
         ValueError: If json_mode=True and all retries fail to produce
-                    valid JSON, or if LLM service returns None
+                    valid JSON, or if LLM service returns no response
         Exception: If LLM service call fails for other reasons
     """
     if not prompt:
         raise ValueError("Prompt cannot be empty")
 
-    llm_config = AzureOpenAIConfig(**settings.AZURE_OPENAI_CONFIG)
-    llm_service = LLMService(llm_config)
-
+    params = get_litellm_params()
     messages = [{"role": "system", "content": prompt}]
     if content:
         messages.append({"role": "user", "content": content})
 
-    max_tokens = settings.AZURE_OPENAI_CONFIG['max_tokens']
-    temperature = settings.AZURE_OPENAI_CONFIG['temperature']
+    params["messages"] = messages
+    if json_mode:
+        params["response_format"] = {"type": "json_object"}
 
     max_attempts = max_retries + 1 if json_mode else 1
     last_error = None
@@ -142,8 +163,9 @@ def call_llm(
         f"Initializing LLM call - "
         f"json_mode: {json_mode}, "
         f"max_retries: {max_retries}, "
-        f"max_tokens: {max_tokens}, "
-        f"temperature: {temperature}"
+        f"model: {params.get('model')}, "
+        f"max_tokens: {params.get('max_tokens')}, "
+        f"temperature: {params.get('temperature')}"
     )
 
     for attempt in range(1, max_attempts + 1):
@@ -155,60 +177,22 @@ def call_llm(
                 f"content: {len(content) if content else 0} chars)"
             )
 
-            chat_kwargs = {
-                'messages': messages,
-                'max_tokens': max_tokens,
-                'temperature': temperature
-            }
-
-            if json_mode:
-                try:
-                    chat_kwargs['response_format'] = {"type": "json_object"}
-                    logger.debug("Using JSON response format")
-                    response = llm_service.chat(**chat_kwargs)
-                except TypeError as e:
-                    logger.warning(
-                        f"response_format parameter not supported "
-                        f"by LLM service ({e}), falling back to regular call"
-                    )
-                    del chat_kwargs['response_format']
-                    response = llm_service.chat(**chat_kwargs)
-            else:
-                response = llm_service.chat(**chat_kwargs)
-
+            response = litellm.completion(**params)
             if response is None:
-                error_msg = (
-                    f"LLM service returned None response on attempt "
-                    f"{attempt}/{max_attempts}. "
-                    f"This may indicate an API error or configuration issue."
-                )
-                logger.error(error_msg)
-                last_error = ValueError(error_msg)
-                if attempt < max_attempts:
-                    logger.info("Retrying due to None response...")
-                    continue
-                raise ValueError(error_msg)
+                raise ValueError("LLM service returned None response")
 
-            if not isinstance(response, str):
-                logger.warning(
-                    f"LLM service returned unexpected type "
-                    f"{type(response).__name__}, expected str. "
-                    f"Converting to string."
-                )
-                response = str(response)
+            response_content = _extract_llm_content(response)
 
             logger.info(
                 f"Attempt {attempt}/{max_attempts}: "
-                f"Received response with {len(response)} chars"
+                f"Received response with {len(response_content)} chars"
             )
 
             if not json_mode:
-                logger.info(
-                    "Returning raw string response (json_mode=False)"
-                )
-                return response
+                logger.info("Returning raw string response (json_mode=False)")
+                return response_content
 
-            parsed_json = parse_json_response(response)
+            parsed_json = parse_json_response(response_content)
             logger.info(
                 f"Attempt {attempt}/{max_attempts}: "
                 f"Successfully parsed JSON with {len(parsed_json)} keys"
@@ -221,12 +205,8 @@ def call_llm(
                 f"Attempt {attempt}/{max_attempts} failed: "
                 f"{error_type}: {str(e)}"
             )
-            if response:
-                logger.debug(
-                    f"Failed response preview (first 500 chars): "
-                    f"{response[:500]}"
-                )
-            last_error = e
+            if last_error is None:
+                last_error = e
             if attempt < max_attempts:
                 logger.info(
                     f"Retrying LLM call... "
@@ -239,7 +219,7 @@ def call_llm(
             logger.error(
                 f"Attempt {attempt}/{max_attempts} failed "
                 f"with unexpected error: {exc_type}: {str(e)}",
-                exc_info=True
+                exc_info=True,
             )
             last_error = e
             if attempt < max_attempts:

@@ -206,6 +206,10 @@ common:
     - Only omit content that is CLEARLY and OBVIOUSLY irrelevant with 100% certainty.
     - If you are not fully certain whether a piece of OCR content helps explain why the image was inserted, keep it.
     - Prefer keeping potentially relevant evidence over aggressive cleanup.
+    - If the image is a logo, watermark, decorative asset, placeholder, repeated branding element, or otherwise unrelated to the conversation, explicitly mark it as irrelevant / noisy / invalid for downstream understanding.
+    - When the image is irrelevant or noisy, say so clearly and explain that it should be ignored in later summaries unless the surrounding conversation explicitly references it.
+    - Never discard error messages, warning banners, status labels, stack traces, HTTP codes, timestamps, IDs, or any other diagnostic text unless you are absolutely certain they are unrelated.
+    - If an image contains a failure message, alert, exception, timeout, validation error, or similar technical detail, preserve it verbatim as much as possible.
 
     Output rules:
     - Produce a clean, readable, structured result in {language}.
@@ -215,6 +219,73 @@ common:
     - Any values, codes, timestamps, IDs, labels, statuses, error messages, and other key evidence that matter to the image's purpose should remain as close to the original OCR wording as possible.
     - Prefer preserving important evidence over aggressive filtering.
     - Do not add extra commentary, summaries, or unrelated content.
+
+  image_intent_prompt: |
+    Please output in {language}.
+    The entire response must be written in {language}. Do not switch to
+    English unless {language} is English.
+
+    You are analyzing one image attached to an email or chat. Determine why
+    the user inserted this image into the conversation, and preserve as much
+    of the original visible information as possible.
+
+    Core rule:
+    - The first sentence must explicitly state the user's purpose for
+      inserting the image, in the form: "[user] inserted this image to ..."
+      in {language}.
+    - If the image is relevant, explain whether it supports, proves,
+      illustrates, reports, or clarifies something in the discussion.
+    - Prefer preserving the full visible content over summarizing it away.
+    - If the image contains technical text, keep exact error messages, warnings, status labels, codes, IDs, timestamps, and file names whenever possible.
+    - If the image is a logo, watermark, decorative element, placeholder,
+      duplicated branding image, empty screenshot, or any other unrelated
+      asset, mark it as irrelevant / noisy / invalid for downstream
+      understanding.
+    - Make this judgment explicit so later summarization can ignore the
+      image instead of treating it as important evidence.
+    - If the image is relevant, explain the likely purpose of the image in
+      the conversation and the key visible details that support that purpose.
+    - Preserve all visible diagnostic and error content as fully as possible,
+      including error text, warning text, labels, numbers, timestamps, status
+      codes, and exception messages.
+    - When in doubt, keep the full technical text instead of compressing it.
+
+    Suggested response structure:
+    - Start with one sentence that explicitly states why the user inserted
+      the image, using the form "The user inserted this image to ..." in
+      {language}
+    - If you use headings or labels, write them in {language}; do not keep
+      English headings when {language} is not English
+    - Then include only the key visible details that support that purpose
+    - Keep diagnostic text, labels, buttons, IDs, timestamps, file paths,
+      URLs, codes, and other original text when present
+    - If the image is irrelevant or noisy, make that clear in the response
+      so later summaries can ignore it
+
+    Requirements:
+    - Use the same language as the conversation output language {language}
+    - Do not output mixed-language headings or mixed-language prose
+    - Preserve important names, numbers, labels, timestamps, and statuses
+      when they matter
+    - Preserve error messages, warning text, validation messages, status
+      indicators, and any other technical evidence even when it looks noisy
+    - Keep the original language of visible technical evidence from the
+      image whenever possible, including error text, labels, button text,
+      product names, code snippets, file paths, URLs, and timestamps
+    - When you quote or restate key image text, preserve the original
+      language of that text even if the surrounding explanation is in
+      {language}
+    - Do not translate quoted image text unless translation is explicitly
+      necessary to explain the user's purpose
+    - Preserve the surrounding conversation context that explains why the
+      image was inserted, including direct references to the problem, task,
+      or question being discussed
+    - Do not summarize away important failure details into generic wording
+    - Do not invent facts that are not supported by the image or context
+    - Keep the output concise, factual, and useful for downstream email
+      understanding
+    - Do not mention OCR or image extraction as a process
+    - Output only the analysis text, without extra commentary
 
   summary_title_prompt: |
     Please output in {language}.
@@ -239,6 +310,9 @@ common:
     - Present information in a structured JSON format, focusing on the core topics, key processes, and TODO items of the conversation.
     - Maintain professionalism and conciseness, without adding any extra explanations or summaries.
     - Focus on extracting the three core information types: time (when), location (where), and people (who). Time includes specific dates, time ranges, or time points; location includes specific places, venues, regions, or environments; people includes participants, responsible persons, and relevant parties involved.
+    - If the input contains image analysis labeled as irrelevant, noisy, invalid, or similar, treat it as background noise and do not promote it into details, key_process, or TODOs unless the surrounding text explicitly makes it relevant.
+    - If the input contains diagnostic details, error messages, warning text, status codes, timestamps, exception names, or other technical evidence, keep them explicitly in the summary instead of collapsing them into vague wording.
+    - Do not drop failure details just because they appear repetitive, noisy, or visual; if they could explain a problem, preserve them.
     - All dates/times present in the conversation content should be interpreted using the provided user timezone context (unless the text explicitly specifies another timezone).
 
     Output Rules:

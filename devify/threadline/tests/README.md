@@ -1,13 +1,25 @@
 # Threadline Tests
 
+## Test Classification
+
+- `unit`: Mock-driven tests for isolated helpers, parsers, and pure logic.
+- `e2e`: Real API or workflow tests that exercise the full request path and validate persisted state.
+- `integration`: Multi-component tests that still stay inside the containerized dev stack.
+
+## Execution Rules
+
+- Run all tests inside the project containers.
+- Do not depend on external services or local machine state outside the container.
+- Prefer deterministic fixtures and database assertions for workflow coverage.
+
 ## Directory Structure
 
 ```
 tests/
 ├── unit/                    # Unit tests for individual components
+├── e2e/                     # Real API and workflow tests
 ├── functional/              # Functional tests for complete workflows
-│   └── test_eml_parsing.py # EML email parsing tests
-├── api/                     # REST API endpoint tests
+│   └── test_eml_parsing.py  # EML email parsing tests
 ├── integration/             # Integration tests
 ├── performance/             # Performance tests
 └── fixtures/                # Test data and configuration
@@ -30,6 +42,9 @@ nox -s tests
 # Specific test categories
 nox -s unit_tests
 nox -s functional_tests
+nox -s e2e_tests
+
+# Legacy compatibility alias
 nox -s api_tests
 
 # Coverage report
@@ -47,12 +62,13 @@ pytest -v
 
 # Specific categories
 pytest unit/ -v
-pytest api/ -v
+pytest e2e/ -v
 ```
 
 ## Test Markers
 
 - `@pytest.mark.unit` - Unit tests
+- `@pytest.mark.e2e` - End-to-end tests
 - `@pytest.mark.functional` - Functional tests
 - `@pytest.mark.integration` - Integration tests
 - `@pytest.mark.performance` - Performance tests

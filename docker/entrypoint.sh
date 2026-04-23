@@ -162,6 +162,11 @@ run_migrations() {
         || log "Superuser already exists or creation failed."
 }
 
+register_periodic_tasks() {
+    log "Registering periodic tasks..."
+    python manage.py register_periodic_tasks || log "Periodic task registration completed with warnings"
+}
+
 collect_static() {
     log "Collecting static files..."
     python manage.py collectstatic --noinput
@@ -197,6 +202,7 @@ start_gunicorn() {
 
 start_celery_worker() {
     log "Starting Celery worker..."
+    export THREADLINE_LOG_FILE=/var/log/celery/worker.log
     exec celery -A core worker \
         --loglevel=${CELERY_LOG_LEVEL:-INFO} \
         --concurrency=${CELERY_CONCURRENCY:-1} \
@@ -235,16 +241,21 @@ case "$1" in
         generate_ssl_certs_if_missing
         wait_for_db
         run_migrations
+        register_periodic_tasks
         init_services
         collect_static
         start_gunicorn
         ;;
     celery)
         wait_for_db
+        run_migrations
+        register_periodic_tasks
         start_celery_worker
         ;;
     celery-beat)
         wait_for_db
+        run_migrations
+        register_periodic_tasks
         start_celery_beat
         ;;
     flower)
@@ -254,6 +265,7 @@ case "$1" in
         generate_ssl_certs_if_missing
         wait_for_db
         run_migrations
+        register_periodic_tasks
         init_services
         start_development
         ;;

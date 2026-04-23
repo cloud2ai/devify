@@ -3,6 +3,7 @@ FROM ubuntu:24.04
 
 # Build argument to control mirror usage
 ARG USE_MIRROR=false
+ARG DEV_MODE=0
 
 # Set environment variables
 ENV PYTHONUNBUFFERED=1 \
@@ -96,6 +97,18 @@ RUN set -eux; \
         echo "Using default PyPI for dependencies"; \
         uv pip compile pyproject.toml -o requirements.txt; \
         uv pip install --system -r requirements.txt; \
+    fi
+
+# In development mode, install agentcore submodules in editable mode so
+# source changes are picked up without publishing packages.
+RUN set -eux; \
+    if [ "$DEV_MODE" = "1" ]; then \
+        for d in /opt/devify/agentcore/*/; do \
+            if [ -f "${d}pyproject.toml" ]; then \
+                echo "Dev mode: installing ${d}"; \
+                (cd "$d" && pip install -e .); \
+            fi; \
+        done; \
     fi
 
 # Create necessary directories

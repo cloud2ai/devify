@@ -19,10 +19,9 @@ from celery import shared_task
 from django.conf import settings
 
 from threadline.models import EmailMessage
-from threadline.agents.workflow import (
-    execute_email_processing_workflow
-)
+from threadline.agents.workflow import execute_email_processing_workflow
 from threadline.utils.task_lock import prevent_duplicate_task
+from threadline.utils.task_tracer import TaskTracer
 
 logger = logging.getLogger(__name__)
 
@@ -31,29 +30,26 @@ logger = logging.getLogger(__name__)
 @prevent_duplicate_task(
     "process_email_workflow",
     lock_param="email_id",
-    timeout=settings.TASK_TIMEOUT_MINUTES
+    timeout=settings.TASK_TIMEOUT_MINUTES,
 )
 def process_email_workflow(
-    email_id: str,
-    force: bool = False,
-    language: str = None,
-    scene: str = None
+    email_id: str, force: bool = False, language: str = None, scene: str = None
 ) -> str:
     """
     Execute LangGraph-based email processing workflow.
 
     This task replaces the traditional Celery chain approach with a
     unified LangGraph StateGraph execution. The workflow manages all
-    processing steps (OCR, LLM, Summary, Issue) in a single graph.
+    processing steps (multimodal image understanding, LLM, Summary,
+    Issue) in a single graph.
 
     Workflow Steps (executed by LangGraph):
     1. WorkflowPrepareNode - Load and validate email data
-    2. OCRNode - Process image attachments
-    3. LLMAttachmentNode - Process OCR content with LLM
-    4. LLMEmailNode - Process email content with LLM
-    5. SummaryNode - Generate email summary
-    6. IssueNode - Validate and prepare issue creation
-    7. WorkflowFinalizeNode - Sync all results to database
+    2. ImageIntentNode - Process image attachments with multimodal LLM
+    3. LLMEmailNode - Process email content with LLM
+    4. SummaryNode - Generate email summary
+    5. IssueNode - Validate and prepare issue creation
+    6. WorkflowFinalizeNode - Sync all results to database
 
     State Machine Integration:
     - Prepare: Sets status to PROCESSING (unless force mode)
@@ -87,36 +83,69 @@ def process_email_workflow(
             raise ValueError(f"Email with id {email_id} not found")
 
         user_info = f"{email.user.username}({email.user_id})"
+        tracer = TaskTracer("EMAIL_WORKFLOW")
+        task_id = getattr(process_email_workflow.request, "id", "") or ""
+        tracer.set_task_id(task_id)
         logger.info(
-            f"[Workflow] Starting for email {email_id}, user {user_info}, "
-            f"status: {email.status}, force: {force}, "
-            f"language: {language}, scene: {scene}"
+            f"{tracer.context_summary({'email_id': str(email_id), 'user_id': str(email.user_id), 'force': force, 'language': language, 'scene': scene})} "
+            f"[Workflow] Starting for email {email_id}, user {user_info}, status: {email.status}, force: {force}, language: {language}, scene: {scene}"
+        )
+
+        tracer.create_task(
+            {
+                "email_id": str(email_id),
+                "force": force,
+                "language": language,
+                "scene": scene,
+                "status": "starting",
+            }
         )
 
         result = execute_email_processing_workflow(
             email=email,
             force=force,
             language=language,
-            scene=scene
+            scene=scene,
+            tracer=tracer,
         )
 
-        if result['success']:
+        if result["success"]:
             logger.info(
-                f"[Workflow] Completed successfully for email {email_id}, "
-                f"user {user_info}"
+                f"{tracer.context_summary({'email_id': str(email_id), 'user_id': str(email.user_id)})} "
+                f"[Workflow] Completed successfully for email {email_id}, user {user_info}"
+            )
+            tracer.complete_task(
+                {
+                    "email_id": str(email_id),
+                    "force": force,
+                    "language": language,
+                    "scene": scene,
+                    "status": "completed",
+                    "workflow_success": True,
+                }
             )
         else:
             logger.error(
-                f"[Workflow] Failed for email {email_id}, user {user_info}: "
-                f"{result.get('error')}"
+                f"{tracer.context_summary({'email_id': str(email_id), 'user_id': str(email.user_id)})} "
+                f"[Workflow] Failed for email {email_id}, user {user_info}: {result.get('error')}"
+            )
+            tracer.fail_task(
+                {
+                    "email_id": str(email_id),
+                    "force": force,
+                    "language": language,
+                    "scene": scene,
+                    "status": "failed",
+                    "workflow_success": False,
+                    "workflow_error": result.get("error"),
+                },
+                result.get("error") or "Workflow failed",
             )
 
         return email_id
 
     except EmailMessage.DoesNotExist:
-        logger.error(
-            f"[Workflow] EmailMessage {email_id} not found"
-        )
+        logger.error(f"[Workflow] EmailMessage {email_id} not found")
         raise ValueError(f"Email with id {email_id} not found")
     except Exception as exc:
         logger.error(
@@ -126,9 +155,7 @@ def process_email_workflow(
 
 
 @shared_task
-def retry_failed_email_workflow(
-    email_id: str
-) -> str:
+def retry_failed_email_workflow(email_id: str) -> str:
     """
     Retry a failed email workflow.
 
@@ -141,7 +168,5 @@ def retry_failed_email_workflow(
     Returns:
         str: The email_id
     """
-    logger.info(
-        f"[Workflow] Retrying failed workflow for email {email_id}"
-    )
+    logger.info(f"[Workflow] Retrying failed workflow for email {email_id}")
     return process_email_workflow(email_id, force=True)

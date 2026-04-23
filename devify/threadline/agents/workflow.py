@@ -2,7 +2,8 @@
 Email processing workflow using LangGraph StateGraph.
 
 This module implements a sequential workflow for processing emails through
-OCR, LLM processing, summarization, and issue creation using LangGraph.
+multimodal image understanding, LLM processing, summarization, and issue
+creation using LangGraph.
 """
 
 import logging
@@ -18,8 +19,7 @@ from threadline.agents.nodes.workflow_prepare import WorkflowPrepareNode
 from threadline.agents.nodes.workflow_finalize import WorkflowFinalizeNode
 from threadline.agents.nodes.credits_check_node import CreditsCheckNode
 from threadline.agents.nodes.error_handler_node import ErrorHandlerNode
-from threadline.agents.nodes.ocr_node import OCRNode
-from threadline.agents.nodes.llm_attachment_node import LLMAttachmentNode
+from threadline.agents.nodes.image_intent_node import ImageIntentNode
 from threadline.agents.nodes.llm_email_node import LLMEmailNode
 from threadline.agents.nodes.summary_node import SummaryNode
 from threadline.agents.nodes.metadata_node import MetadataNode
@@ -27,15 +27,15 @@ from threadline.agents.nodes.issue_node import IssueNode
 from threadline.agents.email_state import (
     EmailState,
     create_email_state,
-    has_node_errors
+    has_node_errors,
 )
+from threadline.utils.task_tracer import TaskTracer, use_task_tracer
 
 logger = logging.getLogger(__name__)
 
 
 def _update_email_status_on_fatal_error(
-    email_id: str,
-    error_message: str
+    email_id: str, error_message: str
 ) -> None:
     """
     Update email status when workflow fails fatally.
@@ -61,8 +61,7 @@ def _update_email_status_on_fatal_error(
         )
     except Exception as update_error:
         logger.error(
-            f"Failed to update email status for {email_id}: "
-            f"{update_error}"
+            f"Failed to update email status for {email_id}: " f"{update_error}"
         )
 
 
@@ -107,14 +106,13 @@ def create_email_processing_graph():
     Workflow sequence:
     1. WorkflowPrepareNode - Load email data and validate
     2. CreditsCheckNode - Check and consume credits
-    3. OCRNode - Process image attachments with OCR
-    4. LLMAttachmentNode - Process OCR content with LLM
-    5. LLMEmailNode - Process email content with LLM
-    6. SummaryNode - Generate email summary
-    7. MetadataNode - Extract structured metadata from summary
-    8. IssueNode - Validate and prepare issue creation
-    9. ErrorHandlerNode - Handle errors and refund credits (conditional)
-    10. WorkflowFinalizeNode - Sync all results to database
+    3. ImageIntentNode - Process image attachments with multimodal LLM
+    4. LLMEmailNode - Process email content with LLM
+    5. SummaryNode - Generate email summary
+    6. MetadataNode - Extract structured metadata from summary
+    7. IssueNode - Validate and prepare issue creation
+    8. ErrorHandlerNode - Handle errors and refund credits (conditional)
+    9. WorkflowFinalizeNode - Sync all results to database
 
     Returns:
         Compiled LangGraph workflow
@@ -125,8 +123,7 @@ def create_email_processing_graph():
 
     workflow.add_node("workflow_prepare", WorkflowPrepareNode())
     workflow.add_node("credits_check", CreditsCheckNode())
-    workflow.add_node("ocr", OCRNode())
-    workflow.add_node("llm_attachment", LLMAttachmentNode())
+    workflow.add_node("image_intent", ImageIntentNode())
     workflow.add_node("llm_email", LLMEmailNode())
     workflow.add_node("summary", SummaryNode())
     workflow.add_node("metadata", MetadataNode())
@@ -136,9 +133,8 @@ def create_email_processing_graph():
 
     workflow.add_edge(START, "workflow_prepare")
     workflow.add_edge("workflow_prepare", "credits_check")
-    workflow.add_edge("credits_check", "ocr")
-    workflow.add_edge("ocr", "llm_attachment")
-    workflow.add_edge("llm_attachment", "llm_email")
+    workflow.add_edge("credits_check", "image_intent")
+    workflow.add_edge("image_intent", "llm_email")
     workflow.add_edge("llm_email", "summary")
     workflow.add_edge("summary", "metadata")
     workflow.add_edge("metadata", "issue")
@@ -162,8 +158,8 @@ def create_email_processing_graph():
         should_handle_error,
         {
             "error_handler": "error_handler",
-            "workflow_finalize": "workflow_finalize"
-        }
+            "workflow_finalize": "workflow_finalize",
+        },
     )
 
     # ErrorHandler always goes to finalize (after refund decision)
@@ -182,7 +178,8 @@ def execute_email_processing_workflow(
     email: EmailMessage,
     force: bool = False,
     language: str = None,
-    scene: str = None
+    scene: str = None,
+    tracer: TaskTracer | None = None,
 ) -> Dict[str, Any]:
     """
     Execute the email processing workflow for an email.
@@ -204,28 +201,24 @@ def execute_email_processing_workflow(
     email_id = email.id
     user_id = email.user_id
 
-    logger.info(
-        f"Starting workflow for email {email_id}, user {user_id}, "
-        f"status: {email.status}, force: {force}, "
-        f"language: {language}, scene: {scene}"
-    )
-
     try:
-        initial_state = create_email_state(
-            email_id,
-            str(email.user_id),
-            force
+        tracer = tracer or TaskTracer("EMAIL_WORKFLOW")
+        logger.info(
+            f"{tracer.context_summary({'email_id': email_id, 'user_id': user_id, 'force': force, 'language': language, 'scene': scene})} "
+            f"starting workflow for email {email_id}, user {user_id}, status: {email.status}, force: {force}, language: {language}, scene: {scene}"
         )
+        initial_state = create_email_state(email_id, str(email.user_id), force)
 
         if language:
-            initial_state['retry_language'] = language
+            initial_state["retry_language"] = language
         if scene:
-            initial_state['retry_scene'] = scene
+            initial_state["retry_scene"] = scene
 
         graph = create_email_processing_graph()
 
         if force:
             from django.utils import timezone
+
             timestamp = int(timezone.now().timestamp())
             thread_id = f"email_workflow_{email_id}_force_{timestamp}"
         else:
@@ -234,56 +227,89 @@ def execute_email_processing_workflow(
         config = {
             "configurable": {
                 "thread_id": thread_id,
-                "checkpoint_ns": "email_processing"
+                "checkpoint_ns": "email_processing",
             }
         }
 
         logger.info(
-            f"Using thread_id: {thread_id} (force={force})"
+            f"{tracer.context_summary({'email_id': email_id, 'user_id': user_id, 'force': force, 'language': language, 'scene': scene})} "
+            f"using thread_id={thread_id} (force={force})"
         )
 
-        result = graph.invoke(initial_state, config=config)
+        tracer.append_task(
+            "WORKFLOW_START",
+            "Email processing workflow started",
+            {
+                "email_id": str(email_id),
+                "force": force,
+                "language": language,
+                "scene": scene,
+            },
+        )
+
+        with use_task_tracer(tracer):
+            result = graph.invoke(initial_state, config=config)
 
         success = not has_node_errors(result)
 
         if success:
             logger.info(
-                f"Workflow completed successfully for email {email_id}, "
-                f"user {user_id}"
+                f"{tracer.context_summary({'email_id': email_id, 'user_id': user_id, 'force': force, 'language': language, 'scene': scene})} "
+                f"completed successfully for email {email_id}, user {user_id}"
             )
         else:
-            node_errors = result.get('node_errors', {})
+            node_errors = result.get("node_errors", {})
             logger.error(
-                f"Workflow completed with errors for email {email_id}, "
-                f"user {user_id}: {node_errors}"
+                f"{tracer.context_summary({'email_id': email_id, 'user_id': user_id, 'force': force, 'language': language, 'scene': scene})} "
+                f"completed with errors for email {email_id}, user {user_id}: {node_errors}"
             )
 
+        tracer.append_task(
+            "WORKFLOW_COMPLETE" if success else "WORKFLOW_FAILED",
+            (
+                "Email processing workflow completed successfully"
+                if success
+                else "Email processing workflow completed with errors"
+            ),
+            {
+                "email_id": str(email_id),
+                "success": success,
+                "node_errors": result.get("node_errors", {}),
+            },
+        )
+
         return {
-            'success': success,
-            'result': result,
-            'error': (
+            "success": success,
+            "result": result,
+            "error": (
                 f'Email workflow failed with errors: '
                 f'{result.get("node_errors", {})}'
-                if not success else None
-            )
+                if not success
+                else None
+            ),
         }
 
     except Exception as e:
         error_traceback = traceback.format_exc()
         logger.error(
-            f"Fatal workflow error for email {email_id}, "
-            f"user {user_id}: {e}"
+            f"Fatal workflow error for email {email_id}, user {user_id}: {e}"
         )
         logger.error(f"Full traceback:\n{error_traceback}")
 
         error_msg = str(e)
+        if tracer is not None:
+            tracer.append_task(
+                "WORKFLOW_ERROR",
+                f"Email processing workflow failed: {error_msg}",
+                {
+                    "email_id": str(email_id),
+                    "error": error_msg,
+                    "traceback": error_traceback,
+                },
+            )
         _update_email_status_on_fatal_error(email_id, error_msg)
 
-        return {
-            'success': False,
-            'result': None,
-            'error': error_msg
-        }
+        return {"success": False, "result": None, "error": error_msg}
 
 
 def get_email_workflow_status(email_id: str) -> Dict[str, Any]:
@@ -300,17 +326,13 @@ def get_email_workflow_status(email_id: str) -> Dict[str, Any]:
         graph = create_email_processing_graph()
 
         return {
-            'email_id': email_id,
-            'status': 'unknown',
-            'message': 'Workflow status check not fully implemented'
+            "email_id": email_id,
+            "status": "unknown",
+            "message": "Workflow status check not fully implemented",
         }
     except Exception as e:
         logger.error(f"Error getting email workflow status: {email_id}, {e}")
-        return {
-            'email_id': email_id,
-            'status': 'error',
-            'error': str(e)
-        }
+        return {"email_id": email_id, "status": "error", "error": str(e)}
 
 
 def clear_email_workflow_checkpoint(email_id: str) -> bool:
