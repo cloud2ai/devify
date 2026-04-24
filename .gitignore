@@ -233,6 +233,7 @@ cache.dev
 *.bak
 # Ignore HTML files except email templates
 *.html
+!ui/index.html
 !devify/accounts/templates/**/*.html
 !devify/threadline/templates/**/*.html
 
