@@ -92,6 +92,7 @@ Important Notes:
 import json
 import logging
 import os
+import re
 import time
 from typing import Any, Dict, List
 
@@ -752,6 +753,19 @@ from configuration."""
                 isinstance(value, str) and not value.strip()
             )
 
+            # Basic format validation for epic_link: must look like JIRA key (e.g., REQ-123)
+            # This is a fallback when allow_values is empty
+            if field_name == "epic_link" and value and not is_empty:
+                if isinstance(value, list):
+                    value = value[0] if value else None
+                if value and not re.match(r'^[A-Z]+-\d+$', str(value).strip()):
+                    logger.warning(
+                        f"LLM returned invalid epic_link format '{value}'. "
+                        f"Will use default."
+                    )
+                    value = None
+                    is_empty = True
+
             # Handle empty or invalid values
             if is_empty:
                 if default_value:
@@ -768,16 +782,30 @@ from configuration."""
                     continue
             elif allow_values:
                 # Validate against allow_values
-                if isinstance(value, list):
-                    normalized_value = [str(item).strip() for item in value]
-                    normalized_allow = [str(av).strip() for av in allow_values]
-                    is_valid = all(
-                        item in normalized_allow for item in normalized_value
-                    )
+                # For epic_link: allow_values contain "KEY (Summary)" but LLM returns only KEY
+                if field_name == "epic_link":
+                    # Extract KEY from "KEY (Summary)" format
+                    valid_keys = [
+                        str(av).split(" (")[0].strip() for av in allow_values
+                    ]
+                    if isinstance(value, list):
+                        normalized_value = [str(item).strip() for item in value]
+                        is_valid = all(item in valid_keys for item in normalized_value)
+                    else:
+                        normalized_value = str(value).strip()
+                        is_valid = normalized_value in valid_keys
                 else:
-                    normalized_value = str(value).strip()
-                    normalized_allow = [str(av).strip() for av in allow_values]
-                    is_valid = normalized_value in normalized_allow
+                    # Standard validation for other fields
+                    if isinstance(value, list):
+                        normalized_value = [str(item).strip() for item in value]
+                        normalized_allow = [str(av).strip() for av in allow_values]
+                        is_valid = all(
+                            item in normalized_allow for item in normalized_value
+                        )
+                    else:
+                        normalized_value = str(value).strip()
+                        normalized_allow = [str(av).strip() for av in allow_values]
+                        is_valid = normalized_value in normalized_allow
 
                 if not is_valid:
                     if default_value:

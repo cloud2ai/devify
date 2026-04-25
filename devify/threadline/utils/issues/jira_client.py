@@ -76,10 +76,21 @@ class JiraClient:
                     f"Failed to connect to JIRA: {error_msg}"
                 ) from e
 
-    def search_issues(self, jql: str, max_results: int = None) -> List:
-        """Search issues using JQL query."""
+    def search_issues(
+        self,
+        jql: str,
+        max_results: int = None,
+        start_at: int = 0,
+    ) -> List:
+        """Search issues using JQL query.
+
+        The wrapper keeps snake_case arguments for internal callers while
+        translating them to the upstream jira-python parameter names.
+        """
         return self.client.search_issues(
-            jql, maxResults=False if max_results is None else max_results
+            jql,
+            maxResults=False if max_results is None else max_results,
+            startAt=start_at,
         )
 
     def get_issue_details(
@@ -294,13 +305,23 @@ class JiraClient:
             project = self.client.project(project_key)
             components = []
             for comp in project.components:
+                lead = getattr(comp, "lead", None)
                 components.append(
                     {
-                        "name": comp.name,
-                        "description": comp.description or "",
-                        "lead": comp.lead.displayName if comp.lead else None,
-                        "assignee_type": comp.assigneeType,
-                        "is_assignee_type_valid": comp.isAssigneeTypeValid,
+                        "name": getattr(comp, "name", ""),
+                        "description": (
+                            getattr(comp, "description", None) or ""
+                        ),
+                        "lead": (
+                            getattr(lead, "displayName", None)
+                            or getattr(lead, "name", None)
+                        ),
+                        "assignee_type": getattr(
+                            comp, "assigneeType", None
+                        ),
+                        "is_assignee_type_valid": getattr(
+                            comp, "isAssigneeTypeValid", None
+                        ),
                     }
                 )
             return components
