@@ -1049,12 +1049,9 @@ onMounted(() => {
   loadShare()
 })
 
-watch(
-  token,
-  (newToken, oldToken) => {
-    if (newToken && newToken !== oldToken) {
-      loadShare()
-    }
+watch(token, (newToken, oldToken) => {
+  if (newToken && newToken !== oldToken) {
+    loadShare()
   }
-)
+})
 </script>

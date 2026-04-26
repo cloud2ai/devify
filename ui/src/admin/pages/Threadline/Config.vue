@@ -105,7 +105,9 @@
                       :disabled="loadingChannels || channelOptions.length === 0"
                     >
                       <option value="">
-                        {{ t('threadline.config.notificationChannelPlaceholder') }}
+                        {{
+                          t('threadline.config.notificationChannelPlaceholder')
+                        }}
                       </option>
                       <option
                         v-for="channel in channelOptions"
@@ -233,8 +235,7 @@ function applyConfig(raw) {
   form.notification_channel_uuid = raw.notification_channel_uuid || ''
   initialValues.image_llm_config_uuid = form.image_llm_config_uuid
   initialValues.text_llm_config_uuid = form.text_llm_config_uuid
-  initialValues.notification_channel_uuid =
-    form.notification_channel_uuid
+  initialValues.notification_channel_uuid = form.notification_channel_uuid
 }
 
 async function loadModels() {

@@ -314,8 +314,8 @@ export const COMMON_TIMEZONES = [
   {
     value: 'Asia/Shanghai',
     label: {
-      en: 'Asia/Shanghai (GMT+8:00) - China Beijing/Shanghai',
-      zh: 'Asia/Shanghai (GMT+8:00) - 中国北京/上海'
+      en: 'Asia/Shanghai (GMT+8:00) - Shanghai / Beijing',
+      zh: 'Asia/Shanghai (GMT+8:00) - 上海 / 北京'
     }
   },
   {
@@ -452,7 +452,16 @@ export const COMMON_TIMEZONES = [
 
 // Get localized timezone list
 export function getLocalizedTimezones(language = 'en') {
-  const lang = language === 'zh-CN' ? 'zh' : language === 'es' ? 'es' : 'en'
+  const normalizedLanguage = String(language || 'en')
+    .trim()
+    .toLowerCase()
+
+  const lang = normalizedLanguage.startsWith('zh')
+    ? 'zh'
+    : normalizedLanguage.startsWith('es')
+      ? 'es'
+      : 'en'
+
   return COMMON_TIMEZONES.map((tz) => ({
     value: tz.value,
     label: typeof tz.label === 'string' ? tz.label : tz.label[lang]

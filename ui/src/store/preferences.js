@@ -2,6 +2,21 @@ import { defineStore } from 'pinia'
 import { detectTimezone, detectLanguage } from '@/utils/timezone'
 import i18n from '@/i18n'
 
+function normalizeUiLanguage(language) {
+  if (!language || typeof language !== 'string') {
+    return 'en'
+  }
+
+  const value = language.trim().toLowerCase()
+  if (value.startsWith('zh')) {
+    return 'zh-CN'
+  }
+  if (value.startsWith('es')) {
+    return 'es'
+  }
+  return 'en'
+}
+
 export const usePreferencesStore = defineStore('preferences', {
   state: () => ({
     language: detectLanguage(),
@@ -24,9 +39,10 @@ export const usePreferencesStore = defineStore('preferences', {
 
   actions: {
     setLanguage(language) {
-      this.language = language
-      i18n.global.locale.value = language
-      localStorage.setItem('userLanguage', language)
+      const normalizedLanguage = normalizeUiLanguage(language)
+      this.language = normalizedLanguage
+      i18n.global.locale.value = normalizedLanguage
+      localStorage.setItem('userLanguage', normalizedLanguage)
     },
 
     setTimezone(timezone) {
@@ -39,8 +55,7 @@ export const usePreferencesStore = defineStore('preferences', {
       const savedTimezone = localStorage.getItem('userTimezone')
 
       if (savedLanguage) {
-        this.language = savedLanguage
-        i18n.global.locale.value = savedLanguage
+        this.setLanguage(savedLanguage)
       }
 
       if (savedTimezone) {

@@ -12,6 +12,7 @@ from django.contrib.auth.models import User
 from django.utils import timezone
 
 from threadline.models import Settings
+from threadline.utils.email.clients.imap import IMAPClient
 
 logger = logging.getLogger(__name__)
 
@@ -145,6 +146,44 @@ class EmailConfigManager:
             return False
 
         return True
+
+    @staticmethod
+    def validate_imap_connection(
+        config: Dict,
+        user_context: Optional[str] = None,
+    ) -> tuple[bool, str]:
+        """
+        Validate IMAP configuration by connecting to the server.
+
+        Args:
+            config: Email configuration dictionary containing imap_config
+                    and filter_config.
+            user_context: Optional user context for logging.
+
+        Returns:
+            tuple[bool, str]: (is_valid, error_message)
+        """
+        imap_config = config.get('imap_config', {}) or {}
+        filter_config = config.get('filter_config', {}) or {}
+        client = None
+
+        try:
+            client = IMAPClient(
+                imap_config=imap_config,
+                filter_config=filter_config,
+                user_context=user_context,
+            )
+            client.connect()
+            return True, ''
+        except Exception as exc:
+            logger.warning(
+                f"IMAP validation failed for {user_context or 'unknown user'}: "
+                f"{exc}"
+            )
+            return False, str(exc)
+        finally:
+            if client is not None:
+                client.disconnect()
 
     @staticmethod
     def update_fetch_config(user_id: int, config: Dict) -> bool:

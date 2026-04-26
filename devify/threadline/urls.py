@@ -16,6 +16,8 @@ from django.urls import path
 from .views import (
     SettingsAPIView,
     SettingsDetailAPIView,
+    SettingsImapValidateAPIView,
+    SettingsIssueTestAPIView,
     EmailMessageAPIView,
     EmailMessageDetailAPIView,
     EmailMessageMetadataAPIView,
@@ -48,6 +50,10 @@ from .views.monitoring import (
 urlpatterns = [
     # Settings endpoints
     path('settings', SettingsAPIView.as_view(), name='settings-list'),
+    path('settings/test-imap', SettingsImapValidateAPIView.as_view(),
+         name='settings-test-imap'),
+    path('settings/test-issue', SettingsIssueTestAPIView.as_view(),
+         name='settings-test-issue'),
     path('settings/<int:pk>', SettingsDetailAPIView.as_view(),
          name='settings-detail'),
 

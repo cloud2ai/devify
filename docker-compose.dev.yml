@@ -10,7 +10,7 @@ services:
         USE_MIRROR: ${USE_MIRROR:-true}
         DEV_MODE: "1"
     env_file:
-      - ./.env
+      - ./.env.dev
     volumes:
       - ./data.dev/django/staticfiles:/opt/devify/core/staticfiles
       - ./data.dev/logs/api:/var/log/gunicorn
@@ -36,7 +36,7 @@ services:
     restart: unless-stopped
     stop_grace_period: 60s
     env_file:
-      - ./.env
+      - ./.env.dev
     volumes:
       - ./cache.dev:/opt/cache
       - ./data.dev/logs/worker:/var/log/celery
@@ -59,7 +59,7 @@ services:
     restart: unless-stopped
     stop_grace_period: 30s
     env_file:
-      - ./.env
+      - ./.env.dev
     volumes:
       - ./data.dev/logs/scheduler:/var/log/celery
       - ./devify:/opt/devify
@@ -105,7 +105,7 @@ services:
     container_name: devify-flower-dev
     restart: unless-stopped
     env_file:
-      - ./.env
+      - ./.env.dev
     ports:
       - "${FLOWER_HOST_PORT:-5555}:5555"
     depends_on:

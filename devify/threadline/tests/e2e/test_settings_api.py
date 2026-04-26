@@ -4,6 +4,8 @@ Tests for Settings API endpoints
 This module contains comprehensive tests for the Settings API CRUD operations.
 """
 
+from unittest.mock import Mock, patch
+
 import pytest
 from django.urls import reverse
 from rest_framework import status
@@ -440,3 +442,80 @@ class TestSettingsAPI:
         assert (
             "No Settings matches the given query" in response.data["message"]
         )
+
+    @patch("threadline.views.settings.get_issue_handler")
+    def test_test_issue_creates_external_record(
+        self, mock_get_issue_handler, authenticated_api_client, test_user
+    ):
+        handler = Mock()
+        handler.create_issue.return_value = "FB-123"
+        handler.get_issue_url.return_value = "https://example.com/FB-123"
+        mock_get_issue_handler.return_value = handler
+
+        url = reverse("settings-test-issue")
+        response = authenticated_api_client.post(
+            url,
+            {
+                "value": {
+                    "issue_engine": "feishu_bitable",
+                    "enable": True,
+                    "feishu_bitable": {
+                        "app_token": "bascnxxxxxxxx",
+                        "table_name": "Requirements",
+                        "field_mappings": {
+                            "任务简述": "title",
+                            "需求收集管理": "summary_content",
+                        },
+                    },
+                }
+            },
+            format="json",
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data["code"] == 200
+        assert response.data["data"]["issue_key"] == "FB-123"
+        assert response.data["data"]["issue_url"] == "https://example.com/FB-123"
+        handler.create_issue.assert_called_once()
+
+    @patch("threadline.views.settings.get_issue_handler")
+    def test_test_issue_creates_jira_issue(
+        self, mock_get_issue_handler, authenticated_api_client, test_user
+    ):
+        handler = Mock()
+        handler.create_issue.return_value = "REQ-456"
+        handler.get_issue_url.return_value = "https://example.com/REQ-456"
+        mock_get_issue_handler.return_value = handler
+
+        url = reverse("settings-test-issue")
+        response = authenticated_api_client.post(
+            url,
+            {
+                "value": {
+                    "issue_engine": "jira",
+                    "enable": True,
+                    "jira": {
+                        "url": "https://jira.example.com",
+                        "username": "test_user",
+                        "api_token": "test_token",
+                    },
+                    "fields": {
+                        "project_key_config": {
+                            "jira_field": "project",
+                            "default": "REQ",
+                        },
+                        "issue_type_config": {
+                            "jira_field": "issuetype",
+                            "default": "Task",
+                        },
+                    },
+                }
+            },
+            format="json",
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data["code"] == 200
+        assert response.data["data"]["issue_key"] == "REQ-456"
+        assert response.data["data"]["issue_url"] == "https://example.com/REQ-456"
+        handler.create_issue.assert_called_once()

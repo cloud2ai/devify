@@ -4,8 +4,9 @@ Unit tests for email services
 Tests EmailConfigManager and EmailSaveService functionality.
 """
 
+from unittest.mock import MagicMock, Mock, patch
+
 import pytest
-from unittest.mock import Mock, patch, MagicMock
 from django.test import TestCase
 from django.contrib.auth.models import User
 from django.utils import timezone
@@ -164,6 +165,57 @@ class EmailConfigManagerTest(TestCase):
             new_time = timezone.now()
             # Should not raise exception
             EmailConfigManager.update_fetch_time(self.user.id, new_time)
+
+    @patch('threadline.utils.email.config.IMAPClient')
+    def test_validate_imap_connection_success(self, mock_imap_client):
+        """Test successful IMAP connection validation"""
+        client = Mock()
+        mock_imap_client.return_value = client
+
+        is_valid, error_message = EmailConfigManager.validate_imap_connection(
+            {
+                'imap_config': {
+                    'imap_host': 'imap.example.com',
+                    'imap_ssl_port': 993,
+                    'username': 'test@example.com',
+                    'password': 'password123',
+                    'use_ssl': True
+                },
+                'filter_config': {}
+            },
+            user_context='testuser',
+        )
+
+        self.assertTrue(is_valid)
+        self.assertEqual(error_message, '')
+        client.connect.assert_called_once()
+        client.disconnect.assert_called_once()
+
+    @patch('threadline.utils.email.config.IMAPClient')
+    def test_validate_imap_connection_failure(self, mock_imap_client):
+        """Test failed IMAP connection validation"""
+        client = Mock()
+        client.connect.side_effect = ValueError('Invalid IMAP config')
+        mock_imap_client.return_value = client
+
+        is_valid, error_message = EmailConfigManager.validate_imap_connection(
+            {
+                'imap_config': {
+                    'imap_host': 'imap.example.com',
+                    'imap_ssl_port': 993,
+                    'username': 'test@example.com',
+                    'password': 'wrong-password',
+                    'use_ssl': True
+                },
+                'filter_config': {}
+            },
+            user_context='testuser',
+        )
+
+        self.assertFalse(is_valid)
+        self.assertIn('Invalid IMAP config', error_message)
+        client.connect.assert_called_once()
+        client.disconnect.assert_called_once()
 
 
 class EmailSaveServiceTest(TestCase):

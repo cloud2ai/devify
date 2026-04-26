@@ -1,9 +1,29 @@
 import apiClient from './index'
 
+function extractSettingsList(response) {
+  const payload = response?.data
+  if (!payload) return []
+
+  const data = payload.data ?? payload
+  if (Array.isArray(data)) return data
+  if (Array.isArray(data?.list)) return data.list
+  return []
+}
+
 export const settingsApi = {
-  async getSettings() {
-    const response = await apiClient.get('/v1/settings')
+  async getSettings(params = {}) {
+    const response = await apiClient.get('/v1/settings', {
+      params
+    })
     return response.data
+  },
+
+  async getSettingsList() {
+    const response = await this.getSettings({
+      page_size: 100,
+      ordering: 'key'
+    })
+    return extractSettingsList(response)
   },
 
   async getSetting(id) {
@@ -26,9 +46,50 @@ export const settingsApi = {
     return response.data
   },
 
+  async validateImapConfig(config) {
+    const response = await apiClient.post('/v1/settings/test-imap', {
+      value: config
+    })
+    return response.data
+  },
+
+  async testIssueConfig(config) {
+    const response = await apiClient.post('/v1/settings/test-issue', {
+      value: config
+    })
+    return response.data
+  },
+
+  async saveSettingByKey({ key, value, description, isActive = true }) {
+    const settings = await this.getSettingsList()
+    const existing = settings.find((setting) => setting.key === key)
+
+    if (existing) {
+      const response = await this.updateSetting(existing.id, {
+        value,
+        description:
+          description !== undefined ? description : existing.description,
+        is_active: isActive
+      })
+      return response.data || response
+    }
+
+    const response = await this.createSetting({
+      key,
+      value,
+      description: description || '',
+      is_active: isActive
+    })
+    return response.data || response
+  },
+
+  async getSettingByKey(key) {
+    const settings = await this.getSettingsList()
+    return settings.find((setting) => setting.key === key) || null
+  },
+
   async updatePreferences(preferences) {
-    const settings = await this.getSettings()
-    const preferencesData = settings.data?.list || settings.data || []
+    const preferencesData = await this.getSettingsList()
 
     const promptConfigSetting = preferencesData.find(
       (s) => s.key === 'prompt_config'
@@ -79,8 +140,7 @@ export const settingsApi = {
   },
 
   async getPreferences() {
-    const settings = await this.getSettings()
-    const settingsData = settings.data?.list || settings.data || []
+    const settingsData = await this.getSettingsList()
 
     const promptConfigSetting = settingsData.find(
       (s) => s.key === 'prompt_config'
@@ -90,30 +150,5 @@ export const settingsApi = {
       language: promptConfigSetting?.value?.language || null,
       scene: promptConfigSetting?.value?.scene || null
     }
-  },
-
-  async getEmailAliases() {
-    const response = await apiClient.get('/v1/settings/email-aliases')
-    return response.data
-  },
-
-  async createEmailAlias(alias) {
-    const response = await apiClient.post('/v1/settings/email-aliases', {
-      alias
-    })
-    return response.data
-  },
-
-  async deleteEmailAlias(id) {
-    const response = await apiClient.delete(`/v1/settings/email-aliases/${id}`)
-    return response.data
-  },
-
-  async validateAlias(alias) {
-    const response = await apiClient.post(
-      '/v1/settings/email-aliases/validate',
-      { alias }
-    )
-    return response.data
   }
 }

@@ -18,7 +18,12 @@ Internal Views (not exposed in public API):
 """
 
 from .base import BaseAPIView
-from .settings import SettingsAPIView, SettingsDetailAPIView
+from .settings import (
+    SettingsAPIView,
+    SettingsDetailAPIView,
+    SettingsImapValidateAPIView,
+    SettingsIssueTestAPIView,
+)
 from .email_message import (
     EmailMessageAPIView,
     EmailMessageDetailAPIView,
@@ -47,6 +52,8 @@ __all__ = [
     'BaseAPIView',
     'SettingsAPIView',
     'SettingsDetailAPIView',
+    'SettingsImapValidateAPIView',
+    'SettingsIssueTestAPIView',
     'EmailMessageAPIView',
     'EmailMessageDetailAPIView',
     'EmailMessageMetadataAPIView',

@@ -426,6 +426,21 @@ class UserDetailsSerializer(serializers.ModelSerializer):
         read_only=True,
         help_text=_("User profile information")
     )
+    language = serializers.CharField(
+        source='profile.language',
+        required=False,
+        allow_blank=False,
+        help_text=_(
+            "Specifies the language used by AI when generating "
+            "summaries, titles, and metadata."
+        )
+    )
+    timezone = serializers.CharField(
+        source='profile.timezone',
+        required=False,
+        allow_blank=False,
+        help_text=_("User's timezone for displaying dates and times")
+    )
 
     auth_info = serializers.SerializerMethodField(
         read_only=True,
@@ -444,6 +459,8 @@ class UserDetailsSerializer(serializers.ModelSerializer):
             'last_name',
             'display_name',
             'virtual_email',
+            'language',
+            'timezone',
             'profile',
             'auth_info',
             'is_staff',
@@ -460,6 +477,9 @@ class UserDetailsSerializer(serializers.ModelSerializer):
             'is_staff',
             'is_superuser',
         ]
+
+    def validate_language(self, value):
+        return normalize_language_code(value)
 
     def get_display_name(self, obj):
         """
@@ -572,6 +592,32 @@ class UserDetailsSerializer(serializers.ModelSerializer):
             )
 
         return auth_info
+
+    def update(self, instance, validated_data):
+        """
+        Update the authenticated user and their profile preferences.
+        """
+        profile_data = validated_data.pop('profile', {})
+        instance = super().update(instance, validated_data)
+
+        if profile_data:
+            profile, _ = Profile.objects.get_or_create(user=instance)
+            fields_to_update = []
+
+            language = profile_data.get('language')
+            if language is not None:
+                profile.language = normalize_language_code(language)
+                fields_to_update.append('language')
+
+            timezone = profile_data.get('timezone')
+            if timezone is not None:
+                profile.timezone = timezone.strip() or profile.timezone
+                fields_to_update.append('timezone')
+
+            if fields_to_update:
+                profile.save(update_fields=fields_to_update)
+
+        return instance
 
 
 class CustomPasswordResetSerializer(serializers.Serializer):
