@@ -289,6 +289,66 @@
                       count: result.attachments?.length || 0
                     })
                   }}</span>
+                  <template v-if="result.issue_external_id">
+                    <span class="hidden sm:inline">•</span>
+                    <a
+                      v-if="result.issue_url"
+                      :href="result.issue_url"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      @click.stop
+                      class="inline-flex max-w-40 items-center gap-1 truncate text-gray-400 transition-colors hover:text-primary-600 hover:underline"
+                      :title="t('chats.issue.openInNewWindow')"
+                    >
+                      <svg
+                        class="h-3 w-3 flex-shrink-0"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                        aria-hidden="true"
+                      >
+                        <path
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          stroke-width="2"
+                          d="M14 3h7v7m0-7L10 14"
+                        />
+                        <path
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          stroke-width="2"
+                          d="M10 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-4"
+                        />
+                      </svg>
+                      <span class="truncate">
+                        {{ t('chats.issue.reference') }}:
+                        {{ result.issue_external_id }}
+                      </span>
+                    </a>
+                    <span
+                      v-else
+                      class="inline-flex max-w-40 items-center gap-1 truncate text-gray-400"
+                    >
+                      <svg
+                        class="h-3 w-3 flex-shrink-0"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                        aria-hidden="true"
+                      >
+                        <path
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          stroke-width="2"
+                          d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"
+                        />
+                      </svg>
+                      <span class="truncate">
+                        {{ t('chats.issue.reference') }}:
+                        {{ result.issue_external_id }}
+                      </span>
+                    </span>
+                  </template>
                 </div>
                 <!-- Tags Display -->
                 <div
@@ -319,7 +379,29 @@
                 class="flex items-center justify-between sm:justify-end sm:flex-col sm:items-end space-x-2 sm:space-x-0 sm:space-y-2 flex-shrink-0"
               >
                 <div class="flex items-center gap-2">
-                  <StatusBadge :status="result.status" />
+                  <span
+                    v-if="result.has_merged_children"
+                    class="inline-flex items-center gap-1 rounded-full border border-yellow-200 bg-yellow-50 px-2 py-0.5 text-xs font-medium text-yellow-800"
+                  >
+                    <svg
+                      class="h-3.5 w-3.5 flex-shrink-0"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        d="M7 7h3a2 2 0 012 2v2m5-4h-3a2 2 0 00-2 2v2M12 11v6"
+                      />
+                      <circle cx="7" cy="7" r="1.5" fill="currentColor" />
+                      <circle cx="17" cy="7" r="1.5" fill="currentColor" />
+                      <circle cx="12" cy="17" r="1.5" fill="currentColor" />
+                    </svg>
+                    {{ t('common.status.merged') }}
+                  </span>
+                  <StatusBadge :status="getThreadlineDisplayStatus(result)" />
                   <span
                     v-if="result.share_status?.is_active"
                     class="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium"
@@ -392,6 +474,7 @@ import BaseCard from '@/components/ui/BaseCard.vue'
 import BaseButton from '@/components/ui/BaseButton.vue'
 import VirtualEmailBanner from '@/components/ui/VirtualEmailBanner.vue'
 import StatusBadge from '@/components/ui/StatusBadge.vue'
+import { getThreadlineDisplayStatus } from '@/utils/threadlineStatus'
 
 const { t } = useI18n()
 const router = useRouter()
@@ -479,7 +562,7 @@ const loadData = async (isLoadMore = false) => {
           isThisWeek(r.received_at || r.created_at)
         ).length,
         pending: results.value.filter((r) => r.status === 'pending').length,
-        completed: results.value.filter((r) => r.status === 'completed').length
+        completed: results.value.filter((r) => r.status === 'success').length
       }
     }
   } catch (error) {
@@ -541,12 +624,12 @@ const getPreviewText = (result) => {
     // Remove headers (# ## ###)
     content = content.replace(/^#{1,6}\s+/gm, '')
     // Remove bold/italic
-    content = content.replace(/\*\*|\*\*/g, '')
-    content = content.replace(/\*|\*/g, '')
+    content = content.replace(/\*\*/g, '')
+    content = content.replace(/\*/g, '')
     // Remove links [text](url)
-    content = content.replace(/\[([^\]]+)\]\([^\)]+\)/g, '$1')
+    content = content.replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
     // Remove images ![alt](url)
-    content = content.replace(/!\[([^\]]*)\]\([^\)]+\)/g, '')
+    content = content.replace(/!\[([^\]]*)\]\([^)]+\)/g, '')
     // Remove code blocks
     content = content.replace(/```[\s\S]*?```/g, '')
     // Remove inline code
@@ -554,7 +637,7 @@ const getPreviewText = (result) => {
     // Remove horizontal rules
     content = content.replace(/^---+$/gm, '')
     // Remove list markers
-    content = content.replace(/^[\*\-\+]\s+/gm, '')
+    content = content.replace(/^[*+-]\s+/gm, '')
     content = content.replace(/^\d+\.\s+/gm, '')
     // Trim whitespace
     content = content.trim()

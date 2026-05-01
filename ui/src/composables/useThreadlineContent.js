@@ -1,6 +1,5 @@
 import { ref, computed, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { usePreferencesStore } from '@/store/preferences'
 import { extractErrorMessage } from '@/utils/api'
 import { chatApi } from '@/api/chat'
 
@@ -13,12 +12,12 @@ import { chatApi } from '@/api/chat'
  */
 export function useThreadlineContent(threadline, route, getSummaryData) {
   const { t } = useI18n()
-  const preferencesStore = usePreferencesStore()
 
   // Copy states
   const copiedStates = ref({
     summary: false,
     llm: false,
+    original: false,
     details: false,
     keyProcess: false
   })
@@ -99,7 +98,6 @@ export function useThreadlineContent(threadline, route, getSummaryData) {
     titleError.value = ''
 
     const id = route.params.id
-    const originalTitle = threadline.value.summary_title
 
     try {
       const response = await chatApi.updateThreadline(id, {
@@ -213,8 +211,8 @@ export function useThreadlineContent(threadline, route, getSummaryData) {
         .replace(/\*([^*]+)\*/g, '$1')
         .replace(/__([^_]+)__/g, '$1')
         .replace(/_([^_]+)_/g, '$1')
-        .replace(/\[([^\]]+)\]\([^\)]+\)/g, '$1')
-        .replace(/!\[([^\]]*)\]\([^\)]+\)/g, '')
+        .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+        .replace(/!\[([^\]]*)\]\([^)]+\)/g, '')
         .replace(/\n{3,}/g, '\n\n')
         .trim()
 
@@ -225,6 +223,20 @@ export function useThreadlineContent(threadline, route, getSummaryData) {
       }, 2000)
     } catch (error) {
       console.error('Failed to copy content:', error)
+    }
+  }
+
+  const copyRawContent = async (content, section) => {
+    if (!content) return
+
+    try {
+      await navigator.clipboard.writeText(content)
+      copiedStates.value[section] = true
+      setTimeout(() => {
+        copiedStates.value[section] = false
+      }, 2000)
+    } catch (error) {
+      console.error('Failed to copy raw content:', error)
     }
   }
 
@@ -300,6 +312,7 @@ export function useThreadlineContent(threadline, route, getSummaryData) {
     cancelEditingKeyProcess,
     saveKeyProcess,
     copyContent,
+    copyRawContent,
     openDetailsEditor,
     openKeyProcessEditor,
     copyKeyProcess

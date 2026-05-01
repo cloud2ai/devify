@@ -15,22 +15,33 @@ from django.utils import timezone
 from django.conf import settings
 from django.db.models import Prefetch
 
-from threadline.models import EmailTask, Settings
+from threadline.models import EmailMessage, Settings
 from threadline.utils.email import (
     EmailProcessor,
     EmailSaveService,
 )
-from threadline.utils.task_cleanup import cleanup_stale_tasks
-from threadline.utils.task_cleanup import cleanup_old_tasks as cleanup_func
 from threadline.utils.task_lock import (
     acquire_task_lock,
     prevent_duplicate_task,
     release_task_lock,
 )
 from threadline.utils.task_tracer import TaskTracer
-from threadline.tasks.email_workflow import process_email_workflow
+from threadline.tasks.email_merge import process_email_merge
 
 logger = logging.getLogger(__name__)
+
+
+def _queue_merge_for_saved_email(email_msg: EmailMessage) -> None:
+    """
+    Queue merge coordination only for real EmailMessage instances.
+    """
+    if not isinstance(email_msg, EmailMessage):
+        logger.debug(
+            "Skipping merge queue for non-model email record: %r", email_msg
+        )
+        return
+
+    process_email_merge.delay(str(email_msg.id))
 
 
 @shared_task
@@ -44,7 +55,7 @@ def imap_email_fetch():
     Responsibilities:
     1. Traverse all active users' IMAP configurations
     2. Process emails for each user independently
-    3. Update EmailTask statistics
+    3. Update task execution records in agentcore
     4. Use unified email save service
     5. Independent error handling and monitoring
     """
@@ -147,16 +158,15 @@ def imap_email_fetch():
                 "error_count": error_count,
             },
         )
-        tracer.complete_task(tracer.task.details)
+        tracer.complete_task(
+            {
+                "processed_users": processed_count,
+                "emails_processed": emails_processed,
+                "error_count": error_count,
+                "status": "completed",
+            }
+        )
         logger.info(f"{context} {message}")
-
-        if email_ids:
-            for email_id in email_ids:
-                process_email_workflow.delay(email_id)
-
-            logger.info(
-                f"{context} Triggered processing for {len(email_ids)} emails: {email_ids}"
-            )
 
         return {
             "processed_users": processed_count,
@@ -168,10 +178,15 @@ def imap_email_fetch():
 
     except Exception as exc:
         logger.error(f"{context} IMAP email fetch failed: {exc}")
-        if tracer.task:
-            tracer.fail_task(
-                tracer.task.details if tracer.task.details else [], str(exc)
-            )
+        tracer.fail_task(
+            {
+                "processed_users": processed_count,
+                "emails_processed": emails_processed,
+                "error_count": error_count,
+                "status": "failed",
+            },
+            str(exc),
+        )
         raise
 
 
@@ -239,6 +254,7 @@ def haraka_email_fetch():
 
                 processed_count += 1
                 email_ids.append(email_msg.id)
+                _queue_merge_for_saved_email(email_msg)
 
                 tracer.append_task(
                     "EMAIL_SUCCESS",
@@ -266,16 +282,14 @@ def haraka_email_fetch():
             message,
             {"emails_processed": processed_count, "error_count": error_count},
         )
-        tracer.complete_task(tracer.task.details)
+        tracer.complete_task(
+            {
+                "emails_processed": processed_count,
+                "error_count": error_count,
+                "status": "completed",
+            }
+        )
         logger.info(f"{context} {message}")
-
-        if email_ids:
-            for email_id in email_ids:
-                process_email_workflow.delay(email_id)
-
-            logger.info(
-                f"{context} Triggered processing for {len(email_ids)} emails: {email_ids}"
-            )
 
         return {
             "emails_processed": processed_count,
@@ -286,10 +300,14 @@ def haraka_email_fetch():
 
     except Exception as exc:
         logger.error(f"{context} Haraka email fetch failed: {exc}")
-        if tracer.task:
-            tracer.fail_task(
-                tracer.task.details if tracer.task.details else [], str(exc)
-            )
+        tracer.fail_task(
+            {
+                "emails_processed": processed_count,
+                "error_count": error_count,
+                "status": "failed",
+            },
+            str(exc),
+        )
         raise
 
 
@@ -352,6 +370,7 @@ def fetch_user_imap_emails(
 
                 processed_count += 1
                 email_ids.append(email_msg.id)
+                _queue_merge_for_saved_email(email_msg)
             except Exception as exc:
                 error_count += 1
                 logger.error(
@@ -372,19 +391,4 @@ def fetch_user_imap_emails(
 
     except Exception as exc:
         logger.error(f"{context} IMAP fetch failed for {user_display}: {exc}")
-        raise
-
-
-@shared_task
-def cleanup_old_tasks():
-    """
-    Periodic task cleanup
-    """
-    try:
-        result = cleanup_func(days_old=1)
-        logger.info(f"[TASK_CLEANUP] Task cleanup completed: {result}")
-        return result
-
-    except Exception as exc:
-        logger.error(f"[TASK_CLEANUP] Task cleanup failed: {exc}")
         raise

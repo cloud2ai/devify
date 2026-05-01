@@ -39,7 +39,7 @@ def _format_node_errors(node_errors: Dict[str, Any]) -> str:
     error_details = []
     for node_name, errors in node_errors.items():
         for err in errors:
-            error_msg = err.get('error_message', 'Unknown error')
+            error_msg = err.get("error_message", "Unknown error")
             error_details.append(f"{node_name}: {error_msg}")
 
     return "; ".join(error_details) if error_details else "Unknown errors"
@@ -87,16 +87,16 @@ class WorkflowFinalizeNode(BaseLangGraphNode):
         Returns:
             EmailState: Validated state
         """
-        email_id = state.get('id')
+        email_id = state.get("id")
         if not email_id:
-            raise ValueError('email_id is required for finalization')
+            raise ValueError("email_id is required for finalization")
 
         try:
             self.email = EmailMessage.objects.get(id=email_id)
         except EmailMessage.DoesNotExist:
-            raise ValueError(f'EmailMessage {email_id} not found')
+            raise ValueError(f"EmailMessage {email_id} not found")
 
-        user_id = state.get('user_id')
+        user_id = state.get("user_id")
         logger.info(
             f"[{self.node_name}] Starting finalization for "
             f"email {email_id}, user {user_id}"
@@ -113,11 +113,11 @@ class WorkflowFinalizeNode(BaseLangGraphNode):
         3. Set SUCCESS or FAILED status based on errors
         """
         has_errors = has_node_errors(state)
-        force = state.get('force', False)
+        force = state.get("force", False)
 
         if has_errors:
             error_nodes = get_all_node_names_with_errors(state)
-            node_errors = state.get('node_errors', {})
+            node_errors = state.get("node_errors", {})
             error_summary = _format_node_errors(node_errors)
 
             logger.error(
@@ -126,31 +126,30 @@ class WorkflowFinalizeNode(BaseLangGraphNode):
 
             # Sync partial data even when workflow fails
             # Preserves successfully generated content while marking as failed
-            logger.info(
-                "Syncing partial data despite workflow errors"
-            )
-            self._sync_data_to_database(state)
+            logger.info("Syncing partial data despite workflow errors")
+            self._sync_data_to_database(state, email=self.email)
+            self._finalize_issue(state, email=self.email)
 
             # Always set status to FAILED, regardless of force mode
             # Force mode only controls whether to re-process OCR/LLM,
             # not status updates
             self.email.set_status(
-                EmailStatus.FAILED.value,
-                error_message=error_summary
+                EmailStatus.FAILED.value, error_message=error_summary
             )
             logger.info(
                 f"EmailMessage {self.email.id} status set to FAILED, "
                 f"force={force}"
             )
         else:
-            email_id = state.get('id')
-            user_id = state.get('user_id')
+            email_id = state.get("id")
+            user_id = state.get("user_id")
             logger.info(
                 f"[{self.node_name}] Workflow completed successfully for "
                 f"email {email_id}, user {user_id}"
             )
 
-            self._sync_data_to_database(state)
+            self._sync_data_to_database(state, email=self.email)
+            self._finalize_issue(state, email=self.email)
 
             # Always set status to SUCCESS, regardless of force mode
             # Force mode only controls whether to re-process OCR/LLM, not
@@ -161,15 +160,17 @@ class WorkflowFinalizeNode(BaseLangGraphNode):
                 f"email {self.email.id}, user {user_id}, force={force}"
             )
 
-        email_id = state.get('id')
-        user_id = state.get('user_id')
+        email_id = state.get("id")
+        user_id = state.get("user_id")
         logger.info(
             f"[{self.node_name}] Workflow finalized for "
             f"email {email_id}, user {user_id}"
         )
         return state
 
-    def _sync_data_to_database(self, state: EmailState) -> None:
+    def _sync_data_to_database(
+        self, state: EmailState, email: EmailMessage | None = None
+    ) -> None:
         """
         Sync all workflow results to database atomically.
 
@@ -179,10 +180,12 @@ class WorkflowFinalizeNode(BaseLangGraphNode):
         Args:
             state: Current email state
         """
+        email = email or self.email
+        if not email:
+            return
+
         with transaction.atomic():
-            email = EmailMessage.objects.select_for_update().get(
-                id=self.email.id
-            )
+            email = EmailMessage.objects.select_for_update().get(id=email.id)
 
             # Sync email fields
             self._sync_email_fields(email, state)
@@ -196,17 +199,36 @@ class WorkflowFinalizeNode(BaseLangGraphNode):
             # Record usage metrics
             self._record_usage_metrics(email, state)
 
-            # Create issue if exists
-            issue_result = state.get('issue_result_data')
-            if issue_result:
-                issue = self._create_issue_record(email, issue_result)
-                logger.info(
-                    f"Created Issue: "
-                    f"ID={issue.id}, "
-                    f"engine={issue.engine}, "
-                    f"external_id={issue.external_id}, "
-                    f"url={issue.issue_url}"
-                )
+    def _finalize_issue(
+        self,
+        state: EmailState,
+        email: EmailMessage | None = None,
+    ) -> EmailMessage | None:
+        """
+        Create an issue on the current email record if the workflow produced
+        one.
+        """
+        email = email or self.email
+        if not email:
+            return None
+
+        issue_result = state.get("issue_result_data")
+        if not issue_result:
+            return email
+
+        try:
+            issue = self._create_issue_record(email, issue_result)
+            logger.info(
+                f"Created Issue: "
+                f"ID={issue.id}, "
+                f"engine={issue.engine}, "
+                f"external_id={issue.external_id}, "
+                f"url={issue.issue_url}"
+            )
+        except Exception as exc:
+            logger.error(f"Failed to create issue for email {email.id}: {exc}")
+
+        return email
 
     def _sync_email_fields(
         self, email: EmailMessage, state: EmailState
@@ -219,11 +241,11 @@ class WorkflowFinalizeNode(BaseLangGraphNode):
             state: Current email state
         """
         field_updates = {
-            'summary_title': state.get('summary_title', ''),
-            'summary_content': state.get('summary_content', ''),
-            'summary_data': state.get('summary_data'),
-            'llm_content': state.get('llm_content', ''),
-            'metadata': state.get('metadata')
+            "summary_title": state.get("summary_title", ""),
+            "summary_content": state.get("summary_content", ""),
+            "summary_data": state.get("summary_data"),
+            "llm_content": state.get("llm_content", ""),
+            "metadata": state.get("metadata"),
         }
 
         update_fields = []
@@ -258,7 +280,7 @@ class WorkflowFinalizeNode(BaseLangGraphNode):
         Args:
             state: Current email state
         """
-        attachments = state.get('attachments', [])
+        attachments = state.get("attachments", [])
         if not attachments:
             return
 
@@ -266,15 +288,15 @@ class WorkflowFinalizeNode(BaseLangGraphNode):
         att_sync_summary = []
 
         for att_data in attachments:
-            att_id = att_data.get('id')
+            att_id = att_data.get("id")
             if not att_id:
                 continue
 
             att_updates = {}
-            if att_data.get('ocr_content'):
-                att_updates['ocr_content'] = att_data.get('ocr_content')
-            if att_data.get('llm_content'):
-                att_updates['llm_content'] = att_data.get('llm_content')
+            if att_data.get("ocr_content"):
+                att_updates["ocr_content"] = att_data.get("ocr_content")
+            if att_data.get("llm_content"):
+                att_updates["llm_content"] = att_data.get("llm_content")
 
             if att_updates:
                 EmailAttachment.objects.filter(id=att_id).update(**att_updates)
@@ -291,9 +313,7 @@ class WorkflowFinalizeNode(BaseLangGraphNode):
                 f"{', '.join(att_sync_summary)}"
             )
 
-    def _sync_todos(
-        self, email: EmailMessage, state: EmailState
-    ) -> None:
+    def _sync_todos(self, email: EmailMessage, state: EmailState) -> None:
         """
         Create/update EmailTodo records from state.
 
@@ -302,7 +322,7 @@ class WorkflowFinalizeNode(BaseLangGraphNode):
             state: Current email state
         """
 
-        todos = state.get('todos')
+        todos = state.get("todos")
         if not todos:
             logger.debug(f"No TODOs to sync for email {email.id}")
             return
@@ -316,13 +336,13 @@ class WorkflowFinalizeNode(BaseLangGraphNode):
                 logger.warning(f"Invalid TODO data (not a dict): {todo_data}")
                 continue
 
-            content = todo_data.get('content', '').strip()
+            content = todo_data.get("content", "").strip()
             if not content:
                 logger.warning("Skipping TODO with empty content")
                 continue
 
             # Parse deadline_processed
-            deadline_processed_str = todo_data.get('deadline_processed')
+            deadline_processed_str = todo_data.get("deadline_processed")
             deadline = None
             if deadline_processed_str:
                 try:
@@ -339,14 +359,14 @@ class WorkflowFinalizeNode(BaseLangGraphNode):
                 email_message=email,
                 content=content,
                 defaults={
-                    'user': email.user,
-                    'is_completed': False,
-                    'priority': todo_data.get('priority'),
-                    'owner': todo_data.get('owner'),
-                    'deadline': deadline,
-                    'location': todo_data.get('location'),
-                    'metadata': todo_data.get('metadata', {})
-                }
+                    "user": email.user,
+                    "is_completed": False,
+                    "priority": todo_data.get("priority"),
+                    "owner": todo_data.get("owner"),
+                    "deadline": deadline,
+                    "location": todo_data.get("location"),
+                    "metadata": todo_data.get("metadata", {}),
+                },
             )
 
             if created:
@@ -358,24 +378,24 @@ class WorkflowFinalizeNode(BaseLangGraphNode):
             else:
                 # Update existing TODO with new metadata
                 update_fields = []
-                priority = todo_data.get('priority')
+                priority = todo_data.get("priority")
                 if priority and todo.priority != priority:
                     todo.priority = priority
-                    update_fields.append('priority')
-                owner = todo_data.get('owner')
+                    update_fields.append("priority")
+                owner = todo_data.get("owner")
                 if owner and todo.owner != owner:
                     todo.owner = owner
-                    update_fields.append('owner')
+                    update_fields.append("owner")
                 if deadline and todo.deadline != deadline:
                     todo.deadline = deadline
-                    update_fields.append('deadline')
-                location = todo_data.get('location')
+                    update_fields.append("deadline")
+                location = todo_data.get("location")
                 if location and todo.location != location:
                     todo.location = location
-                    update_fields.append('location')
-                if todo_data.get('metadata'):
-                    todo.metadata = todo_data.get('metadata', {})
-                    update_fields.append('metadata')
+                    update_fields.append("location")
+                if todo_data.get("metadata"):
+                    todo.metadata = todo_data.get("metadata", {})
+                    update_fields.append("metadata")
 
                 if update_fields:
                     todo.save(update_fields=update_fields)
@@ -394,9 +414,7 @@ class WorkflowFinalizeNode(BaseLangGraphNode):
             )
 
     def _create_issue_record(
-        self,
-        email: EmailMessage,
-        issue_result_data: Dict[str, Any]
+        self, email: EmailMessage, issue_result_data: Dict[str, Any]
     ) -> Issue:
         """
         Create Issue database record from issue engine result data.
@@ -421,9 +439,9 @@ class WorkflowFinalizeNode(BaseLangGraphNode):
         Raises:
             Exception: If Issue creation fails
         """
-        engine = issue_result_data.get('engine', 'unknown')
-        external_id = issue_result_data.get('external_id')
-        title = issue_result_data.get('title', 'Email Issue')
+        engine = issue_result_data.get("engine", "unknown")
+        external_id = issue_result_data.get("external_id")
+        title = issue_result_data.get("title", "Email Issue")
 
         logger.debug(
             f"Creating Issue record: "
@@ -434,8 +452,7 @@ class WorkflowFinalizeNode(BaseLangGraphNode):
 
         if external_id:
             existing_issue = Issue.objects.filter(
-                email_message=email,
-                external_id=external_id
+                email_message=email, external_id=external_id
             ).first()
 
             if existing_issue:
@@ -450,18 +467,16 @@ class WorkflowFinalizeNode(BaseLangGraphNode):
             user=email.user,
             email_message=email,
             title=title,
-            description=issue_result_data.get(
-                'description', 'No content'
-            ),
-            priority=issue_result_data.get('priority', 'Medium'),
+            description=issue_result_data.get("description", "No content"),
+            priority=issue_result_data.get("priority", "Medium"),
             engine=engine,
             external_id=external_id,
-            issue_url=issue_result_data.get('issue_url'),
+            issue_url=issue_result_data.get("issue_url"),
             metadata={
-                'email_id': str(email.id),
-                'created_from': 'langgraph_workflow',
-                **issue_result_data.get('metadata', {})
-            }
+                "email_id": str(email.id),
+                "created_from": "langgraph_workflow",
+                **issue_result_data.get("metadata", {}),
+            },
         )
         return issue
 
@@ -479,14 +494,14 @@ class WorkflowFinalizeNode(BaseLangGraphNode):
             logger.info("Cost tracking is disabled, skipping usage metrics")
             return
 
-        if not state.get('credits_consumed'):
+        if not state.get("credits_consumed"):
             logger.info(
                 "No credits consumed, skipping usage metrics "
                 "(billing disabled or insufficient credits)"
             )
             return
 
-        credits_transaction_id = state.get('credits_transaction_id')
+        credits_transaction_id = state.get("credits_transaction_id")
         if not credits_transaction_id:
             logger.warning(
                 "Credits consumed but no transaction ID found, "
@@ -494,8 +509,8 @@ class WorkflowFinalizeNode(BaseLangGraphNode):
             )
             return
 
-        llm_calls = state.get('llm_calls', [])
-        ocr_calls = state.get('ocr_calls', [])
+        llm_calls = state.get("llm_calls", [])
+        ocr_calls = state.get("ocr_calls", [])
 
         if not llm_calls and not ocr_calls:
             logger.info(
@@ -505,33 +520,31 @@ class WorkflowFinalizeNode(BaseLangGraphNode):
             return
 
         try:
-            llm_total_input = sum(
-                c.get('input_tokens', 0) for c in llm_calls
-            )
+            llm_total_input = sum(c.get("input_tokens", 0) for c in llm_calls)
             llm_total_output = sum(
-                c.get('output_tokens', 0) for c in llm_calls
+                c.get("output_tokens", 0) for c in llm_calls
             )
-            llm_success = sum(1 for c in llm_calls if c.get('success'))
+            llm_success = sum(1 for c in llm_calls if c.get("success"))
 
-            ocr_success = sum(1 for c in ocr_calls if c.get('success'))
+            ocr_success = sum(1 for c in ocr_calls if c.get("success"))
             ocr_total = sum(
-                c.get('pages', 1) for c in ocr_calls if c.get('success')
+                c.get("pages", 1) for c in ocr_calls if c.get("success")
             )
 
             usage, created = EmailWorkflowUsage.objects.get_or_create(
                 credits_transaction_id=int(credits_transaction_id),
                 defaults={
-                    'llm_call_count': len(llm_calls),
-                    'llm_success_count': llm_success,
-                    'llm_total_input_tokens': llm_total_input,
-                    'llm_total_output_tokens': llm_total_output,
-                    'llm_total_tokens': llm_total_input + llm_total_output,
-                    'ocr_call_count': len(ocr_calls),
-                    'ocr_success_count': ocr_success,
-                    'ocr_total_images': ocr_total,
-                    'llm_calls_detail': llm_calls,
-                    'ocr_calls_detail': ocr_calls
-                }
+                    "llm_call_count": len(llm_calls),
+                    "llm_success_count": llm_success,
+                    "llm_total_input_tokens": llm_total_input,
+                    "llm_total_output_tokens": llm_total_output,
+                    "llm_total_tokens": llm_total_input + llm_total_output,
+                    "ocr_call_count": len(ocr_calls),
+                    "ocr_success_count": ocr_success,
+                    "ocr_total_images": ocr_total,
+                    "llm_calls_detail": llm_calls,
+                    "ocr_calls_detail": ocr_calls,
+                },
             )
 
             if created:
@@ -551,9 +564,7 @@ class WorkflowFinalizeNode(BaseLangGraphNode):
         except Exception as e:
             logger.error(f"Failed to record usage metrics: {e}")
 
-    def _handle_error(
-        self, error: Exception, state: EmailState
-    ) -> EmailState:
+    def _handle_error(self, error: Exception, state: EmailState) -> EmailState:
         """
         Handle errors that occur during finalization processing.
 
@@ -572,20 +583,19 @@ class WorkflowFinalizeNode(BaseLangGraphNode):
         # Try to update status to FAILED if email object is available
         # This is best-effort: if email is not available or update fails,
         # we log the error but don't fail the entire error handling
-        force = state.get('force', False)
+        force = state.get("force", False)
 
         # Only attempt status update if we have email object
         # If before_processing failed (self.email is None), we can't reliably
         # update status, so skip it
         if self.email:
             try:
-                node_errors = state.get('node_errors', {})
+                node_errors = state.get("node_errors", {})
                 error_summary = _format_node_errors(node_errors)
                 error_message = f"Finalization failed - {error_summary}"
 
                 self.email.set_status(
-                    EmailStatus.FAILED.value,
-                    error_message=error_message
+                    EmailStatus.FAILED.value, error_message=error_message
                 )
                 logger.info(
                     f"EmailMessage {self.email.id} status set to FAILED "

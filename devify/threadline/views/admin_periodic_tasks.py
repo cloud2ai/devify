@@ -1,4 +1,4 @@
-"""Admin API for managing periodic task schedules."""
+"""Admin API for managing threadline periodic task schedules."""
 
 from __future__ import annotations
 
@@ -49,22 +49,22 @@ def _format_crontab(schedule: CrontabSchedule | None) -> str | None:
             schedule.day_of_month,
             schedule.month_of_year,
             schedule.day_of_week,
-        ]
+        ],
     )
 
 
-def _get_or_create_crontab(expr: str) -> CrontabSchedule:
+def _get_existing_crontab(expr: str) -> CrontabSchedule | None:
     parts = str(expr).strip().split()
     timezone = getattr(settings, "TIME_ZONE", "UTC")
-    obj, _ = CrontabSchedule.objects.get_or_create(
-        minute=parts[0],
-        hour=parts[1],
-        day_of_month=parts[2],
-        month_of_year=parts[3],
-        day_of_week=parts[4],
-        timezone=timezone,
-    )
-    return obj
+    spec = {
+        "minute": parts[0],
+        "hour": parts[1],
+        "day_of_month": parts[2],
+        "month_of_year": parts[3],
+        "day_of_week": parts[4],
+        "timezone": timezone,
+    }
+    return CrontabSchedule.objects.filter(**spec).order_by("id").first()
 
 
 def _task_definitions() -> list[dict]:
@@ -82,18 +82,6 @@ def _task_definitions() -> list[dict]:
             "queue": None,
         },
         {
-            "name": "threadline-reset-stuck-emails",
-            "task": "threadline.tasks.scheduler.schedule_reset_stuck_emails",
-            "module": "threadline",
-            "label": "Stuck email reset",
-            "description": "Reset emails that stay stuck for too long.",
-            "default_enabled": True,
-            "default_crontab": "*/30 * * * *",
-            "args": (),
-            "kwargs": {"timeout_minutes": 30},
-            "queue": None,
-        },
-        {
             "name": "threadline-haraka-cleanup",
             "task": "threadline.tasks.scheduler.schedule_haraka_cleanup",
             "module": "threadline",
@@ -101,18 +89,6 @@ def _task_definitions() -> list[dict]:
             "description": "Clean up Haraka mail files and old attachments.",
             "default_enabled": True,
             "default_crontab": "0 2 * * *",
-            "args": (),
-            "kwargs": {},
-            "queue": None,
-        },
-        {
-            "name": "threadline-email-task-cleanup",
-            "task": "threadline.tasks.scheduler.schedule_email_task_cleanup",
-            "module": "threadline",
-            "label": "Email task cleanup",
-            "description": "Remove old email task records.",
-            "default_enabled": True,
-            "default_crontab": "0 3 * * *",
             "args": (),
             "kwargs": {},
             "queue": None,
@@ -167,20 +143,39 @@ def _serialise_tasks() -> list[dict]:
     return [_resolve_current_definition(defn) for defn in _task_definitions()]
 
 
-def _upsert_task(definition: dict, enabled: bool, crontab_value: str) -> None:
-    schedule = _get_or_create_crontab(crontab_value)
-    PeriodicTask.objects.update_or_create(
-        name=definition["name"],
-        defaults={
-            "task": definition["task"],
-            "args": json.dumps(list(definition["args"])),
-            "kwargs": json.dumps(definition["kwargs"]),
-            "queue": definition["queue"],
-            "enabled": enabled,
-            "crontab": schedule,
-            "interval": None,
-        },
+def _update_task(definition: dict, enabled: bool, crontab_value: str) -> None:
+    schedule = _get_existing_crontab(crontab_value)
+    if schedule is None:
+        raise serializers.ValidationError(
+            {
+                "crontab": (
+                    f"Crontab schedule does not exist: {crontab_value}"
+                )
+            }
+        )
+
+    task = (
+        PeriodicTask.objects.select_for_update()
+        .filter(name=definition["name"])
+        .first()
     )
+    if task is None:
+        raise serializers.ValidationError(
+            {
+                "name": (
+                    f"Periodic task does not exist: {definition['name']}"
+                )
+            }
+        )
+
+    task.task = definition["task"]
+    task.args = json.dumps(list(definition["args"]))
+    task.kwargs = json.dumps(definition["kwargs"])
+    task.queue = definition["queue"]
+    task.enabled = enabled
+    task.crontab = schedule
+    task.interval = None
+    task.save()
 
 
 class PeriodicTaskSettingsItemSerializer(serializers.Serializer):
@@ -204,7 +199,7 @@ class PeriodicTaskSettingsUpdateItemSerializer(serializers.Serializer):
         expr = value.strip()
         if not _is_valid_crontab_expression(expr):
             raise serializers.ValidationError(
-                "Invalid 5-field cron expression."
+                "Invalid 5-field cron expression.",
             )
         return expr
 
@@ -218,7 +213,7 @@ class PeriodicTaskSettingsUpdateSerializer(serializers.Serializer):
 
 
 class AdminPeriodicTaskSettingsAPIView(APIView):
-    """List and update the project periodic task schedule settings."""
+    """List and update the threadline periodic task schedule settings."""
 
     permission_classes = [IsAdminUser]
 
@@ -238,7 +233,7 @@ class AdminPeriodicTaskSettingsAPIView(APIView):
     )
     def patch(self, request: Request) -> Response:
         serializer = PeriodicTaskSettingsUpdateSerializer(
-            data=request.data, partial=False
+            data=request.data, partial=False,
         )
         serializer.is_valid(raise_exception=True)
         definitions = {item["name"]: item for item in _task_definitions()}
@@ -256,7 +251,7 @@ class AdminPeriodicTaskSettingsAPIView(APIView):
         with transaction.atomic():
             for item in serializer.validated_data["tasks"]:
                 definition = definitions[item["name"]]
-                _upsert_task(
+                _update_task(
                     definition=definition,
                     enabled=bool(item["enabled"]),
                     crontab_value=item["crontab"],
@@ -264,5 +259,5 @@ class AdminPeriodicTaskSettingsAPIView(APIView):
 
         PeriodicTasks.update_changed()
         return Response(
-            {"tasks": _serialise_tasks()}, status=status.HTTP_200_OK
+            {"tasks": _serialise_tasks()}, status=status.HTTP_200_OK,
         )

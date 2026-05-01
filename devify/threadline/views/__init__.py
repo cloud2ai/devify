@@ -28,6 +28,7 @@ from .email_message import (
     EmailMessageAPIView,
     EmailMessageDetailAPIView,
     EmailMessageMetadataAPIView,
+    EmailMessageIssueClusterAPIView,
 )
 from .email_todo import (
     EmailTodoAPIView,
@@ -44,33 +45,36 @@ from .share_link import (
 
 # Internal views (not exposed in public API)
 from .email_task import EmailTaskAPIView, EmailTaskDetailAPIView
-from .email_attachment import EmailAttachmentAPIView, EmailAttachmentDetailAPIView
+from .email_attachment import (
+    EmailAttachmentAPIView,
+    EmailAttachmentDetailAPIView,
+)
 from .issue import IssueAPIView, IssueDetailAPIView
 
 __all__ = [
     # Public API views
-    'BaseAPIView',
-    'SettingsAPIView',
-    'SettingsDetailAPIView',
-    'SettingsImapValidateAPIView',
-    'SettingsIssueTestAPIView',
-    'EmailMessageAPIView',
-    'EmailMessageDetailAPIView',
-    'EmailMessageMetadataAPIView',
-    'EmailTodoAPIView',
-    'EmailTodoDetailAPIView',
-    'EmailTodoStatsAPIView',
-    'EmailTodoBatchAPIView',
-    'ThreadlineShareLinkAPIView',
-    'ThreadlineShareLinkDetailAPIView',
-    'PublicShareLinkAPIView',
-    'PublicShareLinkVerifyAPIView',
-
+    "BaseAPIView",
+    "SettingsAPIView",
+    "SettingsDetailAPIView",
+    "SettingsImapValidateAPIView",
+    "SettingsIssueTestAPIView",
+    "EmailMessageAPIView",
+    "EmailMessageDetailAPIView",
+    "EmailMessageMetadataAPIView",
+    "EmailMessageIssueClusterAPIView",
+    "EmailTodoAPIView",
+    "EmailTodoDetailAPIView",
+    "EmailTodoStatsAPIView",
+    "EmailTodoBatchAPIView",
+    "ThreadlineShareLinkAPIView",
+    "ThreadlineShareLinkDetailAPIView",
+    "PublicShareLinkAPIView",
+    "PublicShareLinkVerifyAPIView",
     # Internal views (not exposed in public API)
-    'EmailTaskAPIView',
-    'EmailTaskDetailAPIView',
-    'EmailAttachmentAPIView',
-    'EmailAttachmentDetailAPIView',
-    'IssueAPIView',
-    'IssueDetailAPIView',
+    "EmailTaskAPIView",
+    "EmailTaskDetailAPIView",
+    "EmailAttachmentAPIView",
+    "EmailAttachmentDetailAPIView",
+    "IssueAPIView",
+    "IssueDetailAPIView",
 ]

@@ -19,10 +19,122 @@ from ..serializers import (
     EmailMessageSerializer,
     EmailMessageListSerializer,
     EmailMessageCreateSerializer,
-    EmailMessageUpdateSerializer
+    EmailMessageUpdateSerializer,
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _serialize_issue_cluster(message: EmailMessage) -> dict:
+    """
+    Serialize the merge cluster for on-demand issue inspection.
+    """
+    visited: set[int] = set()
+    nodes: list[dict] = []
+
+    def get_direct_issue(obj: EmailMessage):
+        cache = getattr(obj, "_prefetched_objects_cache", None)
+        if cache and "issues" in cache:
+            prefetched = cache["issues"]
+            if prefetched:
+                return prefetched[0]
+            return None
+
+        return obj.issues.order_by("-created_at", "-id").first()
+
+    def walk(obj: EmailMessage, depth: int = 0):
+        if not obj or obj.id in visited:
+            return
+        visited.add(obj.id)
+
+        issue = get_direct_issue(obj)
+        nodes.append(
+            {
+                "email_id": obj.id,
+                "email_uuid": str(obj.uuid),
+                "subject": obj.subject,
+                "merged_into_id": obj.merged_into_id,
+                "merged_into_uuid": (
+                    str(obj.merged_into.uuid)
+                    if obj.merged_into_id and obj.merged_into
+                    else None
+                ),
+                "depth": depth,
+                "has_issue": bool(issue),
+                "issue_id": issue.id if issue else None,
+                "issue_external_id": issue.external_id if issue else None,
+                "issue_url": issue.issue_url if issue else None,
+            }
+        )
+
+        if obj.merged_into_id and obj.merged_into:
+            walk(obj.merged_into, depth + 1)
+
+        for child in obj.merged_children.all():
+            walk(child, depth + 1)
+
+    walk(message)
+
+    return {
+        "root": {
+            "email_id": message.id,
+            "email_uuid": str(message.uuid),
+            "subject": message.subject,
+            "merged_into_id": message.merged_into_id,
+            "merged_into_uuid": (
+                str(message.merged_into.uuid)
+                if message.merged_into_id and message.merged_into
+                else None
+            ),
+        },
+        "nodes": nodes,
+        "issue_count": sum(1 for node in nodes if node["has_issue"]),
+        "node_count": len(nodes),
+    }
+
+
+def _enqueue_merge_workflow(
+    message: EmailMessage,
+    *,
+    force: bool = False,
+    language: str | None = None,
+    scene: str | None = None,
+) -> EmailMessage:
+    """
+    Mark an email as processing and enqueue the merge workflow.
+    """
+    from ..tasks.email_merge import process_email_merge
+
+    target_message = message
+    target_message.set_status(EmailStatus.PROCESSING.value)
+
+    try:
+        process_email_merge.delay(
+            str(target_message.id),
+            force=force,
+            language=language,
+            scene=scene,
+        )
+    except Exception as exc:
+        logger.error(
+            "Failed to trigger merge workflow for email %s: %s",
+            target_message.uuid,
+            exc,
+        )
+        try:
+            target_message.set_status(
+                EmailStatus.FAILED.value,
+                error_message=str(exc),
+            )
+        except Exception as status_error:
+            logger.error(
+                "Failed to mark email %s as FAILED after dispatch error: %s",
+                target_message.uuid,
+                status_error,
+            )
+        raise
+
+    return target_message
 
 
 class EmailMessageAPIView(BaseAPIView):
@@ -34,39 +146,43 @@ class EmailMessageAPIView(BaseAPIView):
         """
         Get EmailMessage queryset with related objects
         """
-        return (EmailMessage.objects
-                .select_related('user')
-                .prefetch_related('share_links')
-                .all())
+        return (
+            EmailMessage.objects.select_related("user", "merged_into")
+            .prefetch_related("merged_children")
+            .prefetch_related("issues")
+            .prefetch_related("share_links")
+            .filter(merged_into__isnull=True)
+            .all()
+        )
 
     @extend_schema(
-        operation_id='threadlines_list',
-        summary='List threadlines',
-        description='Get paginated list of user threadlines (email messages with attachments)',
+        operation_id="threadlines_list",
+        summary="List threadlines",
+        description="Get paginated list of user threadlines (email messages with attachments)",
         parameters=[
             OpenApiParameter(
-                name='search',
+                name="search",
                 type=OpenApiTypes.STR,
                 location=OpenApiParameter.QUERY,
-                description='Search in subject, sender, recipients fields'
+                description="Search in subject, sender, recipients fields",
             ),
             OpenApiParameter(
-                name='status',
+                name="status",
                 type=OpenApiTypes.STR,
                 location=OpenApiParameter.QUERY,
-                description='Filter by processing status'
+                description="Filter by processing status",
             ),
             OpenApiParameter(
-                name='ordering',
+                name="ordering",
                 type=OpenApiTypes.STR,
                 location=OpenApiParameter.QUERY,
-                description='Order by field (e.g., received_at, created_at)'
-            )
+                description="Order by field (e.g., received_at, created_at)",
+            ),
         ],
         responses={
             200: pagination_response(EmailMessageListSerializer),
-            401: error_response()
-        }
+            401: error_response(),
+        },
     )
     def get(self, request):
         """
@@ -78,15 +194,16 @@ class EmailMessageAPIView(BaseAPIView):
             queryset = self.filter_by_user(self.get_queryset())
 
             # Enhanced search functionality with multi-keyword AND logic
-            search = request.query_params.get('search', None)
+            search = request.query_params.get("search", None)
             if search:
                 # Parse multiple keywords from search query
                 # Support space or comma separated keywords
                 # This will split "lizengyuan project" into
                 # ["lizengyuan", "project"]
                 # But keep "lizengyuan" as a single keyword
-                keywords = [k.strip() for k in re.split(r'[,\s]+', search)
-                            if k.strip()]
+                keywords = [
+                    k.strip() for k in re.split(r"[,\s]+", search) if k.strip()
+                ]
 
                 logger.info(f"Search query parsed into keywords: {keywords}")
 
@@ -95,28 +212,30 @@ class EmailMessageAPIView(BaseAPIView):
                     for keyword in keywords:
                         logger.debug(f"Filtering by keyword: '{keyword}'")
                         queryset = queryset.filter(
-                            Q(subject__icontains=keyword) |
-                            Q(sender__icontains=keyword) |
-                            Q(recipients__icontains=keyword) |
-                            Q(summary_title__icontains=keyword) |
-                            Q(summary_content__icontains=keyword) |
-                            Q(llm_content__icontains=keyword) |
-                            Q(text_content__icontains=keyword)
+                            Q(subject__icontains=keyword)
+                            | Q(sender__icontains=keyword)
+                            | Q(recipients__icontains=keyword)
+                            | Q(summary_title__icontains=keyword)
+                            | Q(summary_content__icontains=keyword)
+                            | Q(llm_content__icontains=keyword)
+                            | Q(text_content__icontains=keyword)
                         )
 
             # Filter by status
-            message_status = request.query_params.get('status', None)
+            message_status = request.query_params.get("status", None)
             if message_status:
                 queryset = queryset.filter(status=message_status)
 
             # Ordering
-            ordering = request.query_params.get('ordering', '-received_at')
+            ordering = request.query_params.get("ordering", "-received_at")
             if ordering:
                 queryset = queryset.order_by(ordering)
 
             # Pagination
-            page_size = min(int(request.query_params.get('page_size', 10)), 100)
-            page = int(request.query_params.get('page', 1))
+            page_size = min(
+                int(request.query_params.get("page_size", 10)), 100
+            )
+            page = int(request.query_params.get("page", 1))
 
             start = (page - 1) * page_size
             end = start + page_size
@@ -125,49 +244,55 @@ class EmailMessageAPIView(BaseAPIView):
             items = queryset[start:end]
 
             serializer = EmailMessageListSerializer(
-                items, many=True, context={'request': request})
+                items, many=True, context={"request": request}
+            )
 
             response_data = {
-                'code': 200,
-                'message': 'Threadlines retrieved successfully',
-                'data': {
-                    'list': serializer.data,
-                    'pagination': {
-                        'total': total,
-                        'page': page,
-                        'pageSize': page_size,
-                        'next': (
+                "code": 200,
+                "message": "Threadlines retrieved successfully",
+                "data": {
+                    "list": serializer.data,
+                    "pagination": {
+                        "total": total,
+                        "page": page,
+                        "pageSize": page_size,
+                        "next": (
                             f"?page={page + 1}&page_size={page_size}"
-                            if end < total else None
+                            if end < total
+                            else None
                         ),
-                        'previous': (
+                        "previous": (
                             f"?page={page - 1}&page_size={page_size}"
-                            if page > 1 else None
-                        )
-                    }
-                }
+                            if page > 1
+                            else None
+                        ),
+                    },
+                },
             }
 
             return Response(response_data, status=status.HTTP_200_OK)
 
         except Exception as e:
             logger.error(f"Error listing email messages: {str(e)}")
-            return Response({
-                'code': 500,
-                'message': 'Internal server error',
-                'data': None
-            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response(
+                {
+                    "code": 500,
+                    "message": "Internal server error",
+                    "data": None,
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
     @extend_schema(
-        operation_id='threadlines_create',
-        summary='Create new threadline',
-        description='Create a new threadline (email message with attachments)',
+        operation_id="threadlines_create",
+        summary="Create new threadline",
+        description="Create a new threadline (email message with attachments)",
         request=EmailMessageCreateSerializer,
         responses={
             201: response(EmailMessageSerializer),
             400: error_response(),
-            401: error_response()
-        }
+            401: error_response(),
+        },
     )
     def post(self, request):
         """
@@ -177,28 +302,50 @@ class EmailMessageAPIView(BaseAPIView):
             # Set request for base class methods
             self.request = request
             serializer = EmailMessageCreateSerializer(
-                data=request.data,
-                context={'request': request}
+                data=request.data, context={"request": request}
             )
 
             if serializer.is_valid(raise_exception=True):
                 message = serializer.save()
-                response_serializer = EmailMessageSerializer(
-                    message, context={'request': request})
+                try:
+                    _enqueue_merge_workflow(message)
+                    logger.info(
+                        f"Triggered merge workflow for newly created threadline {message.id}"
+                    )
+                except Exception as workflow_error:
+                    logger.error(
+                        f"Failed to trigger workflow for threadline {message.id}: {workflow_error}"
+                    )
+                    return Response(
+                        {
+                            "code": 503,
+                            "message": str(workflow_error),
+                            "data": EmailMessageSerializer(
+                                message, context={"request": request}
+                            ).data,
+                        },
+                        status=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    )
 
-                return Response({
-                    'code': 201,
-                    'message': 'Threadline created successfully',
-                    'data': response_serializer.data
-                }, status=status.HTTP_201_CREATED)
+                response_serializer = EmailMessageSerializer(
+                    message, context={"request": request}
+                )
+
+                return Response(
+                    {
+                        "code": 201,
+                        "message": "Threadline created successfully",
+                        "data": response_serializer.data,
+                    },
+                    status=status.HTTP_201_CREATED,
+                )
 
         except Exception as e:
             logger.error(f"Error creating email message: {str(e)}")
-            return Response({
-                'code': 400,
-                'message': str(e),
-                'data': None
-            }, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"code": 400, "message": str(e), "data": None},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
 
 class EmailMessageDetailAPIView(BaseAPIView):
@@ -206,16 +353,19 @@ class EmailMessageDetailAPIView(BaseAPIView):
     APIView for individual EmailMessage operations
     """
 
-    lookup_field = 'uuid'
+    lookup_field = "uuid"
 
     def get_queryset(self):
         """
         Get EmailMessage queryset with related objects
         """
-        return (EmailMessage.objects
-                .select_related('user')
-                .prefetch_related('share_links')
-                .all())
+        return (
+            EmailMessage.objects.select_related("user", "merged_into")
+            .prefetch_related("merged_children")
+            .prefetch_related("issues")
+            .prefetch_related("share_links")
+            .all()
+        )
 
     def get_object(self, uuid):
         """
@@ -224,14 +374,14 @@ class EmailMessageDetailAPIView(BaseAPIView):
         return self.get_queryset().get(uuid=uuid, user=self.request.user)
 
     @extend_schema(
-        operation_id='threadlines_retrieve',
-        summary='Get threadline details',
-        description='Get details of a specific threadline by UUID',
+        operation_id="threadlines_retrieve",
+        summary="Get threadline details",
+        description="Get details of a specific threadline by UUID",
         responses={
             200: response(EmailMessageSerializer),
             404: error_response(),
-            401: error_response()
-        }
+            401: error_response(),
+        },
     )
     def get(self, request, uuid):
         """
@@ -240,33 +390,36 @@ class EmailMessageDetailAPIView(BaseAPIView):
         try:
             message = self.get_object(uuid)
             serializer = EmailMessageSerializer(
-                message, context={'request': request})
+                message, context={"request": request}
+            )
 
-            return Response({
-                'code': 200,
-                'message': 'Threadline retrieved successfully',
-                'data': serializer.data
-            }, status=status.HTTP_200_OK)
+            return Response(
+                {
+                    "code": 200,
+                    "message": "Threadline retrieved successfully",
+                    "data": serializer.data,
+                },
+                status=status.HTTP_200_OK,
+            )
 
         except Exception as e:
             logger.error(f"Error retrieving threadline {uuid}: {str(e)}")
-            return Response({
-                'code': 404,
-                'message': 'Threadline not found',
-                'data': None
-            }, status=status.HTTP_404_NOT_FOUND)
+            return Response(
+                {"code": 404, "message": "Threadline not found", "data": None},
+                status=status.HTTP_404_NOT_FOUND,
+            )
 
     @extend_schema(
-        operation_id='threadlines_update',
-        summary='Update email message',
-        description='Update a specific email message',
+        operation_id="threadlines_update",
+        summary="Update email message",
+        description="Update a specific email message",
         request=EmailMessageUpdateSerializer,
         responses={
             200: response(EmailMessageSerializer),
             400: error_response(),
             404: error_response(),
-            401: error_response()
-        }
+            401: error_response(),
+        },
     )
     def put(self, request, uuid):
         """
@@ -275,41 +428,42 @@ class EmailMessageDetailAPIView(BaseAPIView):
         try:
             message = self.get_object(uuid)
             serializer = EmailMessageUpdateSerializer(
-                message,
-                data=request.data,
-                context={'request': request}
+                message, data=request.data, context={"request": request}
             )
 
             if serializer.is_valid(raise_exception=True):
                 updated_message = serializer.save()
                 response_serializer = EmailMessageSerializer(
-                    updated_message, context={'request': request})
+                    updated_message, context={"request": request}
+                )
 
-                return Response({
-                    'code': 200,
-                    'message': 'Email message updated successfully',
-                    'data': response_serializer.data
-                }, status=status.HTTP_200_OK)
+                return Response(
+                    {
+                        "code": 200,
+                        "message": "Email message updated successfully",
+                        "data": response_serializer.data,
+                    },
+                    status=status.HTTP_200_OK,
+                )
 
         except Exception as e:
             logger.error(f"Error updating email message {uuid}: {str(e)}")
-            return Response({
-                'code': 400,
-                'message': str(e),
-                'data': None
-            }, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"code": 400, "message": str(e), "data": None},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
     @extend_schema(
-        operation_id='email_messages_partial_update',
-        summary='Partially update email message',
-        description='Partially update a specific email message',
+        operation_id="email_messages_partial_update",
+        summary="Partially update email message",
+        description="Partially update a specific email message",
         request=EmailMessageUpdateSerializer,
         responses={
             200: response(EmailMessageSerializer),
             400: error_response(),
             404: error_response(),
-            401: error_response()
-        }
+            401: error_response(),
+        },
     )
     def patch(self, request, uuid):
         """
@@ -321,37 +475,40 @@ class EmailMessageDetailAPIView(BaseAPIView):
                 message,
                 data=request.data,
                 partial=True,
-                context={'request': request}
+                context={"request": request},
             )
 
             if serializer.is_valid(raise_exception=True):
                 updated_message = serializer.save()
                 response_serializer = EmailMessageSerializer(
-                    updated_message, context={'request': request})
+                    updated_message, context={"request": request}
+                )
 
-                return Response({
-                    'code': 200,
-                    'message': 'Email message updated successfully',
-                    'data': response_serializer.data
-                }, status=status.HTTP_200_OK)
+                return Response(
+                    {
+                        "code": 200,
+                        "message": "Email message updated successfully",
+                        "data": response_serializer.data,
+                    },
+                    status=status.HTTP_200_OK,
+                )
 
         except Exception as e:
             logger.error(f"Error updating email message {uuid}: {str(e)}")
-            return Response({
-                'code': 400,
-                'message': str(e),
-                'data': None
-            }, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"code": 400, "message": str(e), "data": None},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
     @extend_schema(
-        operation_id='threadlines_delete',
-        summary='Delete email message',
-        description='Delete a specific email message',
+        operation_id="threadlines_delete",
+        summary="Delete email message",
+        description="Delete a specific email message",
         responses={
             204: error_response(),
             404: error_response(),
-            401: error_response()
-        }
+            401: error_response(),
+        },
     )
     def delete(self, request, uuid):
         """
@@ -361,54 +518,60 @@ class EmailMessageDetailAPIView(BaseAPIView):
             message = self.get_object(uuid)
             message.delete()
 
-            return Response({
-                'code': 204,
-                'message': 'Email message deleted successfully',
-                'data': None
-            }, status=status.HTTP_204_NO_CONTENT)
+            return Response(
+                {
+                    "code": 204,
+                    "message": "Email message deleted successfully",
+                    "data": None,
+                },
+                status=status.HTTP_204_NO_CONTENT,
+            )
 
         except Exception as e:
             logger.error(f"Error deleting email message {uuid}: {str(e)}")
-            return Response({
-                'code': 404,
-                'message': 'Email message not found',
-                'data': None
-            }, status=status.HTTP_404_NOT_FOUND)
+            return Response(
+                {
+                    "code": 404,
+                    "message": "Email message not found",
+                    "data": None,
+                },
+                status=status.HTTP_404_NOT_FOUND,
+            )
 
     @extend_schema(
-        operation_id='threadlines_retry',
-        summary='Retry email processing',
-        description='Retry processing an email with optional language and scene override',
+        operation_id="threadlines_retry",
+        summary="Retry email processing",
+        description="Retry processing an email with optional language and scene override",
         request=serializers.Serializer,
         parameters=[
             OpenApiParameter(
-                name='language',
+                name="language",
                 type=OpenApiTypes.STR,
                 location=OpenApiParameter.QUERY,
-                description='Processing language (e.g., zh-CN, en-US)',
-                required=False
+                description="Processing language (e.g., zh-CN, en-US)",
+                required=False,
             ),
             OpenApiParameter(
-                name='scene',
+                name="scene",
                 type=OpenApiTypes.STR,
                 location=OpenApiParameter.QUERY,
-                description='Processing scene (e.g., chat, product_issue)',
-                required=False
+                description="Processing scene (e.g., chat, product_issue)",
+                required=False,
             ),
             OpenApiParameter(
-                name='force',
+                name="force",
                 type=OpenApiTypes.BOOL,
                 location=OpenApiParameter.QUERY,
-                description='Force retry (re-process OCR and LLM even if already done)',
-                required=False
-            )
+                description="Force retry (re-process OCR and LLM even if already done)",
+                required=False,
+            ),
         ],
         responses={
             200: response(serializers.DictField),
             400: error_response(),
             404: error_response(),
-            401: error_response()
-        }
+            401: error_response(),
+        },
     )
     def post(self, request, uuid):
         """
@@ -418,197 +581,118 @@ class EmailMessageDetailAPIView(BaseAPIView):
         language and scene settings. The force parameter determines
         whether to re-process OCR and LLM even if results already exist.
         """
-        from ..tasks.email_workflow import process_email_workflow
-
         try:
             message = self.get_object(uuid)
 
-            language = request.data.get('language') or request.query_params.get('language')
-            scene = request.data.get('scene') or request.query_params.get('scene')
-            force = request.data.get('force', False)
+            language = request.data.get(
+                "language"
+            ) or request.query_params.get("language")
+            scene = request.data.get("scene") or request.query_params.get(
+                "scene"
+            )
+            force = request.data.get("force", False)
             if isinstance(force, str):
-                force = force.lower() in ('true', '1', 'yes')
+                force = force.lower() in ("true", "1", "yes")
 
             logger.info(
                 f"Retry requested for email {uuid}, "
                 f"language={language}, scene={scene}, force={force}"
             )
 
-            # Immediately set status to PROCESSING to provide instant feedback
-            # This ensures the UI shows processing state right away
-            try:
-                message.set_status(EmailStatus.PROCESSING.value)
-                logger.info(
-                    f"Status set to PROCESSING for email {uuid} "
-                    f"before starting retry workflow"
-                )
-            except Exception as status_error:
-                logger.warning(
-                    f"Failed to set status to PROCESSING for email {uuid}: "
-                    f"{status_error}. Workflow will handle status update."
-                )
-
-            process_email_workflow.delay(
-                str(message.id),
+            target_message = _enqueue_merge_workflow(
+                message,
                 force=force,
                 language=language,
-                scene=scene
+                scene=scene,
             )
 
-            return Response({
-                'code': 200,
-                'message': 'Retry task triggered successfully',
-                'data': {
-                    'email_id': str(message.id),
-                    'uuid': str(message.uuid),
-                    'language': language,
-                    'scene': scene,
-                    'force': force
-                }
-            }, status=status.HTTP_200_OK)
+            return Response(
+                {
+                    "code": 200,
+                    "message": "Retry task triggered successfully",
+                    "data": {
+                        "email_id": str(target_message.id),
+                        "uuid": str(target_message.uuid),
+                        "language": language,
+                        "scene": scene,
+                        "force": force,
+                        "requested_email_id": str(message.id),
+                        "requested_uuid": str(message.uuid),
+                    },
+                },
+                status=status.HTTP_200_OK,
+            )
 
         except EmailMessage.DoesNotExist:
             logger.error(f"EmailMessage {uuid} not found for retry")
-            return Response({
-                'code': 404,
-                'message': 'Threadline not found',
-                'data': None
-            }, status=status.HTTP_404_NOT_FOUND)
+            return Response(
+                {"code": 404, "message": "Threadline not found", "data": None},
+                status=status.HTTP_404_NOT_FOUND,
+            )
         except Exception as e:
             logger.error(f"Error triggering retry for {uuid}: {str(e)}")
-            return Response({
-                'code': 400,
-                'message': str(e),
-                'data': None
-            }, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"code": 503, "message": str(e), "data": None},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
 
 
-class EmailMessageRetryAPIView(BaseAPIView):
+class EmailMessageIssueClusterAPIView(BaseAPIView):
     """
-    APIView for retrying email processing with custom language and scene
+    APIView for on-demand issue cluster inspection.
     """
 
-    lookup_field = 'uuid'
+    lookup_field = "uuid"
 
     def get_queryset(self):
-        """
-        Get EmailMessage queryset with related objects
-        """
-        return EmailMessage.objects.select_related('user').all()
+        return (
+            EmailMessage.objects.select_related("user", "merged_into")
+            .prefetch_related("merged_children")
+            .prefetch_related("issues")
+            .all()
+        )
 
     def get_object(self, uuid):
-        """
-        Get email message by UUID with user ownership validation
-        """
-        return EmailMessage.objects.get(uuid=uuid, user=self.request.user)
+        return self.get_queryset().get(uuid=uuid, user=self.request.user)
 
     @extend_schema(
-        operation_id='threadlines_retry',
-        summary='Retry email processing',
-        description='Retry processing an email with optional language and scene override',
-        request=serializers.Serializer,
-        parameters=[
-            OpenApiParameter(
-                name='language',
-                type=OpenApiTypes.STR,
-                location=OpenApiParameter.QUERY,
-                description='Processing language (e.g., zh-CN, en-US)',
-                required=False
-            ),
-            OpenApiParameter(
-                name='scene',
-                type=OpenApiTypes.STR,
-                location=OpenApiParameter.QUERY,
-                description='Processing scene (e.g., chat, product_issue)',
-                required=False
-            ),
-            OpenApiParameter(
-                name='force',
-                type=OpenApiTypes.BOOL,
-                location=OpenApiParameter.QUERY,
-                description='Force retry (re-process OCR and LLM even if already done)',
-                required=False
-            )
-        ],
+        operation_id="threadlines_issue_cluster",
+        summary="Get issue cluster",
+        description="Get issue nodes across the merged cluster on demand",
         responses={
             200: response(serializers.DictField),
-            400: error_response(),
+            401: error_response(),
             404: error_response(),
-            401: error_response()
-        }
+        },
     )
-    def post(self, request, uuid):
-        """
-        Retry processing an email message with optional language and scene override
-
-        This endpoint allows retrying email processing with different
-        language and scene settings. The force parameter determines
-        whether to re-process OCR and LLM even if results already exist.
-        """
-        from ..tasks.email_workflow import process_email_workflow
-
+    def get(self, request, uuid):
         try:
+            self.request = request
             message = self.get_object(uuid)
-
-            language = request.data.get('language') or request.query_params.get('language')
-            scene = request.data.get('scene') or request.query_params.get('scene')
-            force = request.data.get('force', False)
-            if isinstance(force, str):
-                force = force.lower() in ('true', '1', 'yes')
-
-            logger.info(
-                f"Retry requested for email {uuid}, "
-                f"language={language}, scene={scene}, force={force}"
+            return Response(
+                {
+                    "code": 200,
+                    "message": "Issue cluster retrieved successfully",
+                    "data": _serialize_issue_cluster(message),
+                },
+                status=status.HTTP_200_OK,
             )
-
-            # Immediately set status to PROCESSING to provide instant feedback
-            # This ensures the UI shows processing state right away
-            from ..models import EmailStatus
-            try:
-                message.set_status(EmailStatus.PROCESSING.value)
-                logger.info(
-                    f"Status set to PROCESSING for email {uuid} "
-                    f"before starting retry workflow"
-                )
-            except Exception as status_error:
-                logger.warning(
-                    f"Failed to set status to PROCESSING for email {uuid}: "
-                    f"{status_error}. Workflow will handle status update."
-                )
-
-            process_email_workflow.delay(
-                str(message.id),
-                force=force,
-                language=language,
-                scene=scene
-            )
-
-            return Response({
-                'code': 200,
-                'message': 'Retry task triggered successfully',
-                'data': {
-                    'email_id': str(message.id),
-                    'uuid': str(message.uuid),
-                    'language': language,
-                    'scene': scene,
-                    'force': force
-                }
-            }, status=status.HTTP_200_OK)
-
         except EmailMessage.DoesNotExist:
-            logger.error(f"EmailMessage {uuid} not found for retry")
-            return Response({
-                'code': 404,
-                'message': 'Threadline not found',
-                'data': None
-            }, status=status.HTTP_404_NOT_FOUND)
+            logger.error(f"EmailMessage with UUID {uuid} not found")
+            return Response(
+                {"code": 404, "message": "Threadline not found", "data": None},
+                status=status.HTTP_404_NOT_FOUND,
+            )
         except Exception as e:
-            logger.error(f"Error triggering retry for {uuid}: {str(e)}")
-            return Response({
-                'code': 400,
-                'message': str(e),
-                'data': None
-            }, status=status.HTTP_400_BAD_REQUEST)
+            logger.error(f"Error retrieving issue cluster {uuid}: {str(e)}")
+            return Response(
+                {
+                    "code": 500,
+                    "message": "Internal server error",
+                    "data": None,
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
 
 class EmailMessageMetadataAPIView(BaseAPIView):
@@ -619,27 +703,27 @@ class EmailMessageMetadataAPIView(BaseAPIView):
     metadata keys. Passing null can be used to remove a key if needed.
     """
 
-    lookup_field = 'uuid'
+    lookup_field = "uuid"
 
     def get_object(self, uuid):
         """Get email message by UUID with user ownership validation."""
         return EmailMessage.objects.get(uuid=uuid, user=self.request.user)
 
     @extend_schema(
-        operation_id='threadlines_update_metadata',
-        summary='Partially update threadline metadata',
+        operation_id="threadlines_update_metadata",
+        summary="Partially update threadline metadata",
         description=(
-            'Update one or more metadata keys for a specific threadline by '
-            'UUID. Only provided keys will be updated. '
-            'Use null to delete a key if supported.'
+            "Update one or more metadata keys for a specific threadline by "
+            "UUID. Only provided keys will be updated. "
+            "Use null to delete a key if supported."
         ),
         request=OpenApiTypes.OBJECT,
         responses={
             200: response(EmailMessageSerializer),
             400: error_response(),
             404: error_response(),
-            401: error_response()
-        }
+            401: error_response(),
+        },
     )
     def patch(self, request, uuid):
         """Partially update metadata dictionary for the given threadline."""
@@ -647,11 +731,14 @@ class EmailMessageMetadataAPIView(BaseAPIView):
             message = self.get_object(uuid)
 
             if not isinstance(request.data, dict):
-                return Response({
-                    'code': 400,
-                    'message': 'Payload must be a JSON object',
-                    'data': None
-                }, status=status.HTTP_400_BAD_REQUEST)
+                return Response(
+                    {
+                        "code": 400,
+                        "message": "Payload must be a JSON object",
+                        "data": None,
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
 
             current = message.metadata or {}
 
@@ -663,27 +750,28 @@ class EmailMessageMetadataAPIView(BaseAPIView):
                     current[key] = value
 
             message.metadata = current
-            message.save(update_fields=['metadata', 'updated_at'])
+            message.save(update_fields=["metadata", "updated_at"])
 
-            return Response({
-                'code': 200,
-                'message': 'Metadata updated successfully',
-                'data': {
-                    'uuid': str(message.uuid),
-                    'metadata': message.metadata,
-                }
-            }, status=status.HTTP_200_OK)
+            return Response(
+                {
+                    "code": 200,
+                    "message": "Metadata updated successfully",
+                    "data": {
+                        "uuid": str(message.uuid),
+                        "metadata": message.metadata,
+                    },
+                },
+                status=status.HTTP_200_OK,
+            )
 
         except EmailMessage.DoesNotExist:
-            return Response({
-                'code': 404,
-                'message': 'Threadline not found',
-                'data': None
-            }, status=status.HTTP_404_NOT_FOUND)
+            return Response(
+                {"code": 404, "message": "Threadline not found", "data": None},
+                status=status.HTTP_404_NOT_FOUND,
+            )
         except Exception as e:
             logger.error(f"Error updating metadata for {uuid}: {str(e)}")
-            return Response({
-                'code': 400,
-                'message': str(e),
-                'data': None
-            }, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"code": 400, "message": str(e), "data": None},
+                status=status.HTTP_400_BAD_REQUEST,
+            )

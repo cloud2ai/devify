@@ -1,9 +1,9 @@
 """
 Task Tracer Utility
 
-Dual-writes task execution state to the legacy EmailTask model and to
-agentcore-task's TaskExecution records. This keeps existing code paths and
-tests stable while moving task management to agentcore.
+Records task execution state in agentcore-task's TaskExecution records.
+Legacy EmailTask tracking has been removed; task visibility now comes
+from agentcore only.
 """
 
 from __future__ import annotations
@@ -17,8 +17,6 @@ from typing import Dict, Optional
 
 from celery import current_task
 from django.utils import timezone
-
-from threadline.models import EmailTask
 
 logger = logging.getLogger(__name__)
 _current_task_tracer: ContextVar["TaskTracer | None"] = ContextVar(
@@ -75,27 +73,24 @@ def use_task_tracer(tracer: "TaskTracer"):
 
 class TaskTracer:
     """
-    Task tracer for EmailTask management plus agentcore shadow records.
+    Task tracer for agentcore TaskExecution records.
     """
 
     def __init__(
         self,
         task_type: str,
         module: str = "threadline",
-        track_legacy: bool = True,
     ):
         self.task_type = task_type
         self.module = module
-        self.track_legacy = track_legacy
-        self.task: Optional[EmailTask] = None
         self._task_id: Optional[str] = None
         self._agentcore_task_id: Optional[str] = None
         self._agentcore_metadata: Dict = {}
         self._context: Dict[str, object] = {}
 
     @property
-    def task_id(self) -> Optional[int]:
-        return self.task.id if self.task else None
+    def task_id(self) -> Optional[str]:
+        return self._agentcore_task_id or self._task_id
 
     def _ensure_agentcore_imports(self):
         from agentcore_task.adapters.django import (
@@ -247,16 +242,6 @@ class TaskTracer:
         self._task_id = str(task_id)
         self._merge_context({"task_id": self._task_id})
 
-        if self.task:
-            try:
-                self.task.task_id = self._task_id
-                self.task.save(update_fields=["task_id"])
-                logger.debug(
-                    f"Set legacy task_id for {self.task_type} task: {task_id}"
-                )
-            except Exception as e:
-                logger.error(f"Failed to set legacy task_id: {e}")
-
         if (
             self._agentcore_task_id
             and self._agentcore_task_id != self._task_id
@@ -271,24 +256,7 @@ class TaskTracer:
             except Exception as e:
                 logger.error(f"Failed to update agentcore task_id: {e}")
 
-    def create_task(self, initial_details: Dict = None) -> EmailTask:
-        if self.track_legacy:
-            try:
-                self.task = EmailTask.objects.create(
-                    task_type=self.task_type,
-                    status=EmailTask.TaskStatus.RUNNING,
-                    started_at=timezone.now(),
-                    details=deepcopy(initial_details or {}),
-                )
-                logger.debug(
-                    f"Created legacy {self.task_type} task: {self.task.id}"
-                )
-            except Exception as e:
-                logger.error(
-                    f"Failed to create legacy {self.task_type} task: {e}"
-                )
-                self.task = None
-
+    def create_task(self, initial_details: Dict = None) -> str:
         self._merge_context(initial_details)
 
         self._task_id = self._task_id or _current_celery_task_id()
@@ -296,23 +264,10 @@ class TaskTracer:
             self._merge_context({"task_id": self._task_id})
         self._sync_agentcore_registration(initial_details or {})
         logger.info(f"{self.context_summary(initial_details)} started")
-        return self.task
+        return self._agentcore_task_id or self._task_id
 
     def update_task(self, details: Dict) -> None:
         self._merge_context(details)
-        if self.task:
-            try:
-                self.task.details = deepcopy(details)
-                self.task.save(update_fields=["details"])
-                logger.debug(
-                    f"{self.context_summary(details)} updated legacy task "
-                    f"{self.task.id}"
-                )
-            except Exception as e:
-                logger.error(
-                    f"Failed to update legacy {self.context_summary(details)} "
-                    f"task: {e}"
-                )
 
         self._sync_agentcore_update(
             "STARTED",
@@ -321,23 +276,6 @@ class TaskTracer:
 
     def complete_task(self, details: Dict) -> None:
         self._merge_context(details)
-        if self.task:
-            try:
-                self.task.status = EmailTask.TaskStatus.COMPLETED
-                self.task.completed_at = timezone.now()
-                self.task.details = deepcopy(details)
-                self.task.save(
-                    update_fields=["status", "completed_at", "details"]
-                )
-                logger.debug(
-                    f"{self.context_summary(details)} completed legacy task "
-                    f"{self.task.id}"
-                )
-            except Exception as e:
-                logger.error(
-                    f"Failed to complete legacy {self.context_summary(details)} "
-                    f"task: {e}"
-                )
 
         self._sync_agentcore_update(
             "SUCCESS",
@@ -348,33 +286,6 @@ class TaskTracer:
 
     def fail_task(self, details: Dict, error_msg: str) -> None:
         self._merge_context(details)
-        if self.task:
-            try:
-                self.task.status = EmailTask.TaskStatus.FAILED
-                self.task.completed_at = timezone.now()
-                self.task.error_message = error_msg
-                failure_details = deepcopy(details)
-                if isinstance(failure_details, dict):
-                    failure_details["error"] = error_msg
-                    failure_details["failed_at"] = timezone.now().isoformat()
-                self.task.details = failure_details
-                self.task.save(
-                    update_fields=[
-                        "status",
-                        "completed_at",
-                        "error_message",
-                        "details",
-                    ]
-                )
-                logger.debug(
-                    f"{self.context_summary(details)} marked legacy task "
-                    f"failed: {self.task.id}"
-                )
-            except Exception as e:
-                logger.error(
-                    f"Failed to fail legacy {self.context_summary(details)} "
-                    f"task: {e}"
-                )
 
         failure_metadata = _normalize_metadata(details)
         failure_metadata["error"] = error_msg
@@ -445,24 +356,6 @@ class TaskTracer:
     ) -> None:
         log_entry = self._build_log_entry(action, message, data)
 
-        if self.task:
-            try:
-                if isinstance(self.task.details, list):
-                    details_list = self.task.details
-                elif self.task.details:
-                    details_list = [deepcopy(self.task.details)]
-                else:
-                    details_list = []
-
-                details_list.append(log_entry)
-                self.task.details = details_list
-                self.task.save(update_fields=["details"])
-                logger.debug(
-                    f"Appended log to legacy {self.task_type} task: {action}"
-                )
-            except Exception as e:
-                logger.error(f"Failed to append legacy task log: {e}")
-
         logger.debug(f"{self.context_summary(data)} step {action}: {message}")
 
         self._agentcore_metadata.setdefault("steps", [])
@@ -488,37 +381,10 @@ class TaskTracer:
         )
 
     def update_task_status(self, new_status: str) -> None:
-        if not self.task:
-            return
-
-        try:
-            self.task.status = new_status
-            if (
-                new_status == EmailTask.TaskStatus.RUNNING
-                and not self.task.started_at
-            ):
-                self.task.started_at = timezone.now()
-            elif new_status in [
-                EmailTask.TaskStatus.COMPLETED,
-                EmailTask.TaskStatus.FAILED,
-                EmailTask.TaskStatus.CANCELLED,
-            ]:
-                self.task.completed_at = timezone.now()
-            self.task.save()
-            logger.debug(
-                f"Updated legacy {self.task_type} task status to: "
-                f"{new_status}"
-            )
-        except Exception as e:
-            logger.error(f"Failed to update legacy task status: {e}")
-
         agentcore_status = "STARTED"
-        if new_status == EmailTask.TaskStatus.COMPLETED:
+        if new_status in ("COMPLETED", "SUCCESS"):
             agentcore_status = "SUCCESS"
-        elif new_status in [
-            EmailTask.TaskStatus.FAILED,
-            EmailTask.TaskStatus.CANCELLED,
-        ]:
+        elif new_status in ("FAILED", "CANCELLED", "FAILURE"):
             agentcore_status = "FAILURE"
         self._sync_agentcore_update(
             agentcore_status,

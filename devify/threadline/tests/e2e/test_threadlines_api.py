@@ -7,10 +7,13 @@ Threadlines are EmailMessage objects with their attachments.
 
 import pytest
 from django.urls import reverse
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APIClient
+from unittest.mock import patch
 
-from threadline.models import EmailMessage, EmailAttachment
+from threadline.models import EmailMessage, EmailAttachment, Issue
+from threadline.state_machine import EmailStatus
 from ..fixtures.factories import (
     EmailMessageFactory,
     EmailAttachmentFactory,
@@ -70,6 +73,269 @@ class TestThreadlinesAPI:
         )
         assert "attachments" in response.data["data"]["list"][0]
 
+    def test_list_threadlines_excludes_merged_children(
+        self, authenticated_api_client, test_user
+    ):
+        """
+        Test that merged child rows are hidden from the default list view.
+        """
+        parent = EmailMessageFactory(
+            user=test_user,
+            subject="Canonical thread",
+        )
+        child = EmailMessageFactory(
+            user=test_user,
+            subject="Canonical thread",
+            merged_into=parent,
+        )
+
+        url = reverse("threadlines-list")
+        response = authenticated_api_client.get(url)
+
+        assert response.status_code == status.HTTP_200_OK
+        ids = {item["id"] for item in response.data["data"]["list"]}
+        assert parent.id in ids
+        assert child.id not in ids
+        parent_row = next(
+            item
+            for item in response.data["data"]["list"]
+            if item["id"] == parent.id
+        )
+        assert parent_row["has_merged_children"] is True
+
+    def test_detail_threadline_includes_merged_children(
+        self, authenticated_api_client, test_user
+    ):
+        """
+        Test that detail view exposes merged child records for canonical rows.
+        """
+        parent = EmailMessageFactory(
+            user=test_user,
+            subject="Canonical thread",
+        )
+        child = EmailMessageFactory(
+            user=test_user,
+            subject="Canonical thread",
+            merged_into=parent,
+            merge_reason=EmailMessage.MergeReason.TEXT_SIMILARITY.value,
+        )
+
+        url = reverse("threadlines-detail", kwargs={"uuid": parent.uuid})
+        response = authenticated_api_client.get(url)
+
+        assert response.status_code == status.HTTP_200_OK
+        payload = response.data["data"]
+        assert "merged_children" in payload
+        assert len(payload["merged_children"]) == 1
+        assert payload["merged_children"][0]["id"] == child.id
+        assert payload["merged_children"][0]["merged_into"] == parent.id
+
+    def test_detail_threadline_exposes_merged_target_metadata(
+        self, authenticated_api_client, test_user
+    ):
+        """
+        Test that merged rows expose canonical UUID metadata for UI links.
+        """
+        parent = EmailMessageFactory(
+            user=test_user,
+            subject="Canonical thread",
+        )
+        child = EmailMessageFactory(
+            user=test_user,
+            subject="Canonical thread",
+            merged_into=parent,
+            merge_reason=EmailMessage.MergeReason.TEXT_SIMILARITY.value,
+        )
+
+        url = reverse("threadlines-detail", kwargs={"uuid": child.uuid})
+        response = authenticated_api_client.get(url)
+
+        assert response.status_code == status.HTTP_200_OK
+        payload = response.data["data"]
+        assert payload["merged_into"] == parent.id
+        assert payload["merged_into_uuid"] == str(parent.uuid)
+        assert payload["merged_into_subject"] == parent.subject
+
+    def test_detail_threadline_includes_issue_link_metadata(
+        self, authenticated_api_client, test_user
+    ):
+        """
+        Test that detail view exposes issue link metadata for UI display.
+        """
+        message = EmailMessageFactory(
+            user=test_user,
+            subject="Issue thread",
+        )
+        issue = Issue.objects.create(
+            user=test_user,
+            email_message=message,
+            title="Issue title",
+            description="Issue description",
+            priority="medium",
+            engine="jira",
+            external_id="TEST-123",
+            issue_url="https://jira.example.com/browse/TEST-123",
+            metadata={"project": "TEST"},
+        )
+
+        url = reverse("threadlines-detail", kwargs={"uuid": message.uuid})
+        response = authenticated_api_client.get(url)
+
+        assert response.status_code == status.HTTP_200_OK
+        payload = response.data["data"]
+        assert payload["issue_external_id"] == issue.external_id
+        assert payload["issue_url"] == issue.issue_url
+
+    def test_detail_merged_child_uses_direct_issue_only(
+        self, authenticated_api_client, test_user
+    ):
+        """
+        Test that merged child detail only shows its direct issue, not cluster fallback.
+        """
+        parent = EmailMessageFactory(
+            user=test_user,
+            subject="Canonical issue thread",
+        )
+        child = EmailMessageFactory(
+            user=test_user,
+            subject="Canonical issue thread",
+            merged_into=parent,
+        )
+        issue = Issue.objects.create(
+            user=test_user,
+            email_message=parent,
+            title="Issue title",
+            description="Issue description",
+            priority="medium",
+            engine="jira",
+            external_id="TEST-456",
+            issue_url="https://jira.example.com/browse/TEST-456",
+            metadata={"project": "TEST"},
+        )
+
+        url = reverse("threadlines-detail", kwargs={"uuid": child.uuid})
+        response = authenticated_api_client.get(url)
+
+        assert response.status_code == status.HTTP_200_OK
+        payload = response.data["data"]
+        assert payload["issue_external_id"] is None
+        assert payload["issue_url"] is None
+
+    def test_issue_cluster_endpoint_includes_child_issue(
+        self, authenticated_api_client, test_user
+    ):
+        """
+        Test that the on-demand issue cluster endpoint exposes merged child issues.
+        """
+        parent = EmailMessageFactory(
+            user=test_user,
+            subject="Canonical issue thread",
+        )
+        child = EmailMessageFactory(
+            user=test_user,
+            subject="Canonical issue thread",
+            merged_into=parent,
+        )
+        issue = Issue.objects.create(
+            user=test_user,
+            email_message=child,
+            title="Issue title",
+            description="Issue description",
+            priority="medium",
+            engine="jira",
+            external_id="TEST-789",
+            issue_url="https://jira.example.com/browse/TEST-789",
+            metadata={"project": "TEST"},
+        )
+
+        url = reverse(
+            "threadlines-issue-cluster", kwargs={"uuid": parent.uuid}
+        )
+        response = authenticated_api_client.get(url)
+
+        assert response.status_code == status.HTTP_200_OK
+        payload = response.data["data"]
+        assert payload["issue_count"] == 1
+        assert payload["node_count"] == 2
+        assert any(
+            node["email_uuid"] == str(child.uuid)
+            and node["issue_external_id"] == issue.external_id
+            and node["issue_url"] == issue.issue_url
+            for node in payload["nodes"]
+        )
+
+    @patch("threadline.tasks.email_merge.process_email_merge.delay")
+    def test_create_threadline_returns_failed_when_dispatch_fails(
+        self,
+        mock_delay,
+        authenticated_api_client,
+        test_user,
+    ):
+        """
+        Test that create returns a failure when task dispatch fails.
+        """
+        mock_delay.side_effect = RuntimeError("broker down")
+
+        url = reverse("threadlines-list")
+        data = {
+            "user_id": test_user.id,
+            "message_id": "<create-failure@example.com>",
+            "subject": "Dispatch failure test",
+            "sender": "sender@example.com",
+            "recipients": "recipient@example.com",
+            "received_at": timezone.now().isoformat(),
+            "text_content": "Hello world",
+            "html_content": "",
+        }
+
+        response = authenticated_api_client.post(url, data, format="json")
+
+        assert response.status_code == status.HTTP_503_SERVICE_UNAVAILABLE
+        created = EmailMessage.objects.get(
+            user=test_user,
+            message_id=data["message_id"],
+        )
+        assert created.status == EmailStatus.FAILED.value
+        assert "broker down" in created.error_message
+        mock_delay.assert_called_once()
+
+    @patch("threadline.tasks.email_merge.process_email_merge.delay")
+    def test_retry_merged_child_targets_canonical_when_dispatch_fails(
+        self,
+        mock_delay,
+        authenticated_api_client,
+        test_user,
+    ):
+        """
+        Test that retrying a merged child dispatches canonical and fails cleanly.
+        """
+        parent = EmailMessageFactory(
+            user=test_user,
+            subject="Canonical thread",
+            status="success",
+        )
+        child = EmailMessageFactory(
+            user=test_user,
+            subject="Canonical thread",
+            merged_into=parent,
+            status="fetched",
+        )
+        mock_delay.side_effect = RuntimeError("broker down")
+
+        url = reverse("threadlines-retry", kwargs={"uuid": child.uuid})
+        response = authenticated_api_client.post(
+            url, {"force": True}, format="json"
+        )
+
+        assert response.status_code == status.HTTP_503_SERVICE_UNAVAILABLE
+        parent.refresh_from_db()
+        child.refresh_from_db()
+        assert parent.status == EmailStatus.FAILED.value
+        assert "broker down" in parent.error_message
+        assert child.status == EmailStatus.FETCHED.value
+        assert mock_delay.call_count == 1
+        assert mock_delay.call_args.args[0] == str(parent.id)
+
     def test_list_threadlines_with_attachments(
         self, authenticated_api_client, test_user
     ):
@@ -95,6 +361,40 @@ class TestThreadlinesAPI:
             assert "filename" in attachment
             assert "content_type" in attachment
             assert "file_size" in attachment
+
+    def test_list_threadlines_includes_issue_metadata(
+        self, authenticated_api_client, test_user
+    ):
+        """
+        Test that the list view exposes issue metadata for quick links.
+        """
+        message = EmailMessageFactory(
+            user=test_user,
+            subject="Issue list thread",
+        )
+        issue = Issue.objects.create(
+            user=test_user,
+            email_message=message,
+            title="Issue title",
+            description="Issue description",
+            priority="medium",
+            engine="jira",
+            external_id="TEST-LIST-123",
+            issue_url="https://jira.example.com/browse/TEST-LIST-123",
+            metadata={"project": "TEST"},
+        )
+
+        url = reverse("threadlines-list")
+        response = authenticated_api_client.get(url)
+
+        assert response.status_code == status.HTTP_200_OK
+        row = next(
+            item
+            for item in response.data["data"]["list"]
+            if item["id"] == message.id
+        )
+        assert row["issue_external_id"] == issue.external_id
+        assert row["issue_url"] == issue.issue_url
 
     def test_list_threadlines_user_isolation(
         self, authenticated_api_client, test_user

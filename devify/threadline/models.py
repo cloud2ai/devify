@@ -272,6 +272,11 @@ class EmailMessage(models.Model):
     Email message details
     """
 
+    class MergeReason(models.TextChoices):
+        THREAD_RELATION = "thread_relation", _("Thread Relation")
+        FORWARD_CHAIN = "forward_chain", _("Forward Chain")
+        TEXT_SIMILARITY = "text_similarity", _("Text Similarity")
+
     uuid = models.UUIDField(
         unique=True,
         editable=False,
@@ -345,6 +350,52 @@ class EmailMessage(models.Model):
         help_text=_("Content organized by large language model"),
     )
 
+    merged_into = models.ForeignKey(
+        "self",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="merged_children",
+        verbose_name=_("Merged Into"),
+        help_text=_("Canonical email message that absorbed this record"),
+    )
+    merge_reason = models.CharField(
+        max_length=32,
+        blank=True,
+        choices=MergeReason.choices,
+        default="",
+        verbose_name=_("Merge Reason"),
+        help_text=_("Why this record was merged into another record"),
+    )
+    last_merged_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name=_("Last Merged At"),
+        help_text=_("Timestamp of the latest merge into this record"),
+    )
+    raw_message_id = models.CharField(
+        max_length=255,
+        blank=True,
+        default="",
+        db_index=True,
+        verbose_name=_("Raw Message ID"),
+        help_text=_("RFC Message-ID header extracted from the source email"),
+    )
+    in_reply_to = models.CharField(
+        max_length=255,
+        blank=True,
+        default="",
+        db_index=True,
+        verbose_name=_("In Reply To"),
+        help_text=_("RFC In-Reply-To header extracted from the source email"),
+    )
+    references = models.JSONField(
+        default=list,
+        blank=True,
+        verbose_name=_("References"),
+        help_text=_("Normalized References header tokens"),
+    )
+
     # Processing status for each stage of the email workflow
     status = models.CharField(
         max_length=32,
@@ -377,6 +428,7 @@ class EmailMessage(models.Model):
         indexes = [
             models.Index(fields=["user", "message_id"]),
             models.Index(fields=["user", "status"]),
+            models.Index(fields=["user", "raw_message_id"]),
             models.Index(fields=["received_at"]),
         ]
         unique_together = ["user", "message_id"]
@@ -412,6 +464,11 @@ class EmailMessage(models.Model):
         """
         Override save to automatically validate status transitions
         """
+        update_fields = kwargs.get("update_fields")
+        update_fields_set = (
+            set(update_fields) if update_fields is not None else None
+        )
+
         # Skip state machine validation if saving from Django Admin
         if hasattr(self, "_from_admin"):
             # Clear the flag and save without validation
@@ -424,8 +481,17 @@ class EmailMessage(models.Model):
             try:
                 old_instance = EmailMessage.objects.get(pk=self.pk)
                 status_changed = old_instance.status != self.status
-                if status_changed and not can_transition_to(
-                    old_instance.status, self.status, EMAIL_STATE_MACHINE
+
+                should_validate_status = (
+                    update_fields_set is None or "status" in update_fields_set
+                )
+
+                if (
+                    should_validate_status
+                    and status_changed
+                    and not can_transition_to(
+                        old_instance.status, self.status, EMAIL_STATE_MACHINE
+                    )
                 ):
                     # Get valid next states using the state machine
                     valid_transitions = get_next_states(
@@ -497,6 +563,14 @@ class EmailAttachment(models.Model):
         verbose_name=_("File Path"),
         help_text=_("Path to the stored attachment file"),
     )
+    content_md5 = models.CharField(
+        max_length=32,
+        blank=True,
+        default="",
+        db_index=True,
+        verbose_name=_("Content MD5"),
+        help_text=_("MD5 hash of the attachment content"),
+    )
     is_image = models.BooleanField(
         default=False,
         verbose_name=_("Is Image"),
@@ -528,6 +602,7 @@ class EmailAttachment(models.Model):
         ordering = ["filename"]
         indexes = [
             models.Index(fields=["user", "is_image"]),
+            models.Index(fields=["user", "content_md5"]),
             models.Index(fields=["email_message"]),
         ]
 

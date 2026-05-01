@@ -436,6 +436,25 @@
                   </svg>
                 </h2>
               </button>
+              <div
+                v-if="threadline.has_merged_children && threadline.merge_reason"
+                class="mt-3 inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700"
+              >
+                <svg
+                  class="w-3.5 h-3.5"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M7 11l5-5m0 0l5 5m-5-5v12"
+                  />
+                </svg>
+                {{ t('common.status.merged') }}
+              </div>
               <!-- Share Info Area -->
               <div v-if="shareStatus?.is_active" class="mt-4">
                 <!-- Divider -->
@@ -1257,6 +1276,244 @@
                   </div>
                 </div>
 
+                <!-- Issue Link -->
+                <div
+                  v-if="threadline.issue_external_id"
+                  class="grid grid-cols-[theme(spacing.28),1fr] gap-y-1 gap-x-1.5 text-xs sm:text-sm"
+                >
+                  <div class="flex items-center gap-1 text-gray-500">
+                    <svg
+                      class="w-3.5 h-3.5 text-gray-400 flex-shrink-0"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"
+                      />
+                    </svg>
+                    <span>{{ t('chats.issue.label') }}</span>
+                  </div>
+                  <div class="flex items-center gap-2 min-w-0">
+                    <a
+                      v-if="threadline.issue_url"
+                      :href="threadline.issue_url"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-violet-100 text-violet-800 transition-colors hover:bg-violet-200"
+                      :title="t('chats.issue.openInNewWindow')"
+                    >
+                      <span class="truncate font-medium">
+                        {{ threadline.issue_external_id }}
+                      </span>
+                      <svg
+                        class="h-3 w-3 flex-shrink-0"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                        aria-hidden="true"
+                      >
+                        <path
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          stroke-width="2"
+                          d="M14 3h7v7m0-7L10 14"
+                        />
+                        <path
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          stroke-width="2"
+                          d="M10 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-4"
+                        />
+                      </svg>
+                    </a>
+                    <span
+                      v-else
+                      class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-violet-100 text-violet-800"
+                    >
+                      <span class="truncate font-medium">
+                        {{ threadline.issue_external_id }}
+                      </span>
+                      <svg
+                        class="h-3 w-3 flex-shrink-0"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                        aria-hidden="true"
+                      >
+                        <path
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          stroke-width="2"
+                          d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"
+                        />
+                      </svg>
+                    </span>
+                  </div>
+                </div>
+
+                <div
+                  v-if="threadline.merged_into_uuid"
+                  class="border-t border-gray-200 pt-4"
+                >
+                  <div class="flex items-center justify-between gap-3">
+                    <span class="flex items-center gap-1 text-gray-500">
+                      <svg
+                        class="w-3.5 h-3.5 text-gray-400 flex-shrink-0"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          stroke-width="2"
+                          d="M7 7h3a2 2 0 012 2v2m5-4h-3a2 2 0 00-2 2v2M12 11v6"
+                        />
+                        <circle cx="7" cy="7" r="1.5" fill="currentColor" />
+                        <circle cx="17" cy="7" r="1.5" fill="currentColor" />
+                        <circle cx="12" cy="17" r="1.5" fill="currentColor" />
+                      </svg>
+                      <span class="font-medium text-gray-700">
+                        {{ t('chats.merge.mergedInto') }}
+                      </span>
+                    </span>
+                    <span class="text-xs text-gray-500">
+                      {{ t('chats.merge.sourceCount', { count: 1 }) }}
+                    </span>
+                  </div>
+                  <router-link
+                    :to="`/chats/${threadline.merged_into_uuid}`"
+                    class="mt-3 flex items-start justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-3 transition-colors hover:border-slate-300 hover:bg-slate-100"
+                  >
+                    <div class="min-w-0 flex-1">
+                      <div class="truncate text-sm font-medium text-slate-900">
+                        {{
+                          threadline.merged_into_summary_title ||
+                          threadline.merged_into_subject ||
+                          threadline.merged_into_message_id ||
+                          threadline.merged_into_uuid
+                        }}
+                      </div>
+                      <div class="mt-1 text-xs text-slate-500">
+                        {{ t('chats.merge.sourceDate') }}:
+                        {{
+                          formatDate(
+                            threadline.merged_into_received_at ||
+                              threadline.received_at
+                          )
+                        }}
+                      </div>
+                    </div>
+                    <span
+                      class="inline-flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full border border-amber-200 bg-amber-50 text-amber-600"
+                      :title="t('common.status.merged')"
+                      :aria-label="t('common.status.merged')"
+                    >
+                      <svg
+                        class="h-3.5 w-3.5"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                        aria-hidden="true"
+                      >
+                        <path
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          stroke-width="2"
+                          d="M7 11l5-5m0 0l5 5m-5-5v12"
+                        />
+                      </svg>
+                    </span>
+                  </router-link>
+                </div>
+                <div
+                  v-if="threadline.merged_children?.length"
+                  class="border-t border-gray-200 pt-4"
+                >
+                  <div class="flex items-center justify-between gap-3">
+                    <span class="flex items-center gap-1 text-gray-500">
+                      <svg
+                        class="w-3.5 h-3.5 text-gray-400 flex-shrink-0"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          stroke-width="2"
+                          d="M7 7h3a2 2 0 012 2v2m5-4h-3a2 2 0 00-2 2v2M12 11v6"
+                        />
+                        <circle cx="7" cy="7" r="1.5" fill="currentColor" />
+                        <circle cx="17" cy="7" r="1.5" fill="currentColor" />
+                        <circle cx="12" cy="17" r="1.5" fill="currentColor" />
+                      </svg>
+                      <span class="font-medium text-gray-700">
+                        {{ t('chats.merge.sources') }}
+                      </span>
+                    </span>
+                    <span class="text-xs text-gray-500">
+                      {{
+                        t('chats.merge.sourceCount', {
+                          count: threadline.merged_children.length
+                        })
+                      }}
+                    </span>
+                  </div>
+                  <div class="mt-3 space-y-2">
+                    <router-link
+                      v-for="child in threadline.merged_children"
+                      :key="child.uuid"
+                      :to="`/chats/${child.uuid}`"
+                      class="flex items-start justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-3 transition-colors hover:border-slate-300 hover:bg-slate-100"
+                    >
+                      <div class="min-w-0 flex-1">
+                        <div
+                          class="truncate text-sm font-medium text-slate-900"
+                        >
+                          {{
+                            child.summary_title ||
+                            child.subject ||
+                            child.message_id ||
+                            child.uuid
+                          }}
+                        </div>
+                        <div class="mt-1 text-xs text-slate-500">
+                          {{ t('chats.merge.sourceDate') }}:
+                          {{ formatDate(child.received_at) }}
+                        </div>
+                      </div>
+                      <span
+                        class="inline-flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full border border-amber-200 bg-amber-50 text-amber-600"
+                        :title="t('common.status.merged')"
+                        :aria-label="t('common.status.merged')"
+                      >
+                        <svg
+                          class="h-3.5 w-3.5"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                          aria-hidden="true"
+                        >
+                          <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="2"
+                            d="M7 7h3a2 2 0 012 2v2m5-4h-3a2 2 0 00-2 2v2M12 11v6"
+                          />
+                          <circle cx="7" cy="7" r="1.5" fill="currentColor" />
+                          <circle cx="17" cy="7" r="1.5" fill="currentColor" />
+                          <circle cx="12" cy="17" r="1.5" fill="currentColor" />
+                        </svg>
+                      </span>
+                    </router-link>
+                  </div>
+                </div>
+
                 <p
                   v-if="
                     fieldError('keywords') ||
@@ -1274,6 +1531,97 @@
               </div>
             </div>
           </div>
+        </div>
+      </BaseCard>
+
+      <!-- Original Email Content -->
+      <BaseCard v-if="showOriginalEmailCard" :header-muted="true">
+        <template #header>
+          <div class="flex items-center justify-between w-full">
+            <div class="flex items-center gap-2 text-gray-800">
+              <svg
+                class="w-5 h-5 -mt-px flex-none"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8m-18 8l7.89-4.26a2 2 0 012.22 0L21 16"
+                />
+              </svg>
+              <h3 class="text-base font-semibold leading-5">
+                {{ t('chats.originalEmail') }}
+              </h3>
+            </div>
+            <button
+              v-if="originalEmailContent"
+              @click="copyOriginalEmail"
+              class="flex-shrink-0 inline-flex items-center gap-1 text-xs font-medium text-gray-600 hover:text-gray-900 bg-gray-100 hover:bg-gray-200 px-2 py-1 rounded transition-colors"
+              :title="t('common.copy')"
+            >
+              <svg
+                v-if="!copiedStates.original"
+                class="h-3.5 w-3.5"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
+                />
+              </svg>
+              <svg
+                v-else
+                class="h-3.5 w-3.5 text-green-600"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M5 13l4 4L19 7"
+                />
+              </svg>
+              <span class="hidden sm:inline">
+                {{
+                  copiedStates.original ? t('common.copied') : t('common.copy')
+                }}
+              </span>
+            </button>
+          </div>
+        </template>
+        <div v-if="originalEmailContent" class="space-y-3">
+          <div class="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
+            <div
+              class="whitespace-pre-wrap break-words text-sm leading-6 text-gray-800"
+            >
+              {{ originalEmailContent }}
+            </div>
+          </div>
+        </div>
+        <div v-else class="text-gray-500 italic text-center py-8">
+          <svg
+            class="mx-auto h-12 w-12 text-gray-400 mb-4"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8m-18 8l7.89-4.26a2 2 0 012.22 0L21 16"
+            />
+          </svg>
+          <p>{{ t('common.noData') }}</p>
         </div>
       </BaseCard>
 
@@ -1676,7 +2024,8 @@
           </svg>
           <p>{{ t('chats.summaryProcessing') }}</p>
           <p class="text-sm mt-2">
-            {{ t('common.status') }}: {{ threadline.status || 'pending' }}
+            {{ t('common.status') }}:
+            {{ getThreadlineDisplayStatus(threadline) }}
           </p>
         </div>
       </BaseCard>
@@ -2084,6 +2433,7 @@ import { useThreadlineShare } from '@/composables/useThreadlineShare'
 import { useThreadlineTodos } from '@/composables/useThreadlineTodos'
 import { useThreadlineMetadata } from '@/composables/useThreadlineMetadata'
 import { useThreadlineContent } from '@/composables/useThreadlineContent'
+import { getThreadlineDisplayStatus } from '@/utils/threadlineStatus'
 
 const route = useRoute()
 const { t } = useI18n()
@@ -2269,9 +2619,53 @@ const cancelEditingKeyProcess = content.cancelEditingKeyProcess
 const saveKeyProcess = content.saveKeyProcess
 
 const copyContent = content.copyContent
+const copyRawContent = content.copyRawContent
+const copyOriginalEmail = () =>
+  copyRawContent(originalEmailContent.value, 'original')
 const openDetailsEditor = content.openDetailsEditor
 const openKeyProcessEditor = content.openKeyProcessEditor
 const copyKeyProcess = content.copyKeyProcess
+
+const normalizeHtmlContent = (content) => {
+  if (!content) return ''
+
+  if (typeof window === 'undefined' || typeof DOMParser === 'undefined') {
+    return content
+  }
+
+  try {
+    const doc = new DOMParser().parseFromString(content, 'text/html')
+    return (doc.body?.innerText || doc.body?.textContent || '').trim()
+  } catch (error) {
+    return content
+  }
+}
+
+const originalEmailContent = computed(() => {
+  const textContent = threadline.value?.text_content?.trim()
+  if (textContent) {
+    return textContent
+  }
+
+  const htmlContent = threadline.value?.html_content?.trim()
+  if (htmlContent) {
+    return normalizeHtmlContent(htmlContent)
+  }
+
+  return ''
+})
+
+const showOriginalEmailCard = computed(() => {
+  if (!originalEmailContent.value) {
+    return false
+  }
+
+  return !(
+    threadline.value?.summary_title ||
+    threadline.value?.summary_content ||
+    threadline.value?.llm_content
+  )
+})
 
 // Share button click handler - uses composable method
 const handleShareButtonClick = async () => {

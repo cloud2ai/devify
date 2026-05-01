@@ -49,6 +49,7 @@ dependencies = [
     "google-auth>=2.23.0",
     "google-auth-oauthlib>=1.1.0",
     "requests>=2.31.0",
+    "rapidfuzz>=3.0.0",
     "jira>=3.5.1",
     "lark-oapi==1.5.3",
     "json-repair>=0.25.0",

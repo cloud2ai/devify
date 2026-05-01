@@ -176,3 +176,46 @@ def test_image_intent_node_requires_image_llm_config():
 
     assert "node_errors" in updated_state
     assert "image_intent_node" in updated_state["node_errors"]
+
+
+def test_image_intent_node_skips_when_llm_content_is_cached(
+    tmp_path, monkeypatch
+):
+    node = ImageIntentNode()
+    image_path = tmp_path / "cached.png"
+    image_path.write_bytes(b"cached-image-bytes")
+
+    state = {
+        "attachments": [
+            {
+                "id": "att-4",
+                "filename": "cached.png",
+                "safe_filename": "cached.png",
+                "is_image": True,
+                "file_size": 18,
+                "file_path": str(image_path),
+                "llm_content": "Cached multimodal summary",
+            }
+        ],
+        "prompt_config": {
+            "image_intent_prompt": "Explain why the user inserted the image.",
+        },
+        "force": False,
+        "image_llm_config_uuid": "33333333-3333-3333-3333-333333333333",
+    }
+
+    def fail_if_called(*args, **kwargs):  # pragma: no cover - defensive
+        raise AssertionError(
+            "LLMTracker should not be called for cached image"
+        )
+
+    monkeypatch.setattr(
+        "threadline.agents.nodes.image_intent_node.LLMTracker.call_messages_and_track",
+        fail_if_called,
+    )
+
+    updated_state = node.execute_processing(state)
+
+    assert updated_state["attachments"][0]["llm_content"] == (
+        "Cached multimodal summary"
+    )

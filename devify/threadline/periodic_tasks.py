@@ -14,20 +14,9 @@ def register_periodic_tasks():
         schedule=crontab(minute="*/1"),
     )
     TASK_REGISTRY.add(
-        name="threadline-reset-stuck-emails",
-        task="threadline.tasks.scheduler.schedule_reset_stuck_emails",
-        schedule=crontab(minute="*/30"),
-        kwargs={"timeout_minutes": 30},
-    )
-    TASK_REGISTRY.add(
         name="threadline-haraka-cleanup",
         task="threadline.tasks.scheduler.schedule_haraka_cleanup",
         schedule=crontab(hour=2, minute=0),
-    )
-    TASK_REGISTRY.add(
-        name="threadline-email-task-cleanup",
-        task="threadline.tasks.scheduler.schedule_email_task_cleanup",
-        schedule=crontab(hour=3, minute=0),
     )
     TASK_REGISTRY.add(
         name="threadline-share-link-cleanup",

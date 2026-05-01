@@ -6,6 +6,7 @@ processing.
 """
 
 import logging
+import hashlib
 import os
 import shutil
 from collections import defaultdict
@@ -41,11 +42,7 @@ class EmailSaveService:
         self._user_cache = {}
         self._mappings_loaded = False
 
-    def save_email(
-        self,
-        user_id: int,
-        email_data: Dict
-    ) -> EmailMessage:
+    def save_email(self, user_id: int, email_data: Dict) -> EmailMessage:
         """
         Save email to database
 
@@ -63,20 +60,24 @@ class EmailSaveService:
         """
         try:
             create_data = {
-                'subject': email_data['subject'],
-                'sender': email_data['sender'],
-                'recipients': email_data['recipients'],
-                'received_at': email_data['received_at'],
-                'html_content': email_data.get('html_content', ''),
-                'text_content': email_data.get('text_content', ''),
-                'status': EmailStatus.FETCHED.value,
+                "subject": email_data["subject"],
+                "sender": email_data["sender"],
+                "recipients": email_data["recipients"],
+                "received_at": email_data["received_at"],
+                "html_content": email_data.get("html_content", ""),
+                "text_content": email_data.get("text_content", ""),
+                "metadata": email_data.get("metadata", {}) or {},
+                "raw_message_id": email_data.get("raw_message_id", ""),
+                "in_reply_to": email_data.get("in_reply_to", ""),
+                "references": email_data.get("references", []) or [],
+                "status": EmailStatus.FETCHED.value,
             }
 
             # Use get_or_create to handle duplicate emails
             email_msg, created = EmailMessage.objects.get_or_create(
                 user_id=user_id,
-                message_id=email_data['message_id'],
-                defaults=create_data
+                message_id=email_data["message_id"],
+                defaults=create_data,
             )
 
             if not created:
@@ -91,7 +92,7 @@ class EmailSaveService:
                 f"(message_id: {email_data['message_id']})"
             )
 
-            attachments = email_data.get('attachments', [])
+            attachments = email_data.get("attachments", [])
             if attachments:
                 self.process_attachments(user_id, email_msg, attachments)
 
@@ -102,11 +103,8 @@ class EmailSaveService:
             raise
 
     def process_attachments(
-        self,
-        user_id: int,
-        email_msg: EmailMessage,
-        attachments: List[Dict]
-    ):
+        self, user_id: int, email_msg: EmailMessage, attachments: List[Dict]
+    ) -> List[EmailAttachment]:
         """
         Process email attachments from parsed metadata
 
@@ -114,6 +112,9 @@ class EmailSaveService:
             user_id: User ID
             email_msg: EmailMessage instance
             attachments: List of attachment metadata from parser
+
+        Returns:
+            List[EmailAttachment]: Created attachment records
         """
         try:
             logger.info(
@@ -125,33 +126,33 @@ class EmailSaveService:
             # message_id format is "email_XXXXXXXX" which is filesystem-safe
             attachment_dir_name = email_msg.message_id
             user_attachment_dir = os.path.join(
-                settings.EMAIL_ATTACHMENT_DIR,
-                attachment_dir_name
+                settings.EMAIL_ATTACHMENT_DIR, attachment_dir_name
             )
             os.makedirs(user_attachment_dir, exist_ok=True)
+
+            created_attachments: List[EmailAttachment] = []
 
             for attachment_data in attachments:
                 try:
                     # Extract attachment information from parser metadata
-                    filename = attachment_data.get('filename', 'unknown')
+                    filename = attachment_data.get("filename", "unknown")
                     content_type = attachment_data.get(
-                        'content_type',
-                        'application/octet-stream'
+                        "content_type", "application/octet-stream"
                     )
-                    file_size = attachment_data.get('file_size', 0)
-                    source_file_path = attachment_data.get('file_path', '')
+                    file_size = attachment_data.get("file_size", 0)
+                    source_file_path = attachment_data.get("file_path", "")
                     # Get safe filename for attachment.
                     # Fallback to original filename if safe_filename is not
                     # present.
                     safe_filename = attachment_data.get(
-                        'safe_filename', filename
+                        "safe_filename", filename
                     )
+                    content_md5 = attachment_data.get("content_md5", "")
 
                     # Skip processing if source file path is missing or file
                     # does not exist
-                    if (
-                        not source_file_path or
-                        not os.path.exists(source_file_path)
+                    if not source_file_path or not os.path.exists(
+                        source_file_path
                     ):
                         logger.warning(
                             f"Skipping attachment {filename}: "
@@ -159,16 +160,31 @@ class EmailSaveService:
                         )
                         continue
 
-                    # Copy file to user-specific directory
                     dest_file_path = os.path.join(
-                        user_attachment_dir, safe_filename)
-                    shutil.copy2(source_file_path, dest_file_path)
+                        user_attachment_dir, safe_filename
+                    )
+
+                    if not content_md5:
+                        content_md5 = self._compute_file_md5(source_file_path)
+
+                    cached_attachment = self._find_cached_attachment(
+                        user_id=user_id,
+                        content_md5=content_md5,
+                    )
+                    cached_content = self._extract_cached_content(
+                        cached_attachment
+                    )
+                    self._materialize_attachment_file(
+                        source_file_path=source_file_path,
+                        dest_file_path=dest_file_path,
+                        cached_attachment=cached_attachment,
+                    )
 
                     # Determine if it's an image
-                    is_image = content_type.startswith('image/')
+                    is_image = content_type.startswith("image/")
 
                     # Create EmailAttachment record
-                    EmailAttachment.objects.create(
+                    attachment = EmailAttachment.objects.create(
                         user_id=user_id,
                         email_message=email_msg,
                         filename=filename,
@@ -176,27 +192,124 @@ class EmailSaveService:
                         content_type=content_type,
                         file_size=file_size,
                         file_path=dest_file_path,
-                        is_image=is_image
+                        content_md5=content_md5,
+                        ocr_content=cached_content.get("ocr_content"),
+                        llm_content=cached_content.get("llm_content"),
+                        is_image=is_image,
                     )
+                    created_attachments.append(attachment)
 
                     logger.info(
                         f"Attachment {filename} processed successfully, "
-                        f"size={file_size} bytes, copied to {dest_file_path}"
+                        f"size={file_size} bytes, md5={content_md5}, "
+                        f"stored at {dest_file_path}"
                     )
 
                 except Exception as exc:
-                    logger.error(f"Failed to process attachment "
-                                 f"{filename}: {exc}")
+                    logger.error(
+                        f"Failed to process attachment " f"{filename}: {exc}"
+                    )
                     continue
 
-            logger.info(f"Successfully processed {len(attachments)} "
-                        f"attachments")
+            logger.info(
+                f"Successfully processed {len(attachments)} " f"attachments"
+            )
+            return created_attachments
 
         except Exception as exc:
-            logger.error(
-                f"Failed to process attachments: {exc}"
-            )
+            logger.error(f"Failed to process attachments: {exc}")
             raise
+
+    def _compute_file_md5(self, file_path: str) -> str:
+        """
+        Compute the MD5 hash for a file on disk.
+        """
+        digest = hashlib.md5()
+        with open(file_path, "rb") as file_handle:
+            for chunk in iter(lambda: file_handle.read(8192), b""):
+                digest.update(chunk)
+        return digest.hexdigest()
+
+    def _find_cached_attachment(
+        self,
+        user_id: int,
+        content_md5: str,
+    ) -> Optional[EmailAttachment]:
+        """
+        Find a previously processed attachment with the same content hash.
+        """
+        if not content_md5:
+            return None
+
+        cached_attachment = (
+            EmailAttachment.objects.filter(
+                user_id=user_id,
+                content_md5=content_md5,
+                llm_content__isnull=False,
+            )
+            .exclude(llm_content="")
+            .order_by("-updated_at", "-id")
+            .first()
+        )
+        if cached_attachment:
+            return cached_attachment
+
+        return (
+            EmailAttachment.objects.filter(
+                user_id=user_id,
+                content_md5=content_md5,
+                ocr_content__isnull=False,
+            )
+            .exclude(ocr_content="")
+            .order_by("-updated_at", "-id")
+            .first()
+        )
+
+    def _extract_cached_content(
+        self,
+        cached_attachment: Optional[EmailAttachment],
+    ) -> Dict[str, Optional[str]]:
+        """
+        Extract reusable OCR/LLM content from a cached attachment.
+        """
+        if not cached_attachment:
+            return {
+                "ocr_content": None,
+                "llm_content": None,
+            }
+
+        return {
+            "ocr_content": cached_attachment.ocr_content or None,
+            "llm_content": cached_attachment.llm_content or None,
+        }
+
+    def _materialize_attachment_file(
+        self,
+        source_file_path: str,
+        dest_file_path: str,
+        cached_attachment: Optional[EmailAttachment],
+    ) -> None:
+        """
+        Persist the attachment file, reusing an existing inode when possible.
+        """
+        if os.path.lexists(dest_file_path):
+            os.remove(dest_file_path)
+
+        if cached_attachment and cached_attachment.file_path:
+            cached_file_path = cached_attachment.file_path
+            if os.path.exists(cached_file_path):
+                try:
+                    os.link(cached_file_path, dest_file_path)
+                    return
+                except OSError as exc:
+                    logger.debug(
+                        "Hardlink reuse failed for %s -> %s: %s",
+                        cached_file_path,
+                        dest_file_path,
+                        exc,
+                    )
+
+        shutil.copy2(source_file_path, dest_file_path)
 
     def load_user_mappings(self):
         """
@@ -216,14 +329,13 @@ class EmailSaveService:
         # Get all email configs and filter in Python due to JSONField
         # query limitations
         all_email_settings = Settings.objects.filter(
-            key='email_config',
-            is_active=True
-        ).values('user_id', 'value')
+            key="email_config", is_active=True
+        ).values("user_id", "value")
 
         auto_assign_user_ids = {
-            setting['user_id']
+            setting["user_id"]
             for setting in all_email_settings
-            if setting['value'].get('mode') == 'auto_assign'
+            if setting["value"].get("mode") == "auto_assign"
         }
 
         if not auto_assign_user_ids:
@@ -232,21 +344,19 @@ class EmailSaveService:
             return
 
         users = User.objects.filter(
-            id__in=auto_assign_user_ids,
-            is_active=True
-        ).values('id', 'email', 'username')
+            id__in=auto_assign_user_ids, is_active=True
+        ).values("id", "email", "username")
 
         default_domain = settings.AUTO_ASSIGN_EMAIL_DOMAIN
         aliases = EmailAlias.objects.filter(
-            user_id__in=auto_assign_user_ids,
-            is_active=True
-        ).values('alias', 'user_id')
+            user_id__in=auto_assign_user_ids, is_active=True
+        ).values("alias", "user_id")
 
         # Group aliases by user_id (supports multiple aliases per user,
         # but typically one user has one alias)
         alias_map = defaultdict(list)
         for alias in aliases:
-            alias_map[alias['user_id']].append(alias['alias'])
+            alias_map[alias["user_id"]].append(alias["alias"])
 
         logger.info(
             f"Found {len(aliases)} active aliases for "
@@ -254,7 +364,7 @@ class EmailSaveService:
         )
 
         for user in users:
-            user_id = user['id']
+            user_id = user["id"]
 
             # Cache user data
             user_aliases = alias_map.get(user_id, [])
@@ -266,9 +376,9 @@ class EmailSaveService:
             )
 
             self._user_cache[user_id] = {
-                'id': user_id,
-                'email': primary_email,
-                'username': user['username']
+                "id": user_id,
+                "email": primary_email,
+                "username": user["username"],
             }
 
             # Map all aliases to user (typically just one alias)
@@ -317,7 +427,7 @@ class EmailSaveService:
             User instance or None if no user found
         """
         try:
-            recipients = email_data.get('recipients', [])
+            recipients = email_data.get("recipients", [])
             if not recipients:
                 logger.warning("No recipients found in email")
                 return None
@@ -326,13 +436,11 @@ class EmailSaveService:
                 user_id = self._email_to_user_map.get(recipient)
                 if user_id:
                     user_data = self._user_cache[user_id]
-                    logger.debug(
-                        f"Found user: {user_data['username']}"
-                    )
+                    logger.debug(f"Found user: {user_data['username']}")
                     user = User(
-                        id=user_data['id'],
-                        email=user_data['email'],
-                        username=user_data['username']
+                        id=user_data["id"],
+                        email=user_data["email"],
+                        username=user_data["username"],
                     )
                     return user
 

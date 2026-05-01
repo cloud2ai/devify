@@ -131,14 +131,13 @@ class EmailFlankerParser:
             subject = self._decode_header(
                 str(message.headers.get("Subject", ""))
             )
-            sender = self._decode_header(
-                str(message.headers.get("From", ""))
-            )
+            sender = self._decode_header(str(message.headers.get("From", "")))
             recipients = self._decode_header(
                 str(message.headers.get("To", ""))
             )
-            date_str = str(
-                message.headers.get("Date", "")
+            date_str = str(message.headers.get("Date", ""))
+            raw_message_id, in_reply_to, references = (
+                self._extract_thread_headers(message)
             )
 
             # Parse and normalize email date
@@ -177,10 +176,13 @@ class EmailFlankerParser:
                 "recipients": recipients,
                 "received_at": received_at,
                 "raw_content": email_data.decode("utf-8", errors="ignore"),
+                "raw_message_id": raw_message_id,
+                "in_reply_to": in_reply_to,
+                "references": references,
                 "html_content": html_content,
                 "text_content": text_content,
                 "content": text_content or html_content or "",
-                "attachments": attachments
+                "attachments": attachments,
             }
 
         except Exception as e:
@@ -233,28 +235,45 @@ class EmailFlankerParser:
             return False
 
     def _generate_message_id(
-        self,
-        subject: str,
-        sender: str,
-        recipients: str,
-        received_at
+        self, subject: str, sender: str, recipients: str, received_at
     ) -> str:
         """
         Generate a stable unique message_id using key email fields.
         """
         # Compose the base string for hashing
-        base = (
-            f"{subject}|{sender}|{recipients}|"
-            f"{received_at.isoformat()}"
-        )
+        base = f"{subject}|{sender}|{recipients}|" f"{received_at.isoformat()}"
         # Generate a hash and truncate to the required length
-        msg_hash = hashlib.sha256(
-            base.encode("utf-8")
-        ).hexdigest()[:self.MESSAGE_ID_HASH_LENGTH]
+        msg_hash = hashlib.sha256(base.encode("utf-8")).hexdigest()[
+            : self.MESSAGE_ID_HASH_LENGTH
+        ]
         return f"email_{msg_hash}"
 
-    def _detect_file_type(self, payload, content_type: str = "",
-                         filename: str = "") -> Tuple[str, str]:
+    def _extract_thread_headers(self, message) -> tuple[str, str, list[str]]:
+        """
+        Extract RFC message threading headers from a flanker message.
+        """
+        raw_message_id = self._decode_header(
+            str(message.headers.get("Message-ID", ""))
+        )
+        in_reply_to = self._decode_header(
+            str(message.headers.get("In-Reply-To", ""))
+        )
+        references = self._decode_header(
+            str(message.headers.get("References", ""))
+        )
+        return raw_message_id, in_reply_to, self._split_references(references)
+
+    def _split_references(self, references: str) -> list[str]:
+        """
+        Normalize a References header into individual message IDs.
+        """
+        if not references:
+            return []
+        return re.findall(r"<[^>]+>", references)
+
+    def _detect_file_type(
+        self, payload, content_type: str = "", filename: str = ""
+    ) -> Tuple[str, str]:
         """
         File type detection using file signature analysis only.
 
@@ -276,8 +295,9 @@ class EmailFlankerParser:
         logger.debug(f"File signature detection: {mime_type} -> {extension}")
         return mime_type, extension
 
-
-    def _is_image_file(self, payload, content_type: str, filename: str) -> bool:
+    def _is_image_file(
+        self, payload, content_type: str, filename: str
+    ) -> bool:
         """
         Detect if a file is an image using the centralized FileTypeDetector.
 
@@ -289,7 +309,9 @@ class EmailFlankerParser:
         Returns:
             bool: True if file is detected as an image
         """
-        return self.file_detector.is_image_file(payload, content_type, filename)
+        return self.file_detector.is_image_file(
+            payload, content_type, filename
+        )
 
     def _decode_header(self, header_value: str) -> str:
         """
@@ -332,7 +354,7 @@ class EmailFlankerParser:
             return "".join(result_parts)
 
         except Exception as e:
-            logger.warning(f"Failed to decode header \"{header_value}\": {e}")
+            logger.warning(f'Failed to decode header "{header_value}": {e}')
             return header_value
 
     def _extract_content(self, message) -> Tuple[str, str]:
@@ -350,8 +372,7 @@ class EmailFlankerParser:
 
         # Log the number of parts in the email message for debugging
         logger.debug(
-            "Processing email message, parts: %d",
-            len(list(message.walk()))
+            "Processing email message, parts: %d", len(list(message.walk()))
         )
 
         # Extract all text parts
@@ -362,7 +383,8 @@ class EmailFlankerParser:
             # Extract common variables for debugging and processing
             content_type = f"{part.content_type.main}/{part.content_type.sub}"
             content_disposition = (
-                part.content_disposition.value if part.content_disposition
+                part.content_disposition.value
+                if part.content_disposition
                 else "None"
             )
             has_body = bool(part.body)
@@ -428,7 +450,8 @@ class EmailFlankerParser:
                     charset = "utf-8"
                     if hasattr(part.content_type, "params"):
                         charset = part.content_type.params.get(
-                            "charset", "utf-8")
+                            "charset", "utf-8"
+                        )
 
                     try:
                         content = part.body.decode(charset, errors="ignore")
@@ -464,7 +487,8 @@ class EmailFlankerParser:
             # Extract common variables for debugging and processing
             content_type = f"{part.content_type.main}/{part.content_type.sub}"
             content_disposition = (
-                part.content_disposition.value if part.content_disposition
+                part.content_disposition.value
+                if part.content_disposition
                 else "None"
             )
             has_body = bool(part.body)
@@ -473,7 +497,9 @@ class EmailFlankerParser:
             # Extract image-specific variables
             content_id = ""
             if hasattr(part.headers, "get"):
-                content_id = str(part.headers.get("content-id", "")).strip("<>")
+                content_id = str(part.headers.get("content-id", "")).strip(
+                    "<>"
+                )
 
             filename = None
             if hasattr(part.content_disposition, "params"):
@@ -505,9 +531,11 @@ class EmailFlankerParser:
                 is_image = is_image_by_mime or is_image_by_signature
 
                 if is_image:
-                    logger.debug(f"Detected image - MIME: {is_image_by_mime}, "
-                                 f"Signature: {is_image_by_signature}, "
-                                 f"detected_type: {detected_type}")
+                    logger.debug(
+                        f"Detected image - MIME: {is_image_by_mime}, "
+                        f"Signature: {is_image_by_signature}, "
+                        f"detected_type: {detected_type}"
+                    )
 
                     # Ensure content is in bytes format for MD5 hashing
                     if isinstance(part.body, bytes):
@@ -518,16 +546,16 @@ class EmailFlankerParser:
 
                     # Skip if we've already processed this image content
                     if file_md5 in processed_md5s:
-                        logger.debug(f"Skipping duplicate image with "
-                                     f"MD5: {file_md5}")
+                        logger.debug(
+                            f"Skipping duplicate image with "
+                            f"MD5: {file_md5}"
+                        )
                         continue
 
                     # Validate image attachment (apply same filters as
                     # _process_attachments)
                     is_valid, validation_reason = (
-                        self._validate_image_attachment(
-                            body_bytes, filename
-                        )
+                        self._validate_image_attachment(body_bytes, filename)
                     )
 
                     # Record MD5 after validation to avoid re-processing
@@ -553,7 +581,7 @@ class EmailFlankerParser:
                         "content_type": str(part.content_type),
                         "size": body_size,
                         "is_inline": True,
-                        "content_disposition": content_disposition
+                        "content_disposition": content_disposition,
                     }
 
                     # Store image info by content_id for inline references
@@ -618,28 +646,35 @@ class EmailFlankerParser:
         try:
             # Use EmailImageProcessor's methods to avoid code duplication
             # Step 1: Normalize HTML img tags to placeholders
-            html_with_placeholders = self.image_processor._normalize_html_img_tags(
-                html_content, image_placeholders
+            html_with_placeholders = (
+                self.image_processor._normalize_html_img_tags(
+                    html_content, image_placeholders
+                )
             )
 
             # Step 2: Extract text from HTML with embedded placeholders
             extracted_text = self._extract_text_with_placeholders(
-                html_with_placeholders)
+                html_with_placeholders
+            )
 
             # Check if any images were actually embedded in the HTML
-            if extracted_text and '[IMAGE:' in extracted_text:
-                logger.info("Successfully positioned images using "
-                            "EmailImageProcessor")
+            if extracted_text and "[IMAGE:" in extracted_text:
+                logger.info(
+                    "Successfully positioned images using "
+                    "EmailImageProcessor"
+                )
                 return extracted_text
             else:
                 # No images were embedded in HTML, append them at the end
                 logger.info("No images found in HTML, appending at end")
                 return self._embed_images_in_text(
-                    text_content, image_placeholders)
+                    text_content, image_placeholders
+                )
 
         except Exception as e:
-            logger.warning(f"Failed to position images using "
-                           f"EmailImageProcessor: {e}")
+            logger.warning(
+                f"Failed to position images using " f"EmailImageProcessor: {e}"
+            )
             # Fallback to simple image embedding
             return self._embed_images_in_text(text_content, image_placeholders)
 
@@ -657,24 +692,30 @@ class EmailFlankerParser:
             str: Clean text content with preserved image placeholders
         """
         try:
-
             # Step 1: Remove script and style elements
             html_content = re.sub(
-                r'<script[^>]*>.*?</script>', '', html_content,
-                flags=re.DOTALL | re.IGNORECASE
+                r"<script[^>]*>.*?</script>",
+                "",
+                html_content,
+                flags=re.DOTALL | re.IGNORECASE,
             )
             html_content = re.sub(
-                r'<style[^>]*>.*?</style>', '', html_content,
-                flags=re.DOTALL | re.IGNORECASE
+                r"<style[^>]*>.*?</style>",
+                "",
+                html_content,
+                flags=re.DOTALL | re.IGNORECASE,
             )
 
             # Step 2: Convert HTML tags to text formatting
-            html_content = re.sub(r'<br\s*/?>', '\n', html_content,
-                                flags=re.IGNORECASE)
-            html_content = re.sub(r'</p>', '\n\n', html_content,
-                                flags=re.IGNORECASE)
-            html_content = re.sub(r'</div>', '\n', html_content,
-                                flags=re.IGNORECASE)
+            html_content = re.sub(
+                r"<br\s*/?>", "\n", html_content, flags=re.IGNORECASE
+            )
+            html_content = re.sub(
+                r"</p>", "\n\n", html_content, flags=re.IGNORECASE
+            )
+            html_content = re.sub(
+                r"</div>", "\n", html_content, flags=re.IGNORECASE
+            )
 
             # Step 2.5: Convert external links to markdown format before
             # removing tags. Convert <a href="url">text</a> to [text](url)
@@ -683,7 +724,7 @@ class EmailFlankerParser:
                 href = match.group(1)
                 text = match.group(2)
                 # Only convert external links (http/https)
-                if href.startswith(('http://', 'https://')):
+                if href.startswith(("http://", "https://")):
                     return f"[{text}]({href})"
                 else:
                     # For internal links, just return the text
@@ -691,40 +732,44 @@ class EmailFlankerParser:
 
             html_content = re.sub(
                 r'<a[^>]*href=["\']([^"\']*)["\'][^>]*>([^<]*)</a>',
-                convert_link, html_content, flags=re.IGNORECASE)
+                convert_link,
+                html_content,
+                flags=re.IGNORECASE,
+            )
 
             # Step 3: Remove all remaining HTML tags but preserve image placeholders
-            text_content = re.sub(r'<[^>]+>', '', html_content)
+            text_content = re.sub(r"<[^>]+>", "", html_content)
 
             # Step 4: Decode HTML entities
             text_content = html.unescape(text_content)
 
             # Step 5: Clean up whitespace while preserving image placeholders
             # Split by image placeholders to handle them separately
-            parts = re.split(r'(\[IMAGE:[^\]]+\])', text_content)
+            parts = re.split(r"(\[IMAGE:[^\]]+\])", text_content)
 
             # Clean each part and reassemble
             cleaned_parts = []
             for part in parts:
-                if part.startswith('[IMAGE:'):
+                if part.startswith("[IMAGE:"):
                     # This is an image placeholder, keep it as is
                     cleaned_parts.append(part)
                 else:
                     # This is regular text, clean it up
-                    cleaned_part = re.sub(r'\n\s*\n', '\n\n', part)
-                    cleaned_part = re.sub(r'[ \t]+', ' ', cleaned_part)
-                    cleaned_part = re.sub(r'\n +', '\n', cleaned_part)
+                    cleaned_part = re.sub(r"\n\s*\n", "\n\n", part)
+                    cleaned_part = re.sub(r"[ \t]+", " ", cleaned_part)
+                    cleaned_part = re.sub(r"\n +", "\n", cleaned_part)
                     cleaned_parts.append(cleaned_part)
 
             # Join parts back together
-            text_content = ''.join(cleaned_parts)
+            text_content = "".join(cleaned_parts)
 
             return text_content.strip()
 
         except Exception as e:
-            logger.warning(f"Failed to extract text from HTML with "
-                           f"placeholders: {e}")
-            return ''
+            logger.warning(
+                f"Failed to extract text from HTML with " f"placeholders: {e}"
+            )
+            return ""
 
     def _extract_text_from_html(
         self, text_content: str, html_content: str
@@ -744,7 +789,6 @@ class EmailFlankerParser:
             logger.warning(f"Failed to extract text from HTML: {e}")
             return text_content
 
-
     def _normalize_text(self, text: str) -> str:
         """
         Normalize whitespace in extracted text.
@@ -758,9 +802,7 @@ class EmailFlankerParser:
         return text
 
     def _embed_images_in_text(
-        self,
-        text_content: str,
-        image_placeholders: dict
+        self, text_content: str, image_placeholders: dict
     ) -> str:
         """
         Embed image references in text content.
@@ -784,18 +826,17 @@ class EmailFlankerParser:
         if html_content:
             # Check if HTML contains <img> tags or image references
             has_html_images = bool(
-                re.search(r'<img[^>]*>', html_content, re.IGNORECASE))
+                re.search(r"<img[^>]*>", html_content, re.IGNORECASE)
+            )
 
         if has_html_images:
             logger.info(
                 "Using HTML positioning algorithm with %d images",
-                len(image_placeholders)
+                len(image_placeholders),
             )
             # Use EmailImageProcessor for consistent image positioning
             return self.image_processor.process_images(
-                text_content,
-                html_content,
-                image_placeholders
+                text_content, html_content, image_placeholders
             )
         else:
             # Try to intelligently position images based on text patterns
@@ -804,7 +845,8 @@ class EmailFlankerParser:
                 f"positioning for {len(image_placeholders)} images"
             )
             return self.image_processor.process_images(
-                text_content, "", image_placeholders)
+                text_content, "", image_placeholders
+            )
 
     def _clean_html_entities(self, text: str) -> str:
         """
@@ -837,9 +879,7 @@ class EmailFlankerParser:
         return text.strip()
 
     def _validate_image_attachment(
-        self,
-        payload: bytes,
-        filename: Optional[str] = None
+        self, payload: bytes, filename: Optional[str] = None
     ) -> Tuple[bool, str]:
         """
         Validate image attachment against filtering criteria.
@@ -881,13 +921,14 @@ class EmailFlankerParser:
                 # Validate dimensions are non-zero
                 if width == 0 or height == 0:
                     return False, (
-                        f"image has invalid dimensions "
-                        f"({width}x{height})"
+                        f"image has invalid dimensions " f"({width}x{height})"
                     )
 
                 # Check minimum dimensions
-                if (width < self.MIN_IMAGE_WIDTH or
-                        height < self.MIN_IMAGE_HEIGHT):
+                if (
+                    width < self.MIN_IMAGE_WIDTH
+                    or height < self.MIN_IMAGE_HEIGHT
+                ):
                     return False, (
                         f"image dimensions too small "
                         f"({width}x{height} < "
@@ -924,9 +965,7 @@ class EmailFlankerParser:
         return True, ""
 
     def _clean_invalid_image_placeholders(
-        self,
-        text_content: str,
-        attachments: list
+        self, text_content: str, attachments: list
     ) -> str:
         """
         Remove image placeholders from text content that don't have
@@ -943,11 +982,15 @@ class EmailFlankerParser:
             str: Text content with invalid placeholders removed
         """
         # Early return for None, empty string, or text without image markers
-        if text_content is None or not text_content or '[IMAGE:' not in text_content:
+        if (
+            text_content is None
+            or not text_content
+            or "[IMAGE:" not in text_content
+        ):
             return text_content
 
         # Extract all image placeholders from text
-        image_placeholder_pattern = r'\[IMAGE:\s*([^\]]+)\]'
+        image_placeholder_pattern = r"\[IMAGE:\s*([^\]]+)\]"
         placeholders = re.findall(image_placeholder_pattern, text_content)
 
         if not placeholders:
@@ -956,8 +999,8 @@ class EmailFlankerParser:
         # Create set of valid safe_filenames from attachments
         valid_filenames = set()
         for att in attachments:
-            if att.get('is_image'):
-                safe_filename = att.get('safe_filename')
+            if att.get("is_image"):
+                safe_filename = att.get("safe_filename")
                 if safe_filename:
                     valid_filenames.add(safe_filename)
 
@@ -972,9 +1015,7 @@ class EmailFlankerParser:
                 # This handles variations like [IMAGE: filename] and
                 # [IMAGE:filename]
                 placeholder_pattern = (
-                    r'\[IMAGE:\s*' +
-                    re.escape(placeholder_filename) +
-                    r'\]'
+                    r"\[IMAGE:\s*" + re.escape(placeholder_filename) + r"\]"
                 )
                 # Check if placeholder exists before removing
                 if re.search(placeholder_pattern, cleaned_content):
@@ -989,8 +1030,8 @@ class EmailFlankerParser:
 
         if removed_count > 0:
             # Clean up extra whitespace left by removed placeholders
-            cleaned_content = re.sub(r'\n\s*\n\s*\n', '\n\n', cleaned_content)
-            cleaned_content = re.sub(r'[ \t]+\n', '\n', cleaned_content)
+            cleaned_content = re.sub(r"\n\s*\n\s*\n", "\n\n", cleaned_content)
+            cleaned_content = re.sub(r"[ \t]+\n", "\n", cleaned_content)
             logger.info(
                 f"Cleaned {removed_count} invalid image placeholder(s) "
                 f"from text content"
@@ -1016,7 +1057,8 @@ class EmailFlankerParser:
             # Extract common variables for debugging and processing
             content_type = f"{part.content_type.main}/{part.content_type.sub}"
             content_disposition = (
-                part.content_disposition.value if part.content_disposition
+                part.content_disposition.value
+                if part.content_disposition
                 else "None"
             )
             has_body = bool(part.body)
@@ -1041,14 +1083,12 @@ class EmailFlankerParser:
             # Check content disposition for attachment status
             if part.content_disposition:
                 if hasattr(part.content_disposition, "value"):
-                    is_attachment = (
-                        part.content_disposition.value in [
-                            "attachment", "inline"]
-                    )
+                    is_attachment = part.content_disposition.value in [
+                        "attachment",
+                        "inline",
+                    ]
                 if hasattr(part.content_disposition, "params"):
-                    filename = part.content_disposition.params.get(
-                        "filename"
-                    )
+                    filename = part.content_disposition.params.get("filename")
 
             # Check content type parameters for filename
             if not filename and hasattr(part.content_type, "params"):
@@ -1072,8 +1112,10 @@ class EmailFlankerParser:
 
                     # Skip if we've already processed this attachment
                     if file_md5 in processed_md5s:
-                        logger.debug(f"Skipping duplicate attachment "
-                                     f"with MD5: {file_md5}")
+                        logger.debug(
+                            f"Skipping duplicate attachment "
+                            f"with MD5: {file_md5}"
+                        )
                         continue
 
                     processed_md5s.add(file_md5)
@@ -1085,9 +1127,7 @@ class EmailFlankerParser:
                     # images
                     if is_image:
                         is_valid, validation_reason = (
-                            self._validate_image_attachment(
-                                payload, filename
-                            )
+                            self._validate_image_attachment(payload, filename)
                         )
 
                         if not is_valid:
@@ -1114,10 +1154,14 @@ class EmailFlankerParser:
                     )
                     if attachment_info:
                         attachments.append(attachment_info)
-                        logger.info(f"Successfully processed "
-                                    f"attachment: {filename}")
+                        logger.info(
+                            f"Successfully processed "
+                            f"attachment: {filename}"
+                        )
                     else:
-                        logger.warning(f"Failed to save attachment: {filename}")
+                        logger.warning(
+                            f"Failed to save attachment: {filename}"
+                        )
 
                 except Exception as e:
                     logger.error(f"Error processing attachment: {e}")
@@ -1127,10 +1171,7 @@ class EmailFlankerParser:
         return attachments
 
     def _save_attachment(
-        self,
-        filename: str,
-        content_type: str,
-        payload: bytes
+        self, filename: str, content_type: str, payload: bytes
     ) -> Optional[Dict]:
         """
         Save attachment to disk and return metadata.
@@ -1162,13 +1203,12 @@ class EmailFlankerParser:
             safe_filename = f"{file_md5}{file_extension}"
 
             # Check if file with same MD5 already exists
-            file_path = os.path.join(
-                self.attachment_dir, safe_filename
-            )
+            file_path = os.path.join(self.attachment_dir, safe_filename)
 
             if os.path.exists(file_path):
-                logger.debug(f"File with same MD5 already exists: "
-                             f"{safe_filename}")
+                logger.debug(
+                    f"File with same MD5 already exists: " f"{safe_filename}"
+                )
             else:
                 # Write new file to disk
                 with open(file_path, "wb") as f:
@@ -1176,7 +1216,7 @@ class EmailFlankerParser:
                 logger.debug(f"Saved new file with MD5: {safe_filename}")
 
             logger.info(
-                f"Attachment \"{filename}\" processed successfully, "
+                f'Attachment "{filename}" processed successfully, '
                 f"size={len(payload)} bytes, MD5: {file_md5}"
             )
 
@@ -1196,9 +1236,9 @@ class EmailFlankerParser:
                 "content_type": corrected_content_type,
                 "file_size": len(payload),
                 "file_path": file_path,
-                "is_image": is_image
+                "is_image": is_image,
             }
 
         except Exception as e:
-            logger.error(f"Error saving attachment \"{filename}\": {e}")
+            logger.error(f'Error saving attachment "{filename}": {e}')
             return None

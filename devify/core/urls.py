@@ -3,7 +3,6 @@ from django.http import JsonResponse
 from django.urls import path, include
 
 from accounts.views import OAuthCallbackRedirectView
-from core.views.periodic_tasks import AdminPeriodicTaskSettingsAPIView
 from .swagger import schema_view, swagger_view, redoc_view
 
 # Define project URL routing configuration
@@ -49,10 +48,6 @@ urlpatterns = [
     path("api/v1/", include("threadline.urls")),
     # Agentcore task execution API
     path("api/v1/tasks/", include("agentcore_task.adapters.django.urls")),
-    path(
-        "api/v1/admin/periodic-tasks/",
-        AdminPeriodicTaskSettingsAPIView.as_view(),
-    ),
     # Management APIs for auth users/groups
     path("api/v1/management/", include("accounts.management_urls")),
     # Agentcore admin APIs for LLM metering and notifications

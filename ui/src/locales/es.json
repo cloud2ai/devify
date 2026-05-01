@@ -26,6 +26,7 @@
     "noData": "No hay datos disponibles",
     "error": "Error",
     "success": "Éxito",
+    "merged": "Fusionado",
     "language": "Idioma",
     "tryAgain": "Intentar de nuevo",
     "noSubject": "Sin asunto"
@@ -175,7 +176,9 @@
       "processing": "Procesando",
       "completed": "Completado",
       "failed": "Fallido",
-      "success": "Éxito"
+      "success": "Éxito",
+      "canonical": "Principal",
+      "merged": "Fusionado"
     },
     "summary": "Resumen",
     "originalEmail": "Correo Original",
@@ -200,6 +203,18 @@
     "participants": "Participantes",
     "locations": "Ubicaciones",
     "timeline": "Cronología",
+    "merge": {
+      "mergedInto": "Fusionado en el registro principal",
+      "viewMainRecord": "Ver registro principal",
+      "sources": "Orígenes de fusión",
+      "sourceCount": "{count} elementos",
+      "sourceDate": "Recibido"
+    },
+    "issue": {
+      "label": "Enlace del problema",
+      "openInNewWindow": "Abrir en una nueva ventana",
+      "reference": "Problema"
+    },
     "errorLoading": "Error al cargar el hilo de conversación",
     "errorLoadingDesc": "No se pudieron cargar los detalles de la conversación"
   },

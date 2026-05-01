@@ -42,6 +42,8 @@
       "failed": "Failed",
       "processing": "Processing",
       "fetched": "Fetched",
+      "canonical": "Canonical",
+      "merged": "Merged",
       "pending": "Pending",
       "completed": "Completed",
       "unknown": "Unknown"
@@ -226,6 +228,18 @@
     "participants": "Participants",
     "locations": "Locations",
     "timeline": "Timeline",
+    "merge": {
+      "mergedInto": "Merged into main record",
+      "viewMainRecord": "View main record",
+      "sources": "Merge sources",
+      "sourceCount": "{count} items",
+      "sourceDate": "Received"
+    },
+    "issue": {
+      "label": "Issue link",
+      "openInNewWindow": "Open in new window",
+      "reference": "Issue"
+    },
     "errorLoading": "Error loading threadline",
     "errorLoadingDesc": "Failed to load conversation details"
   },

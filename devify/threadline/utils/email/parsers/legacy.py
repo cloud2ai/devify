@@ -57,12 +57,10 @@ class EmailParser:
             parser = EmailFlankerParser()
     """
 
-    EMAIL_ATTACHMENT_PREFIX = 'email_attachment_'
-    IMAGE_CONTENT_TYPE_PREFIX = 'image/'
+    EMAIL_ATTACHMENT_PREFIX = "email_attachment_"
+    IMAGE_CONTENT_TYPE_PREFIX = "image/"
 
-    def __init__(
-        self, attachment_dir: str = '/tmp/email_attachments'
-    ):
+    def __init__(self, attachment_dir: str = "/tmp/email_attachments"):
         """
         Initialize email parser.
 
@@ -73,11 +71,12 @@ class EmailParser:
             attachment_dir: Directory for storing email attachments
         """
         import warnings
+
         warnings.warn(
             "EmailParser is obsolete and will be removed in a future version. "
             "Please use EmailFlankerParser instead for better functionality.",
             DeprecationWarning,
-            stacklevel=2
+            stacklevel=2,
         )
         self.attachment_dir = attachment_dir
 
@@ -96,10 +95,13 @@ class EmailParser:
             msg = message_from_bytes(email_data)
 
             # Extract and decode basic email information
-            subject = self._decode_header(msg.get('subject', ''))
-            sender = self._decode_header(msg.get('from', ''))
-            recipients = self._decode_header(msg.get('to', ''))
-            date_str = msg.get('date', '')
+            subject = self._decode_header(msg.get("subject", ""))
+            sender = self._decode_header(msg.get("from", ""))
+            recipients = self._decode_header(msg.get("to", ""))
+            date_str = msg.get("date", "")
+            raw_message_id, in_reply_to, references = (
+                self._extract_thread_headers(msg)
+            )
 
             # Parse date
             try:
@@ -110,9 +112,7 @@ class EmailParser:
                 received_at = timezone.now()
 
             # Extract text and HTML content
-            text_content, html_content = (
-                self._extract_content_from_email(msg)
-            )
+            text_content, html_content = self._extract_content_from_email(msg)
 
             # Generate stable message_id
             stable_message_id = self._generate_stable_message_id(
@@ -123,18 +123,19 @@ class EmailParser:
             attachments = self._process_attachments_from_email(msg)
 
             return {
-                'message_id': stable_message_id,
-                'subject': subject,
-                'sender': sender,
-                'recipients': recipients,
-                'received_at': received_at,
-                'raw_content': email_data.decode(
-                    'utf-8', errors='ignore'
-                ),
-                'html_content': html_content,
-                'text_content': text_content,
-                'content': text_content or html_content or '',
-                'attachments': attachments
+                "message_id": stable_message_id,
+                "subject": subject,
+                "sender": sender,
+                "recipients": recipients,
+                "received_at": received_at,
+                "raw_content": email_data.decode("utf-8", errors="ignore"),
+                "raw_message_id": raw_message_id,
+                "in_reply_to": in_reply_to,
+                "references": references,
+                "html_content": html_content,
+                "text_content": text_content,
+                "content": text_content or html_content or "",
+                "attachments": attachments,
             }
 
         except Exception as e:
@@ -152,13 +153,11 @@ class EmailParser:
             Parsed email data dictionary or None if parsing fails
         """
         try:
-            with open(file_path, 'rb') as f:
+            with open(file_path, "rb") as f:
                 email_data = f.read()
             return self.parse_from_bytes(email_data)
         except Exception as e:
-            logger.error(
-                f"Failed to parse email from file {file_path}: {e}"
-            )
+            logger.error(f"Failed to parse email from file {file_path}: {e}")
             return None
 
     def parse_from_string(self, raw_content: str) -> Optional[Dict]:
@@ -172,7 +171,7 @@ class EmailParser:
             Parsed email data dictionary or None if parsing fails
         """
         try:
-            email_data = raw_content.encode('utf-8')
+            email_data = raw_content.encode("utf-8")
             return self.parse_from_bytes(email_data)
         except Exception as e:
             logger.error(f"Failed to parse email from string: {e}")
@@ -188,16 +187,14 @@ class EmailParser:
         except EmailNotValidError:
             return False
 
-    def _generate_stable_message_id(self, subject: str, sender: str,
-                                   recipients: str, received_at) -> str:
+    def _generate_stable_message_id(
+        self, subject: str, sender: str, recipients: str, received_at
+    ) -> str:
         """
         Generate a stable unique message_id using key email fields.
         """
-        base = (
-            f"{subject}|{sender}|{recipients}|"
-            f"{received_at.isoformat()}"
-        )
-        msg_hash = hashlib.sha256(base.encode('utf-8')).hexdigest()[:16]
+        base = f"{subject}|{sender}|{recipients}|" f"{received_at.isoformat()}"
+        msg_hash = hashlib.sha256(base.encode("utf-8")).hexdigest()[:16]
         return f"email_{msg_hash}"
 
     def _decode_header(self, header_value: str) -> str:
@@ -217,7 +214,7 @@ class EmailParser:
             str: Decoded header value
         """
         if not header_value:
-            return ''
+            return ""
 
         try:
             decoded_parts = decode_header(header_value)
@@ -229,24 +226,37 @@ class EmailParser:
                     # Decode bytes using the specified encoding or
                     # default to utf-8
                     try:
-                        decoded_part = part.decode(encoding or 'utf-8')
+                        decoded_part = part.decode(encoding or "utf-8")
                     except (UnicodeDecodeError, LookupError):
                         # Fallback to utf-8 if specified encoding fails
-                        decoded_part = part.decode(
-                            'utf-8', errors='replace'
-                        )
+                        decoded_part = part.decode("utf-8", errors="replace")
                     result_parts.append(decoded_part)
                 else:
                     # Part is already a string
                     result_parts.append(part)
 
-            return ''.join(result_parts)
+            return "".join(result_parts)
 
         except Exception as e:
-            logger.warning(
-                f"Failed to decode header '{header_value}': {e}"
-            )
+            logger.warning(f"Failed to decode header '{header_value}': {e}")
             return header_value
+
+    def _extract_thread_headers(self, msg) -> tuple[str, str, list[str]]:
+        """
+        Extract RFC message threading headers from a parsed email.
+        """
+        raw_message_id = self._decode_header(msg.get("message-id", ""))
+        in_reply_to = self._decode_header(msg.get("in-reply-to", ""))
+        references = self._decode_header(msg.get("references", ""))
+        return raw_message_id, in_reply_to, self._split_references(references)
+
+    def _split_references(self, references: str) -> list[str]:
+        """
+        Normalize the References header into message ID tokens.
+        """
+        if not references:
+            return []
+        return re.findall(r"<[^>]+>", references)
 
     def _extract_content_from_email(self, msg) -> (str, str):
         """
@@ -257,14 +267,12 @@ class EmailParser:
             tuple: (text_content, html_content)
         """
         # Initialize content containers
-        text_content = ''
-        html_content = ''
+        text_content = ""
+        html_content = ""
         image_placeholders = {}
 
         # Process email based on its structure
-        logger.debug(
-            f"Processing email is multipart: {msg.is_multipart()}"
-        )
+        logger.debug(f"Processing email is multipart: {msg.is_multipart()}")
         if msg.is_multipart():
             logger.info("Processing multipart email")
             text_content, html_content, image_placeholders = (
@@ -293,8 +301,8 @@ class EmailParser:
         Returns:
             tuple: (text_content, html_content, image_placeholders)
         """
-        text_content = ''
-        html_content = ''
+        text_content = ""
+        html_content = ""
         image_placeholders = {}
 
         for part in msg.walk():
@@ -303,25 +311,21 @@ class EmailParser:
                 f"Processing multipart email part "
                 f"content_type: {content_type}"
             )
-            content_disposition = str(
-                part.get('Content-Disposition', '')
-            )
+            content_disposition = str(part.get("Content-Disposition", ""))
 
             # Handle attachments and inline images
-            if self._is_attachment_or_image(
-                content_type, content_disposition
-            ):
+            if self._is_attachment_or_image(content_type, content_disposition):
                 image_info = self._process_image_attachment(part)
                 if image_info:
-                    placeholder = image_info['placeholder']
+                    placeholder = image_info["placeholder"]
                     image_placeholders[placeholder] = image_info
                 continue
 
             # NOTE(Ray): Currently, we only handle the first part of
             # the email to avoid duplicate content.
-            if content_type == 'text/html' and not html_content:
+            if content_type == "text/html" and not html_content:
                 html_content = self._get_part_content(part)
-            elif content_type == 'text/plain' and not text_content:
+            elif content_type == "text/plain" and not text_content:
                 text_content = self._get_part_content(part)
 
         return text_content, html_content, image_placeholders
@@ -343,19 +347,18 @@ class EmailParser:
                 html_content: "<html><body>Hello world</body></html>"
         """
         content_type = msg.get_content_type()
-        logger.info(
-            f"Processing simple email content_type: {content_type}"
-        )
+        logger.info(f"Processing simple email content_type: {content_type}")
 
-        if content_type == 'text/html':
-            return '', self._get_part_content(msg)
-        elif content_type == 'text/plain':
-            return self._get_part_content(msg), ''
+        if content_type == "text/html":
+            return "", self._get_part_content(msg)
+        elif content_type == "text/plain":
+            return self._get_part_content(msg), ""
         else:
-            return '', ''
+            return "", ""
 
-    def _detect_image_type(self, payload: bytes, content_type: str,
-                          filename: str) -> bool:
+    def _detect_image_type(
+        self, payload: bytes, content_type: str, filename: str
+    ) -> bool:
         """
         Detect if a file is an image based on file signature
         (magic bytes).
@@ -376,42 +379,36 @@ class EmailParser:
             return False
 
         # Check file signature (magic bytes) for common image formats
-        if payload.startswith(b'\x89PNG\r\n\x1a\n'):
+        if payload.startswith(b"\x89PNG\r\n\x1a\n"):
             # PNG signature
             return True
-        elif payload.startswith(b'\xff\xd8\xff'):
+        elif payload.startswith(b"\xff\xd8\xff"):
             # JPEG signature
             return True
-        elif (payload.startswith(b'GIF87a') or
-              payload.startswith(b'GIF89a')):
+        elif payload.startswith(b"GIF87a") or payload.startswith(b"GIF89a"):
             # GIF signature
             return True
-        elif payload.startswith(b'BM'):
+        elif payload.startswith(b"BM"):
             # BMP signature
             return True
-        elif payload.startswith(b'RIFF') and b'WEBP' in payload[:12]:
+        elif payload.startswith(b"RIFF") and b"WEBP" in payload[:12]:
             # WebP signature
             return True
-        elif payload.startswith(b'\x00\x00\x01\x00'):
+        elif payload.startswith(b"\x00\x00\x01\x00"):
             # ICO signature
             return True
-        elif payload.startswith(b'\x00\x00\x02\x00'):
+        elif payload.startswith(b"\x00\x00\x02\x00"):
             # CUR signature
             return True
-        elif (payload.startswith(b'II*\x00') or
-              payload.startswith(b'MM\x00*')):
+        elif payload.startswith(b"II*\x00") or payload.startswith(b"MM\x00*"):
             # TIFF signature
             return True
         else:
             # Fall back to MIME type if no signature match
-            return content_type.startswith(
-                self.IMAGE_CONTENT_TYPE_PREFIX
-            )
+            return content_type.startswith(self.IMAGE_CONTENT_TYPE_PREFIX)
 
     def _get_corrected_content_type(
-        self,
-        payload: bytes,
-        content_type: str
+        self, payload: bytes, content_type: str
     ) -> str:
         """
         Get corrected content type based on file signature.
@@ -435,30 +432,29 @@ class EmailParser:
             return content_type
 
         # Check file signature and return appropriate MIME type
-        if payload.startswith(b'\x89PNG\r\n\x1a\n'):
-            return 'image/png'
-        elif payload.startswith(b'\xff\xd8\xff'):
-            return 'image/jpeg'
-        elif (payload.startswith(b'GIF87a') or
-              payload.startswith(b'GIF89a')):
-            return 'image/gif'
-        elif payload.startswith(b'BM'):
-            return 'image/bmp'
-        elif payload.startswith(b'RIFF') and b'WEBP' in payload[:12]:
-            return 'image/webp'
-        elif payload.startswith(b'\x00\x00\x01\x00'):
-            return 'image/x-icon'
-        elif payload.startswith(b'\x00\x00\x02\x00'):
-            return 'image/x-cursor'
-        elif (payload.startswith(b'II*\x00') or
-              payload.startswith(b'MM\x00*')):
-            return 'image/tiff'
+        if payload.startswith(b"\x89PNG\r\n\x1a\n"):
+            return "image/png"
+        elif payload.startswith(b"\xff\xd8\xff"):
+            return "image/jpeg"
+        elif payload.startswith(b"GIF87a") or payload.startswith(b"GIF89a"):
+            return "image/gif"
+        elif payload.startswith(b"BM"):
+            return "image/bmp"
+        elif payload.startswith(b"RIFF") and b"WEBP" in payload[:12]:
+            return "image/webp"
+        elif payload.startswith(b"\x00\x00\x01\x00"):
+            return "image/x-icon"
+        elif payload.startswith(b"\x00\x00\x02\x00"):
+            return "image/x-cursor"
+        elif payload.startswith(b"II*\x00") or payload.startswith(b"MM\x00*"):
+            return "image/tiff"
         else:
             # Return original content type if no signature match
             return content_type
 
-    def _is_attachment_or_image(self, content_type: str,
-                                content_disposition: str) -> bool:
+    def _is_attachment_or_image(
+        self, content_type: str, content_disposition: str
+    ) -> bool:
         """
         Check if email part is an attachment or inline image.
 
@@ -480,9 +476,9 @@ class EmailParser:
               "" -> False
         """
         return (
-            'attachment' in content_disposition or
-            'inline' in content_disposition or
-            content_type.startswith('image/')
+            "attachment" in content_disposition
+            or "inline" in content_disposition
+            or content_type.startswith("image/")
         )
 
     def _process_image_attachment(self, part) -> Optional[Dict]:
@@ -512,46 +508,42 @@ class EmailParser:
             }
         """
         filename = part.get_filename()
-        content_id = part.get('Content-ID', '')
+        content_id = part.get("Content-ID", "")
 
         # For inline images, we need either filename or content_id
         if not filename and not content_id:
             return None
 
         content_type = part.get_content_type()
-        content_disposition = str(part.get('Content-Disposition', ''))
+        content_disposition = str(part.get("Content-Disposition", ""))
 
         # Generate MD5-based filename for consistency
         # This ensures same content always has same safe_filename
         payload = part.get_payload(decode=True)
         if not payload:
-            logger.warning(f"No payload available for image attachment: "
-                           f"{filename}")
+            logger.warning(
+                f"No payload available for image attachment: " f"{filename}"
+            )
             return None
 
         file_md5 = hashlib.md5(payload).hexdigest()
-        file_extension = (
-            os.path.splitext(filename)[1] if filename else ''
-        )
+        file_extension = os.path.splitext(filename)[1] if filename else ""
         safe_filename = f"{file_md5}{file_extension}"
 
         placeholder = f"[IMAGE: {safe_filename}]"
 
         return {
-            'placeholder': placeholder,
-            'filename': filename,
-            'safe_filename': safe_filename,
-            'content_id': content_id.strip('<>') if content_id else None,
-            'content_type': content_type,
-            'is_inline': 'inline' in content_disposition,
-            'content_disposition': content_disposition
+            "placeholder": placeholder,
+            "filename": filename,
+            "safe_filename": safe_filename,
+            "content_id": content_id.strip("<>") if content_id else None,
+            "content_type": content_type,
+            "is_inline": "inline" in content_disposition,
+            "content_disposition": content_disposition,
         }
 
     def _extract_text_with_images(
-        self,
-        text_content: str,
-        html_content: str,
-        image_placeholders: dict
+        self, text_content: str, html_content: str, image_placeholders: dict
     ) -> str:
         """
         Extract text content with embedded image placeholders.
@@ -583,7 +575,8 @@ class EmailParser:
 
             # Extract text from HTML with embedded placeholders
             extracted_text = self._extract_text_with_placeholders(
-                html_with_placeholders)
+                html_with_placeholders
+            )
             if extracted_text:
                 text_content = extracted_text
 
@@ -601,8 +594,9 @@ class EmailParser:
 
         return text_content
 
-    def _embed_placeholders_in_html(self, html_content: str,
-                                    image_placeholders: dict) -> str:
+    def _embed_placeholders_in_html(
+        self, html_content: str, image_placeholders: dict
+    ) -> str:
         """
         Embed image placeholders directly in HTML content.
 
@@ -630,10 +624,9 @@ class EmailParser:
         # Replace each <img> tag with its corresponding placeholder
         for placeholder, image_info in image_placeholders.items():
             # Get both filename and content_id for matching
-            safe_filename = image_info['safe_filename']
-            original_filename = image_info['filename']
-            content_id = image_info.get('content_id')
-
+            safe_filename = image_info["safe_filename"]
+            original_filename = image_info["filename"]
+            content_id = image_info.get("content_id")
 
             # Create patterns to match the img tag using constants
             patterns = []
@@ -641,56 +634,68 @@ class EmailParser:
             # Pattern 1: Match by original filename (for cid: protocol)
             if original_filename:
                 filename_without_ext = os.path.splitext(original_filename)[0]
-                patterns.extend([
-                    HTML_IMG_PATTERNS['CID_BY_FILENAME'].format(
-                        filename=re.escape(original_filename)
-                    ),
-                    HTML_IMG_PATTERNS['CID_BY_FILENAME_NO_EXT'].format(
-                        filename_no_ext=re.escape(filename_without_ext)
-                    )
-                ])
+                patterns.extend(
+                    [
+                        HTML_IMG_PATTERNS["CID_BY_FILENAME"].format(
+                            filename=re.escape(original_filename)
+                        ),
+                        HTML_IMG_PATTERNS["CID_BY_FILENAME_NO_EXT"].format(
+                            filename_no_ext=re.escape(filename_without_ext)
+                        ),
+                    ]
+                )
 
             # Pattern 2: Match by content_id (for complex CID formats)
             if content_id:
-                patterns.append(HTML_IMG_PATTERNS['CID_BY_CONTENT_ID'].format(
-                    content_id=re.escape(content_id)
-                ))
+                patterns.append(
+                    HTML_IMG_PATTERNS["CID_BY_CONTENT_ID"].format(
+                        content_id=re.escape(content_id)
+                    )
+                )
 
             # Pattern 3: Match by safe_filename (fallback)
-            patterns.append(HTML_IMG_PATTERNS['CID_BY_SAFE_FILENAME'].format(
-                safe_filename=re.escape(safe_filename)
-            ))
+            patterns.append(
+                HTML_IMG_PATTERNS["CID_BY_SAFE_FILENAME"].format(
+                    safe_filename=re.escape(safe_filename)
+                )
+            )
 
             # Pattern 4: Match file:// protocol images by filename
             if original_filename:
                 filename_without_ext = os.path.splitext(original_filename)[0]
-                patterns.extend([
-                    HTML_IMG_PATTERNS['FILE_BY_FILENAME'].format(
-                        filename=re.escape(original_filename)
-                    ),
-                    HTML_IMG_PATTERNS['FILE_BY_FILENAME_NO_EXT'].format(
-                        filename_no_ext=re.escape(filename_without_ext)
-                    )
-                ])
+                patterns.extend(
+                    [
+                        HTML_IMG_PATTERNS["FILE_BY_FILENAME"].format(
+                            filename=re.escape(original_filename)
+                        ),
+                        HTML_IMG_PATTERNS["FILE_BY_FILENAME_NO_EXT"].format(
+                            filename_no_ext=re.escape(filename_without_ext)
+                        ),
+                    ]
+                )
 
             # Pattern 5: Match by img id attribute (for complex cases)
             if original_filename:
                 filename_without_ext = os.path.splitext(original_filename)[0]
-                patterns.extend([
-                    HTML_IMG_PATTERNS['ID_BY_FILENAME'].format(
-                        filename=re.escape(original_filename)
-                    ),
-                    HTML_IMG_PATTERNS['ID_BY_FILENAME_NO_EXT'].format(
-                        filename_no_ext=re.escape(filename_without_ext)
-                    )
-                ])
+                patterns.extend(
+                    [
+                        HTML_IMG_PATTERNS["ID_BY_FILENAME"].format(
+                            filename=re.escape(original_filename)
+                        ),
+                        HTML_IMG_PATTERNS["ID_BY_FILENAME_NO_EXT"].format(
+                            filename_no_ext=re.escape(filename_without_ext)
+                        ),
+                    ]
+                )
 
             # Try to match and replace
             for pattern in patterns:
                 if re.search(pattern, result_html):
                     # Use safe_filename for the placeholder to ensure consistency
                     safe_placeholder = f"[IMAGE: {safe_filename}]"
-                    result_html = re.sub(pattern, safe_placeholder, result_html)
+                    result_html = re.sub(
+                        pattern, safe_placeholder, result_html
+                    )
                     logger.debug(f"Replaced {pattern} with {safe_placeholder}")
                     break
 
@@ -731,58 +736,65 @@ class EmailParser:
                 End of message.
         """
         try:
-
             # Step 1: Remove script and style elements
             html_content = re.sub(
-                r'<script[^>]*>.*?</script>', '', html_content,
-                flags=re.DOTALL | re.IGNORECASE
+                r"<script[^>]*>.*?</script>",
+                "",
+                html_content,
+                flags=re.DOTALL | re.IGNORECASE,
             )
             html_content = re.sub(
-                r'<style[^>]*>.*?</style>', '', html_content,
-                flags=re.DOTALL | re.IGNORECASE
+                r"<style[^>]*>.*?</style>",
+                "",
+                html_content,
+                flags=re.DOTALL | re.IGNORECASE,
             )
 
             # Step 2: Convert HTML tags to text formatting
-            html_content = re.sub(r'<br\s*/?>', '\n', html_content,
-                                flags=re.IGNORECASE)
-            html_content = re.sub(r'</p>', '\n\n', html_content,
-                                flags=re.IGNORECASE)
-            html_content = re.sub(r'</div>', '\n', html_content,
-                                flags=re.IGNORECASE)
+            html_content = re.sub(
+                r"<br\s*/?>", "\n", html_content, flags=re.IGNORECASE
+            )
+            html_content = re.sub(
+                r"</p>", "\n\n", html_content, flags=re.IGNORECASE
+            )
+            html_content = re.sub(
+                r"</div>", "\n", html_content, flags=re.IGNORECASE
+            )
 
             # Step 3: Remove all remaining HTML tags but preserve image placeholders
             # Use a more sophisticated approach to preserve [IMAGE: ...] placeholders
-            text_content = re.sub(r'<[^>]+>', '', html_content)
+            text_content = re.sub(r"<[^>]+>", "", html_content)
 
             # Step 4: Decode HTML entities
             text_content = unescape(text_content)
 
             # Step 5: Clean up whitespace while preserving image placeholders
             # Split by image placeholders to handle them separately
-            parts = re.split(r'(\[IMAGE:[^\]]+\])', text_content)
+            parts = re.split(r"(\[IMAGE:[^\]]+\])", text_content)
 
             # Clean each part and reassemble
             cleaned_parts = []
             for part in parts:
-                if part.startswith('[IMAGE:'):
+                if part.startswith("[IMAGE:"):
                     # This is an image placeholder, keep it as is
                     cleaned_parts.append(part)
                 else:
                     # This is regular text, clean it up
-                    cleaned_part = re.sub(r'\n\s*\n', '\n\n', part)
-                    cleaned_part = re.sub(r'[ \t]+', ' ', cleaned_part)
-                    cleaned_part = re.sub(r'\n +', '\n', cleaned_part)
+                    cleaned_part = re.sub(r"\n\s*\n", "\n\n", part)
+                    cleaned_part = re.sub(r"[ \t]+", " ", cleaned_part)
+                    cleaned_part = re.sub(r"\n +", "\n", cleaned_part)
                     cleaned_parts.append(cleaned_part)
 
             # Join parts back together
-            text_content = ''.join(cleaned_parts)
+            text_content = "".join(cleaned_parts)
 
             return text_content.strip()
 
         except Exception as e:
-            logger.warning(f"Failed to extract text from HTML with "
-                           f"placeholders: {e}")
-            return ''
+            logger.warning(
+                f"Failed to extract text from HTML with " f"placeholders: {e}"
+            )
+            return ""
 
     def _get_part_content(self, part) -> str:
         """
@@ -809,26 +821,26 @@ class EmailParser:
             # Get raw payload
             payload = part.get_payload(decode=True)
             if payload is None:
-                return ''
+                return ""
 
             # Get charset from email part
-            charset = part.get_content_charset() or 'utf-8'
+            charset = part.get_content_charset() or "utf-8"
 
             # Decode content with proper charset
             try:
-                content = payload.decode(charset, errors='ignore')
+                content = payload.decode(charset, errors="ignore")
             except (UnicodeDecodeError, LookupError):
                 # Fallback to utf-8 if charset decoding fails
-                content = payload.decode('utf-8', errors='ignore')
+                content = payload.decode("utf-8", errors="ignore")
 
             # Clean HTML entities from text content
             content_type = part.get_content_type()
-            if content_type == 'text/plain':
+            if content_type == "text/plain":
                 content = self._clean_html_entities(content)
             return content
         except Exception as e:
             logger.warning(f"Failed to decode email part: {e}")
-            return ''
+            return ""
 
     def _clean_html_entities(self, text: str) -> str:
         """
@@ -853,7 +865,7 @@ class EmailParser:
         text = html.unescape(text)
 
         # Remove extra whitespace
-        text = re.sub(r'\s+', ' ', text)
+        text = re.sub(r"\s+", " ", text)
 
         return text.strip()
 
@@ -892,15 +904,18 @@ class EmailParser:
                 End of message.
         """
         try:
-
             # Step 1: Remove script and style elements
             html_content = re.sub(
-                r'<script[^>]*>.*?</script>', '', html_content,
-                flags=re.DOTALL | re.IGNORECASE
+                r"<script[^>]*>.*?</script>",
+                "",
+                html_content,
+                flags=re.DOTALL | re.IGNORECASE,
             )
             html_content = re.sub(
-                r'<style[^>]*>.*?</style>', '', html_content,
-                flags=re.DOTALL | re.IGNORECASE
+                r"<style[^>]*>.*?</style>",
+                "",
+                html_content,
+                flags=re.DOTALL | re.IGNORECASE,
             )
 
             # Step 2: Replace images with placeholders before removing HTML tags
@@ -916,40 +931,39 @@ class EmailParser:
 
             # Replace <img> tags with placeholders, controlling line length
             html_content = re.sub(
-                img_pattern,
-                replace_img_with_placeholder,
-                html_content
+                img_pattern, replace_img_with_placeholder, html_content
             )
 
             # Step 3: Convert HTML tags to text formatting
-            html_content = re.sub(r'<br\s*/?>', '\n', html_content,
-                                flags=re.IGNORECASE)
-            html_content = re.sub(r'</p>', '\n\n', html_content,
-                                flags=re.IGNORECASE)
-            html_content = re.sub(r'</div>', '\n', html_content,
-                                flags=re.IGNORECASE)
+            html_content = re.sub(
+                r"<br\s*/?>", "\n", html_content, flags=re.IGNORECASE
+            )
+            html_content = re.sub(
+                r"</p>", "\n\n", html_content, flags=re.IGNORECASE
+            )
+            html_content = re.sub(
+                r"</div>", "\n", html_content, flags=re.IGNORECASE
+            )
 
             # Step 4: Remove all remaining HTML tags
-            text_content = re.sub(r'<[^>]+>', '', html_content)
+            text_content = re.sub(r"<[^>]+>", "", html_content)
 
             # Step 5: Decode HTML entities
             text_content = unescape(text_content)
 
             # Step 6: Clean up whitespace
-            text_content = re.sub(r'\n\s*\n', '\n\n', text_content)
-            text_content = re.sub(r'[ \t]+', ' ', text_content)
-            text_content = re.sub(r'\n +', '\n', text_content)
+            text_content = re.sub(r"\n\s*\n", "\n\n", text_content)
+            text_content = re.sub(r"[ \t]+", " ", text_content)
+            text_content = re.sub(r"\n +", "\n", text_content)
 
             return text_content.strip()
 
         except Exception as e:
             logger.warning(f"Failed to extract text from HTML: {e}")
-            return ''
+            return ""
 
     def _embed_images_in_text(
-        self,
-        text_content: str,
-        image_placeholders: dict
+        self, text_content: str, image_placeholders: dict
     ) -> str:
         """
         correspond to the original HTML structure.
@@ -981,18 +995,17 @@ class EmailParser:
                 "Hello world\n\n[IMAGE: image1.jpg]\n[IMAGE: image2.png]"
         """
         # Strategy 1: Use HTML positioning algorithm if available
-        if (
-            hasattr(self, "_last_html_content")
-            and getattr(self, "_last_html_content", "")
+        if hasattr(self, "_last_html_content") and getattr(
+            self, "_last_html_content", ""
         ):
             logger.info(
                 "Using HTML positioning algorithm with %d images",
-                len(image_placeholders)
+                len(image_placeholders),
             )
             return process_email_images(
                 text_content,
                 getattr(self, "_last_html_content", ""),
-                image_placeholders
+                image_placeholders,
             )
         else:
             # Strategy 2: Fallback - append images at the end
@@ -1051,22 +1064,24 @@ class EmailParser:
         attachments = []
 
         for part in msg.walk():
-            content_disposition = str(part.get('Content-Disposition', ''))
+            content_disposition = str(part.get("Content-Disposition", ""))
             content_type = part.get_content_type()
             filename = part.get_filename()
 
             # Add debug logging
-            logger.debug(f"Processing part: content_type={content_type}, "
-                        f"content_disposition='{content_disposition}', "
-                        f"filename='{filename}'")
+            logger.debug(
+                f"Processing part: content_type={content_type}, "
+                f"content_disposition='{content_disposition}', "
+                f"filename='{filename}'"
+            )
 
             # Process attachments and inline files
             # Some email clients don't set Content-Disposition for inline images
             # So we also check if it's an image with a filename
             is_attachment = (
-                'attachment' in content_disposition or
-                'inline' in content_disposition or
-                (content_type.startswith('image/') and filename)
+                "attachment" in content_disposition
+                or "inline" in content_disposition
+                or (content_type.startswith("image/") and filename)
             )
 
             if not is_attachment:
@@ -1081,18 +1096,24 @@ class EmailParser:
                 payload = part.get_payload(decode=True)
 
                 if payload:
-                    logger.debug(f"Processing attachment: {filename}, "
-                                f"size={len(payload)} bytes")
+                    logger.debug(
+                        f"Processing attachment: {filename}, "
+                        f"size={len(payload)} bytes"
+                    )
                     # Save attachment with safe filename
                     attachment_info = self._save_attachment(
                         filename, content_type, payload
                     )
                     if attachment_info:
                         attachments.append(attachment_info)
-                        logger.info(f"Successfully processed "
-                                    f"attachment: {filename}")
+                        logger.info(
+                            f"Successfully processed "
+                            f"attachment: {filename}"
+                        )
                     else:
-                        logger.warning(f"Failed to save attachment: {filename}")
+                        logger.warning(
+                            f"Failed to save attachment: {filename}"
+                        )
                 else:
                     logger.debug(f"Skipping part: no payload")
 
@@ -1104,10 +1125,7 @@ class EmailParser:
         return attachments
 
     def _save_attachment(
-        self,
-        filename: str,
-        content_type: str,
-        payload: bytes
+        self, filename: str, content_type: str, payload: bytes
     ) -> Optional[Dict]:
         """
         Save attachment to disk and return metadata.
@@ -1143,21 +1161,20 @@ class EmailParser:
             # Generate MD5-based filename for consistency
             # This ensures same content always has same safe_filename
             file_md5 = hashlib.md5(payload).hexdigest()
-            file_extension = os.path.splitext(filename)[1] if filename else ''
+            file_extension = os.path.splitext(filename)[1] if filename else ""
             safe_filename = f"{file_md5}{file_extension}"
 
             # Check if file already exists with same MD5
-            file_path = os.path.join(
-                self.attachment_dir, safe_filename
-            )
+            file_path = os.path.join(self.attachment_dir, safe_filename)
 
             if os.path.exists(file_path):
-                logger.debug(f"File with same MD5 already "
-                             f"exists: {safe_filename}")
+                logger.debug(
+                    f"File with same MD5 already " f"exists: {safe_filename}"
+                )
                 # File already exists, no need to save again
             else:
                 # Save file to disk
-                with open(file_path, 'wb') as f:
+                with open(file_path, "wb") as f:
                     f.write(payload)
                 logger.debug(f"Saved new file with MD5: {safe_filename}")
 
@@ -1175,12 +1192,12 @@ class EmailParser:
             )
 
             return {
-                'filename': filename,
-                'safe_filename': safe_filename,
-                'content_type': corrected_content_type,
-                'file_size': len(payload),
-                'file_path': file_path,
-                'is_image': is_image
+                "filename": filename,
+                "safe_filename": safe_filename,
+                "content_type": corrected_content_type,
+                "file_size": len(payload),
+                "file_path": file_path,
+                "is_image": is_image,
             }
 
         except Exception as e:

@@ -51,9 +51,8 @@ from .models import (
     EmailMessage,
     EmailAttachment,
     Issue,
-    ThreadlineShareLink
+    ThreadlineShareLink,
 )
-from .tasks.email_workflow import process_email_workflow
 
 
 def format_json_preview(value, max_length=100):
@@ -85,7 +84,7 @@ def format_json_preview(value, max_length=100):
         Output: {"name":"test","value":123}
     """
     if not value:
-        return '-'
+        return "-"
 
     try:
         if isinstance(value, (dict, list)):
@@ -93,40 +92,40 @@ def format_json_preview(value, max_length=100):
             # separators=(',', ':') removes extra spaces for compact
             # display
             json_str = json.dumps(
-                value, ensure_ascii=False, separators=(',', ':')
+                value, ensure_ascii=False, separators=(",", ":")
             )
         else:
             # Handle non-JSON values (strings, numbers, booleans)
             json_str = str(value)
 
-        return (json_str[:max_length] + '...'
-                if len(json_str) > max_length else json_str)
+        return (
+            json_str[:max_length] + "..."
+            if len(json_str) > max_length
+            else json_str
+        )
     except (TypeError, ValueError):
         # Fallback for any serialization errors
-        return str(value)[:max_length] + '...'
+        return str(value)[:max_length] + "..."
 
 
 @admin.register(Settings)
 class SettingsAdmin(admin.ModelAdmin):
     """Admin interface for Settings model with JSON editor."""
 
-    list_display = [
-        'user', 'key', 'value_preview', 'is_active', 'created_at'
-    ]
-    list_filter = ['is_active', 'key', 'created_at']
-    search_fields = ['user__username', 'key', 'description']
-    readonly_fields = ['created_at', 'updated_at']
+    list_display = ["user", "key", "value_preview", "is_active", "created_at"]
+    list_filter = ["is_active", "key", "created_at"]
+    search_fields = ["user__username", "key", "description"]
+    readonly_fields = ["created_at", "updated_at"]
 
     fieldsets = (
-        (_('Basic Information'), {
-            'fields': (
-                'user', 'key', 'value', 'description', 'is_active'
-            )
-        }),
-        (_('Timestamps'), {
-            'fields': ('created_at', 'updated_at'),
-            'classes': ('collapse',)
-        }),
+        (
+            _("Basic Information"),
+            {"fields": ("user", "key", "value", "description", "is_active")},
+        ),
+        (
+            _("Timestamps"),
+            {"fields": ("created_at", "updated_at"), "classes": ("collapse",)},
+        ),
     )
 
     # DJANGO-JSON-WIDGET CONFIGURATION FOR SETTINGS
@@ -153,11 +152,9 @@ class SettingsAdmin(admin.ModelAdmin):
     # - Automatic validation
     # - Proper data serialization
     # - JavaScript compatibility
-    formfield_overrides = {
-        models.JSONField: {'widget': JSONEditorWidget}
-    }
+    formfield_overrides = {models.JSONField: {"widget": JSONEditorWidget}}
 
-    @admin.display(description=_('Value Preview'))
+    @admin.display(description=_("Value Preview"))
     def value_preview(self, obj):
         """
         Display formatted JSON preview for list view.
@@ -182,46 +179,43 @@ class SettingsAdmin(admin.ModelAdmin):
 
     def get_queryset(self, request):
         """Optimize queryset with select_related."""
-        return super().get_queryset(request).select_related('user')
+        return super().get_queryset(request).select_related("user")
 
 
 @admin.register(EmailTask)
 class EmailTaskAdmin(admin.ModelAdmin):
     """Admin interface for EmailTask model."""
 
-    list_display = [
-        'id', 'task_type', 'status', 'created_at'
-    ]
-    list_filter = ['status', 'task_type', 'created_at']
-    search_fields = ['id', 'task_id', 'task_type']
-    readonly_fields = ['created_at']
+    list_display = ["id", "task_type", "status", "created_at"]
+    list_filter = ["status", "task_type", "created_at"]
+    search_fields = ["id", "task_id", "task_type"]
+    readonly_fields = ["created_at"]
 
     fieldsets = (
-        (_('Task Information'), {
-            'fields': ('task_type', 'status', 'task_id')
-        }),
-        (_('Progress'), {
-            'fields': ('started_at', 'completed_at'),
-            'classes': ('collapse',)
-        }),
-        (_('Error Information'), {
-            'fields': ('error_message',),
-            'classes': ('collapse',)
-        }),
-        (_('Details'), {
-            'fields': ('details',),
-            'classes': ('collapse',)
-        }),
-        (_('Timestamps'), {
-            'fields': ('created_at',),
-            'classes': ('collapse',)
-        }),
+        (
+            _("Task Information"),
+            {"fields": ("task_type", "status", "task_id")},
+        ),
+        (
+            _("Progress"),
+            {
+                "fields": ("started_at", "completed_at"),
+                "classes": ("collapse",),
+            },
+        ),
+        (
+            _("Error Information"),
+            {"fields": ("error_message",), "classes": ("collapse",)},
+        ),
+        (_("Details"), {"fields": ("details",), "classes": ("collapse",)}),
+        (
+            _("Timestamps"),
+            {"fields": ("created_at",), "classes": ("collapse",)},
+        ),
     )
 
     # JSON widget for details field
-    formfield_overrides = {
-        models.JSONField: {'widget': JSONEditorWidget}
-    }
+    formfield_overrides = {models.JSONField: {"widget": JSONEditorWidget}}
 
 
 @admin.register(EmailMessage)
@@ -229,115 +223,151 @@ class EmailMessageAdmin(admin.ModelAdmin):
     """Admin interface for EmailMessage model."""
 
     list_display = [
-        'id', 'uuid', 'summary_title_preview', 'subject_preview', 'user',
-        'status', 'attachment_count', 'issue_count', 'received_at'
+        "id",
+        "uuid",
+        "summary_title_preview",
+        "subject_preview",
+        "user",
+        "status",
+        "attachment_count",
+        "issue_count",
+        "received_at",
     ]
-    list_filter = ['status', 'received_at', 'created_at']
+    list_filter = ["status", "received_at", "created_at"]
     search_fields = [
-        'subject', 'sender', 'recipients', 'summary_title',
-        'user__username'
+        "subject",
+        "sender",
+        "recipients",
+        "summary_title",
+        "user__username",
     ]
     readonly_fields = [
-        'created_at', 'updated_at', 'message_id', 'attachment_links',
-        'issue_links', 'raw_content_preview', 'html_content_preview',
-        'text_content_preview', 'summary_content_preview',
-        'llm_content_preview', 'metadata_preview'
+        "created_at",
+        "updated_at",
+        "message_id",
+        "attachment_links",
+        "issue_links",
+        "raw_content_preview",
+        "html_content_preview",
+        "text_content_preview",
+        "summary_content_preview",
+        "llm_content_preview",
+        "metadata_preview",
     ]
-    actions = ['trigger_process', 'force_reprocess']
+    actions = ["trigger_process", "force_reprocess"]
 
     fieldsets = (
-        (_('Email Information'), {
-            'fields': (
-                'user', 'message_id', 'subject', 'sender',
-                'recipients', 'received_at'
-            )
-        }),
-        (_('Content Preview'), {
-            'fields': (
-                'raw_content_preview',
-                'html_content_preview',
-                'text_content_preview'
-            ),
-            'classes': ('collapse',)
-        }),
-        (_('Content (Full)'), {
-            'fields': ('html_content', 'text_content'),
-            'classes': ('collapse',)
-        }),
-        (_('Summary Preview'), {
-            'fields': (
-                'summary_title',
-                'summary_content_preview',
-                'summary_priority'
-            ),
-            'classes': ('collapse',)
-        }),
-        (_('Summary (Full)'), {
-            'fields': ('summary_content',),
-            'classes': ('collapse',)
-        }),
-        (_('LLM Processing Preview'), {
-            'fields': (
-                'llm_content_preview',
-                'metadata_preview'
-            ),
-            'classes': ('collapse',)
-        }),
-        (_('LLM Processing (Full)'), {
-            'fields': ('llm_content', 'metadata'),
-            'classes': ('collapse',)
-        }),
-        (_('Status'), {
-            'fields': ('status', 'fetch_retry_count', 'error_message')
-        }),
-        (_('Related Objects'), {
-            'fields': (
-                'attachment_links',
-                'issue_links'
-            ),
-            'classes': ('collapse',)
-        }),
-        (_('Timestamps'), {
-            'fields': ('created_at', 'updated_at'),
-            'classes': ('collapse',)
-        }),
+        (
+            _("Email Information"),
+            {
+                "fields": (
+                    "user",
+                    "message_id",
+                    "subject",
+                    "sender",
+                    "recipients",
+                    "received_at",
+                )
+            },
+        ),
+        (
+            _("Content Preview"),
+            {
+                "fields": (
+                    "raw_content_preview",
+                    "html_content_preview",
+                    "text_content_preview",
+                ),
+                "classes": ("collapse",),
+            },
+        ),
+        (
+            _("Content (Full)"),
+            {
+                "fields": ("html_content", "text_content"),
+                "classes": ("collapse",),
+            },
+        ),
+        (
+            _("Summary Preview"),
+            {
+                "fields": (
+                    "summary_title",
+                    "summary_content_preview",
+                    "summary_priority",
+                ),
+                "classes": ("collapse",),
+            },
+        ),
+        (
+            _("Summary (Full)"),
+            {"fields": ("summary_content",), "classes": ("collapse",)},
+        ),
+        (
+            _("LLM Processing Preview"),
+            {
+                "fields": ("llm_content_preview", "metadata_preview"),
+                "classes": ("collapse",),
+            },
+        ),
+        (
+            _("LLM Processing (Full)"),
+            {"fields": ("llm_content", "metadata"), "classes": ("collapse",)},
+        ),
+        (
+            _("Status"),
+            {"fields": ("status", "fetch_retry_count", "error_message")},
+        ),
+        (
+            _("Related Objects"),
+            {
+                "fields": ("attachment_links", "issue_links"),
+                "classes": ("collapse",),
+            },
+        ),
+        (
+            _("Timestamps"),
+            {"fields": ("created_at", "updated_at"), "classes": ("collapse",)},
+        ),
     )
 
     # DJANGO-JSON-WIDGET CONFIGURATION FOR EMAIL MESSAGE
     # Applies JSONEditorWidget to all JSONField instances
     # (like llm_content)
     # See Settings admin class for detailed configuration notes
-    formfield_overrides = {
-        models.JSONField: {'widget': JSONEditorWidget}
-    }
+    formfield_overrides = {models.JSONField: {"widget": JSONEditorWidget}}
 
-    @admin.display(description=_('Summary Title'))
+    @admin.display(description=_("Summary Title"))
     def summary_title_preview(self, obj):
         """Display truncated summary title."""
         if not obj.summary_title:
-            return '-'
-        return (obj.summary_title[:60] + '...'
-                if len(obj.summary_title) > 60 else obj.summary_title)
+            return "-"
+        return (
+            obj.summary_title[:60] + "..."
+            if len(obj.summary_title) > 60
+            else obj.summary_title
+        )
 
-    @admin.display(description=_('Subject'))
+    @admin.display(description=_("Subject"))
     def subject_preview(self, obj):
         """Display truncated subject."""
-        return (obj.subject[:50] + '...'
-                if len(obj.subject) > 50 else obj.subject)
+        return (
+            obj.subject[:50] + "..." if len(obj.subject) > 50 else obj.subject
+        )
 
-    @admin.display(description=_('Attachments'))
+    @admin.display(description=_("Attachments"))
     def attachment_count(self, obj):
         """Display attachment count."""
         count = obj.attachments.count()
         return f"{count} 个附件" if count > 0 else "无附件"
 
-    @admin.display(description=_('Issues'))
+    @admin.display(description=_("Issues"))
     def issue_count(self, obj):
         """Display issue count."""
         count = obj.issues.count()
         return f"{count} 个问题" if count > 0 else "无问题"
 
-    @admin.display(description=_('Attachment Links'))
+    @admin.display(description=_("Attachment Links"))
     def attachment_links(self, obj):
         """Display links to related attachments."""
         attachments = obj.attachments.all()
@@ -347,16 +377,17 @@ class EmailMessageAdmin(admin.ModelAdmin):
         links = []
         for attachment in attachments:
             url = reverse(
-                'admin:threadline_emailattachment_change',
-                args=[attachment.pk]
+                "admin:threadline_emailattachment_change", args=[attachment.pk]
             )
-            link = (f'<a href="{url}" target="_blank">'
-                    f'{attachment.filename}</a>')
+            link = (
+                f'<a href="{url}" target="_blank">'
+                f"{attachment.filename}</a>"
+            )
             links.append(link)
 
-        return mark_safe('<br>'.join(links))
+        return mark_safe("<br>".join(links))
 
-    @admin.display(description=_('Issue Links'))
+    @admin.display(description=_("Issue Links"))
     def issue_links(self, obj):
         """Display links to related issues."""
         issues = obj.issues.all()
@@ -365,74 +396,96 @@ class EmailMessageAdmin(admin.ModelAdmin):
 
         links = []
         for issue in issues:
-            url = reverse(
-                'admin:threadline_issue_change', args=[issue.pk]
-            )
+            url = reverse("admin:threadline_issue_change", args=[issue.pk])
             link = f'<a href="{url}" target="_blank">{issue.title}</a>'
             if issue.external_id:
-                link += f' ({issue.external_id})'
+                link += f" ({issue.external_id})"
             links.append(link)
 
-        return mark_safe('<br>'.join(links))
+        return mark_safe("<br>".join(links))
 
-    @admin.display(description=_('Raw Content Preview'))
+    @admin.display(description=_("Raw Content Preview"))
     def raw_content_preview(self, obj):
         """Display truncated raw content."""
-        raw_content = getattr(obj, 'raw_content', None)
+        raw_content = getattr(obj, "raw_content", None)
         if not raw_content:
             return "无内容"
-        content = (raw_content[:500] + '...'
-                  if len(raw_content) > 500
-                  else raw_content)
+        content = (
+            raw_content[:500] + "..."
+            if len(raw_content) > 500
+            else raw_content
+        )
         return mark_safe(
             f'<pre style="white-space: pre-wrap; max-height: 200px; '
             f'overflow-y: auto;">{content}</pre>'
         )
 
-    @admin.display(description=_('HTML Content Preview'))
+    @admin.display(description=_("HTML Content Preview"))
     def html_content_preview(self, obj):
         """Display truncated HTML content."""
         if not obj.html_content:
             return "无内容"
-        content = (obj.html_content[:500] + '...'
-                  if len(obj.html_content) > 500
-                  else obj.html_content)
+        content = (
+            obj.html_content[:500] + "..."
+            if len(obj.html_content) > 500
+            else obj.html_content
+        )
         return mark_safe(
             f'<div style="max-height: 200px; overflow-y: auto; '
             f'border: 1px solid #ddd; padding: 10px;">{content}</div>'
         )
 
-    @admin.display(description=_('Text Content Preview'))
+    @admin.display(description=_("Text Content Preview"))
     def text_content_preview(self, obj):
         """Display truncated text content."""
         if not obj.text_content:
             return "无内容"
-        content = obj.text_content[:500] + '...' if len(obj.text_content) > 500 else obj.text_content
-        return mark_safe(f'<pre style="white-space: pre-wrap; max-height: 200px; overflow-y: auto;">{content}</pre>')
+        content = (
+            obj.text_content[:500] + "..."
+            if len(obj.text_content) > 500
+            else obj.text_content
+        )
+        return mark_safe(
+            f'<pre style="white-space: pre-wrap; max-height: 200px; overflow-y: auto;">{content}</pre>'
+        )
 
-    @admin.display(description=_('Summary Content Preview'))
+    @admin.display(description=_("Summary Content Preview"))
     def summary_content_preview(self, obj):
         """Display truncated summary content."""
         if not obj.summary_content:
             return "无内容"
-        content = obj.summary_content[:500] + '...' if len(obj.summary_content) > 500 else obj.summary_content
-        return mark_safe(f'<div style="max-height: 200px; overflow-y: auto; border: 1px solid #ddd; padding: 10px;">{content}</div>')
+        content = (
+            obj.summary_content[:500] + "..."
+            if len(obj.summary_content) > 500
+            else obj.summary_content
+        )
+        return mark_safe(
+            f'<div style="max-height: 200px; overflow-y: auto; border: 1px solid #ddd; padding: 10px;">{content}</div>'
+        )
 
-    @admin.display(description=_('LLM Content Preview'))
+    @admin.display(description=_("LLM Content Preview"))
     def llm_content_preview(self, obj):
         """Display truncated LLM content."""
         if not obj.llm_content:
             return "无内容"
-        content = obj.llm_content[:500] + '...' if len(obj.llm_content) > 500 else obj.llm_content
-        return mark_safe(f'<pre style="white-space: pre-wrap; max-height: 200px; overflow-y: auto;">{content}</pre>')
+        content = (
+            obj.llm_content[:500] + "..."
+            if len(obj.llm_content) > 500
+            else obj.llm_content
+        )
+        return mark_safe(
+            f'<pre style="white-space: pre-wrap; max-height: 200px; overflow-y: auto;">{content}</pre>'
+        )
 
-    @admin.display(description=_('Metadata Preview'))
+    @admin.display(description=_("Metadata Preview"))
     def metadata_preview(self, obj):
         """Display truncated metadata."""
         if not obj.metadata:
             return "无元数据"
         metadata_str = format_json_preview(obj.metadata, max_length=500)
-        return mark_safe(f'<pre style="white-space: pre-wrap; max-height: 200px; overflow-y: auto;">{metadata_str}</pre>')
+        return mark_safe(
+            f'<pre style="white-space: pre-wrap; max-height: 200px; overflow-y: auto;">{metadata_str}</pre>'
+        )
 
     def save_model(self, request, obj, form, change):
         """
@@ -443,7 +496,7 @@ class EmailMessageAdmin(admin.ModelAdmin):
         obj._from_admin = True
         super().save_model(request, obj, form, change)
 
-    @admin.action(description=_('Trigger process (for FETCHED emails)'))
+    @admin.action(description=_("Trigger process (for FETCHED emails)"))
     def trigger_process(self, request, queryset):
         """
         Trigger email processing workflow for selected emails.
@@ -460,24 +513,24 @@ class EmailMessageAdmin(admin.ModelAdmin):
         count = 0
         for email in queryset:
             try:
-                process_email_workflow.delay(str(email.id), force=False)
+                from threadline.tasks.email_merge import process_email_merge
+
+                process_email_merge.delay(str(email.id), force=False)
                 count += 1
             except Exception as e:
                 self.message_user(
                     request,
                     f"Failed to trigger processing for email {email.id}: {e}",
-                    level=messages.ERROR
+                    level=messages.ERROR,
                 )
 
         self.message_user(
             request,
             f"Successfully triggered processing for {count} email(s)",
-            level=messages.SUCCESS
+            level=messages.SUCCESS,
         )
 
-    @admin.action(
-        description=_('Force reprocess (charges credits again)')
-    )
+    @admin.action(description=_("Force reprocess (charges credits again)"))
     def force_reprocess(self, request, queryset):
         """
         Force reprocess selected emails regardless of current status.
@@ -505,28 +558,32 @@ class EmailMessageAdmin(admin.ModelAdmin):
         count = 0
         for email in queryset:
             try:
-                process_email_workflow.delay(str(email.id), force=True)
+                from threadline.tasks.email_merge import process_email_merge
+
+                process_email_merge.delay(str(email.id), force=True)
                 count += 1
             except Exception as e:
                 self.message_user(
                     request,
                     f"Failed to force reprocess email {email.id}: {e}",
-                    level=messages.ERROR
+                    level=messages.ERROR,
                 )
 
         self.message_user(
             request,
             f"⚠️  Successfully triggered force reprocessing for {count} "
             f"email(s). Credits will be charged again.",
-            level=messages.WARNING
+            level=messages.WARNING,
         )
-
 
     def get_queryset(self, request):
         """Optimize queryset with select_related and prefetch_related."""
-        return (super().get_queryset(request)
-                .select_related('user')
-                .prefetch_related('attachments', 'issues'))
+        return (
+            super()
+            .get_queryset(request)
+            .select_related("user")
+            .prefetch_related("attachments", "issues")
+        )
 
 
 @admin.register(EmailAttachment)
@@ -534,64 +591,83 @@ class EmailAttachmentAdmin(admin.ModelAdmin):
     """Admin interface for EmailAttachment model."""
 
     list_display = [
-        'id', 'filename', 'email_message_link', 'content_type',
-        'file_size', 'is_image', 'created_at', 'updated_at'
+        "id",
+        "filename",
+        "email_message_link",
+        "content_type",
+        "file_size",
+        "is_image",
+        "created_at",
+        "updated_at",
     ]
-    list_filter = ['content_type', 'is_image', 'created_at']
-    search_fields = ['filename', 'content_type']
+    list_filter = ["content_type", "is_image", "created_at"]
+    search_fields = ["filename", "content_type"]
     readonly_fields = [
-        'created_at', 'updated_at', 'file_size', 'safe_filename',
-        'email_message_link'
+        "created_at",
+        "updated_at",
+        "file_size",
+        "safe_filename",
+        "email_message_link",
     ]
 
     fieldsets = (
-        (_('Attachment Information'), {
-            'fields': (
-                'user', 'email_message_link', 'filename',
-                'safe_filename',
-                'content_type', 'file_size', 'is_image'
-            )
-        }),
-        (_('File Storage'), {
-            'fields': ('file_path',),
-            'classes': ('collapse',)
-        }),
-        (_('Content'), {
-            'fields': ('ocr_content', 'llm_content'),
-            'classes': ('collapse',)
-        }),
-        (_('Timestamps'), {
-            'fields': ('created_at', 'updated_at'),
-            'classes': ('collapse',)
-        }),
+        (
+            _("Attachment Information"),
+            {
+                "fields": (
+                    "user",
+                    "email_message_link",
+                    "filename",
+                    "safe_filename",
+                    "content_type",
+                    "file_size",
+                    "is_image",
+                )
+            },
+        ),
+        (
+            _("File Storage"),
+            {"fields": ("file_path",), "classes": ("collapse",)},
+        ),
+        (
+            _("Content"),
+            {
+                "fields": ("ocr_content", "llm_content"),
+                "classes": ("collapse",),
+            },
+        ),
+        (
+            _("Timestamps"),
+            {"fields": ("created_at", "updated_at"), "classes": ("collapse",)},
+        ),
     )
 
     # DJANGO-JSON-WIDGET CONFIGURATION FOR EMAIL ATTACHMENT
     # Applies JSONEditorWidget to JSONField instances
     # (like llm_content, ocr_content)
     # See Settings admin class for detailed configuration notes
-    formfield_overrides = {
-        models.JSONField: {'widget': JSONEditorWidget}
-    }
+    formfield_overrides = {models.JSONField: {"widget": JSONEditorWidget}}
 
-    @admin.display(description=_('Email Message'))
+    @admin.display(description=_("Email Message"))
     def email_message_link(self, obj):
         """Display link to related email message."""
         url = reverse(
-            'admin:threadline_emailmessage_change',
-            args=[obj.email_message.pk]
+            "admin:threadline_emailmessage_change", args=[obj.email_message.pk]
         )
-        subject = (obj.email_message.subject[:30] + '...'
-                   if len(obj.email_message.subject) > 30
-                   else obj.email_message.subject)
-        return mark_safe(
-            f'<a href="{url}" target="_blank">{subject}</a>'
+        subject = (
+            obj.email_message.subject[:30] + "..."
+            if len(obj.email_message.subject) > 30
+            else obj.email_message.subject
         )
+        return mark_safe(f'<a href="{url}" target="_blank">{subject}</a>')
 
     def get_queryset(self, request):
         """Optimize queryset with select_related."""
-        return (super().get_queryset(request)
-                .select_related('email_message', 'user'))
+        return (
+            super()
+            .get_queryset(request)
+            .select_related("email_message", "user")
+        )
 
 
 @admin.register(ThreadlineShareLink)
@@ -599,68 +675,74 @@ class ThreadlineShareLinkAdmin(admin.ModelAdmin):
     """Admin interface for ThreadlineShareLink model."""
 
     list_display = [
-        'uuid',
-        'email_message_link',
-        'owner',
-        'expires_at',
-        'is_active',
-        'view_count',
-        'last_viewed_at',
-        'created_at'
+        "uuid",
+        "email_message_link",
+        "owner",
+        "expires_at",
+        "is_active",
+        "view_count",
+        "last_viewed_at",
+        "created_at",
     ]
-    list_filter = ['is_active', 'expires_at', 'created_at']
+    list_filter = ["is_active", "expires_at", "created_at"]
     search_fields = [
-        'uuid',
-        'email_message__subject',
-        'owner__username',
-        'owner__email'
+        "uuid",
+        "email_message__subject",
+        "owner__username",
+        "owner__email",
     ]
     readonly_fields = [
-        'created_at',
-        'updated_at',
-        'view_count',
-        'last_viewed_at',
-        'email_message_link'
+        "created_at",
+        "updated_at",
+        "view_count",
+        "last_viewed_at",
+        "email_message_link",
     ]
 
     fieldsets = (
-        (_('Share Link'), {
-            'fields': (
-                'uuid',
-                'email_message_link',
-                'owner',
-                'is_active'
-            )
-        }),
-        (_('Security'), {
-            'fields': ('expires_at',),
-        }),
-        (_('Usage'), {
-            'fields': ('view_count', 'last_viewed_at'),
-            'classes': ('collapse',)
-        }),
-        (_('Timestamps'), {
-            'fields': ('created_at', 'updated_at'),
-            'classes': ('collapse',)
-        }),
+        (
+            _("Share Link"),
+            {"fields": ("uuid", "email_message_link", "owner", "is_active")},
+        ),
+        (
+            _("Security"),
+            {
+                "fields": ("expires_at",),
+            },
+        ),
+        (
+            _("Usage"),
+            {
+                "fields": ("view_count", "last_viewed_at"),
+                "classes": ("collapse",),
+            },
+        ),
+        (
+            _("Timestamps"),
+            {"fields": ("created_at", "updated_at"), "classes": ("collapse",)},
+        ),
     )
 
-    @admin.display(description=_('Email Message'))
+    @admin.display(description=_("Email Message"))
     def email_message_link(self, obj):
         """Display clickable link to related email message."""
         url = reverse(
-            'admin:threadline_emailmessage_change',
-            args=[obj.email_message.pk]
+            "admin:threadline_emailmessage_change", args=[obj.email_message.pk]
         )
-        subject = (obj.email_message.subject[:50] + '...'
-                   if len(obj.email_message.subject) > 50
-                   else obj.email_message.subject)
+        subject = (
+            obj.email_message.subject[:50] + "..."
+            if len(obj.email_message.subject) > 50
+            else obj.email_message.subject
+        )
         return mark_safe(f'<a href="{url}" target="_blank">{subject}</a>')
 
     def get_queryset(self, request):
         """Optimize queryset with select_related."""
-        return (super().get_queryset(request)
-                .select_related('email_message', 'owner'))
+        return (
+            super()
+            .get_queryset(request)
+            .select_related("email_message", "owner")
+        )
 
 
 @admin.register(Issue)
@@ -668,113 +750,116 @@ class IssueAdmin(admin.ModelAdmin):
     """Admin interface for Issue model."""
 
     list_display = [
-        'id', 'title', 'email_message_link', 'engine', 'priority',
-        'created_at'
+        "id",
+        "title",
+        "email_message_link",
+        "engine",
+        "priority",
+        "created_at",
     ]
-    list_filter = ['engine', 'priority', 'created_at']
-    search_fields = [
-        'user__username', 'title', 'description', 'external_id'
-    ]
-    readonly_fields = ['created_at', 'updated_at', 'email_message_link']
+    list_filter = ["engine", "priority", "created_at"]
+    search_fields = ["user__username", "title", "description", "external_id"]
+    readonly_fields = ["created_at", "updated_at", "email_message_link"]
 
     fieldsets = (
-        (_('Issue Information'), {
-            'fields': (
-                'user', 'email_message_link', 'title', 'description'
-            )
-        }),
-        (_('Classification'), {
-            'fields': ('priority', 'engine')
-        }),
-        (_('External System'), {
-            'fields': ('external_id', 'issue_url'),
-            'classes': ('collapse',)
-        }),
-        (_('Metadata'), {
-            'fields': ('metadata',),
-            'classes': ('collapse',)
-        }),
-        (_('Timestamps'), {
-            'fields': ('created_at', 'updated_at'),
-            'classes': ('collapse',)
-        }),
+        (
+            _("Issue Information"),
+            {"fields": ("user", "email_message_link", "title", "description")},
+        ),
+        (_("Classification"), {"fields": ("priority", "engine")}),
+        (
+            _("External System"),
+            {"fields": ("external_id", "issue_url"), "classes": ("collapse",)},
+        ),
+        (_("Metadata"), {"fields": ("metadata",), "classes": ("collapse",)}),
+        (
+            _("Timestamps"),
+            {"fields": ("created_at", "updated_at"), "classes": ("collapse",)},
+        ),
     )
 
     # DJANGO-JSON-WIDGET CONFIGURATION FOR ISSUE
     # Applies JSONEditorWidget to JSONField instances (like metadata)
     # See Settings admin class for detailed configuration notes
-    formfield_overrides = {
-        models.JSONField: {'widget': JSONEditorWidget}
-    }
+    formfield_overrides = {models.JSONField: {"widget": JSONEditorWidget}}
 
-    @admin.display(description=_('Email Message'))
+    @admin.display(description=_("Email Message"))
     def email_message_link(self, obj):
         """Display link to related email message."""
         url = reverse(
-            'admin:threadline_emailmessage_change',
-            args=[obj.email_message.pk]
+            "admin:threadline_emailmessage_change", args=[obj.email_message.pk]
         )
-        subject = (obj.email_message.subject[:30] + '...'
-                   if len(obj.email_message.subject) > 30
-                   else obj.email_message.subject)
-        return mark_safe(
-            f'<a href="{url}" target="_blank">{subject}</a>'
+        subject = (
+            obj.email_message.subject[:30] + "..."
+            if len(obj.email_message.subject) > 30
+            else obj.email_message.subject
         )
+        return mark_safe(f'<a href="{url}" target="_blank">{subject}</a>')
 
     def get_queryset(self, request):
         """Optimize queryset with select_related."""
-        return (super().get_queryset(request)
-                .select_related('user', 'email_message'))
+        return (
+            super()
+            .get_queryset(request)
+            .select_related("user", "email_message")
+        )
 
 
 @admin.register(EmailAlias)
 class EmailAliasAdmin(admin.ModelAdmin):
     """Admin interface for EmailAlias model"""
+
     list_display = [
-        'alias',
-        'user',
-        'full_email_address_display',
-        'is_active',
-        'created_at'
+        "alias",
+        "user",
+        "full_email_address_display",
+        "is_active",
+        "created_at",
     ]
-    list_filter = ['is_active', 'created_at']
-    search_fields = ['alias', 'user__username', 'user__email']
-    readonly_fields = ['created_at', 'updated_at', 'full_email_address_display']
-    ordering = ['-created_at']
+    list_filter = ["is_active", "created_at"]
+    search_fields = ["alias", "user__username", "user__email"]
+    readonly_fields = [
+        "created_at",
+        "updated_at",
+        "full_email_address_display",
+    ]
+    ordering = ["-created_at"]
     list_per_page = 25
 
     fieldsets = (
-        (_('Basic Information'), {
-            'fields': ('user', 'alias', 'is_active')
-        }),
-        (_('Email Address'), {
-            'fields': ('full_email_address_display',),
-            'classes': ('collapse',)
-        }),
-        (_('Timestamps'), {
-            'fields': ('created_at', 'updated_at'),
-            'classes': ('collapse',)
-        }),
+        (_("Basic Information"), {"fields": ("user", "alias", "is_active")}),
+        (
+            _("Email Address"),
+            {
+                "fields": ("full_email_address_display",),
+                "classes": ("collapse",),
+            },
+        ),
+        (
+            _("Timestamps"),
+            {"fields": ("created_at", "updated_at"), "classes": ("collapse",)},
+        ),
     )
 
-    @admin.display(description=_('Domain'))
+    @admin.display(description=_("Domain"))
     def domain_display(self, obj):
         """Display domain for the alias"""
         from django.conf import settings
+
         return settings.AUTO_ASSIGN_EMAIL_DOMAIN
 
     def full_email_address_display(self, obj):
         """Display full email address in admin"""
         return obj.full_email_address()
-    full_email_address_display.short_description = _('Full Email Address')
+
+    full_email_address_display.short_description = _("Full Email Address")
 
     def get_queryset(self, request):
         """Optimize queryset with select_related"""
-        return (super().get_queryset(request)
-                .select_related('user'))
+        return super().get_queryset(request).select_related("user")
 
 
 # Admin site customization
-admin.site.site_header = _('Threadline Administration')
-admin.site.site_title = _('Threadline Admin')
-admin.site.index_title = _('Welcome to Threadline Administration')
+admin.site.site_header = _("Threadline Administration")
+admin.site.site_title = _("Threadline Admin")
+admin.site.index_title = _("Welcome to Threadline Administration")

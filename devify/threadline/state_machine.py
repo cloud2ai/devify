@@ -1,54 +1,10 @@
 """
-State Machine Configuration for Email Processing Workflow
+State Machine Configuration for Email Processing Workflow.
 
-This module defines the state machine rules for EmailMessage models.
-
-SIMPLIFIED STATE MACHINE (LangGraph-based)
-===========================================
-
-This state machine has been simplified from 19 states to 4 states
-to align with the LangGraph architecture.
-
-States:
--------
-- FETCHED: Email has been fetched and ready for processing
-- PROCESSING: Email is being processed through the workflow
-- FAILED: Processing failed, can be retried
-- SUCCESS: All processing completed successfully (terminal state)
-
-State Transitions:
------------------
-FETCHED → PROCESSING (chain orchestrator starts processing)
-FETCHED → FAILED (stuck or unable to start processing)
-PROCESSING → SUCCESS (all tasks succeed)
-PROCESSING → FAILED (any task fails)
-FAILED → PROCESSING (retry)
-SUCCESS → PROCESSING (retry from success state)
-
-Key Design Principles:
----------------------
-1. Database status shows overall progress only
-   (not individual step status)
-2. Detailed step-by-step progress is managed by
-   LangGraph internal state
-3. Error details are logged, not reflected in status
-4. Simpler state model = easier debugging, monitoring,
-   and maintenance
-5. Individual tasks (OCR, LLM, etc.) focus on business logic,
-   not status management
-6. SUCCESS is the terminal state; error_message is cleared
-   on success transitions
-
-Migration from Old States:
--------------------------
-Old detailed states have been migrated to simplified states:
-- All *_PROCESSING states → PROCESSING
-- All *_SUCCESS states → SUCCESS
-- All *_FAILED states → FAILED
-- FETCHED remains unchanged
-- COMPLETED has been removed (SUCCESS is now terminal)
-
-See migration file: 0007_migrate_to_simplified_statuses.py
+This module defines the state machine rules for EmailMessage processing.
+Only the main workflow status is modeled here. Merge tracking is now
+represented as relationship data on EmailMessage, not as a separate state
+machine.
 """
 
 from enum import Enum
@@ -70,13 +26,14 @@ class EmailStatus(Enum):
     Detailed progress tracking is handled by LangGraph internal state,
     not stored in the database.
     """
+
     # Initial state
-    FETCHED = 'fetched'
+    FETCHED = "fetched"
 
     # Processing states
-    PROCESSING = 'processing'
-    SUCCESS = 'success'
-    FAILED = 'failed'
+    PROCESSING = "processing"
+    SUCCESS = "success"
+    FAILED = "failed"
 
     @classmethod
     def choices(cls):
@@ -87,50 +44,50 @@ class EmailStatus(Enum):
             List of tuples with (value, display_name)
         """
         return [
-            (cls.FETCHED.value, 'Fetched'),
-            (cls.PROCESSING.value, 'Processing'),
-            (cls.SUCCESS.value, 'Success'),
-            (cls.FAILED.value, 'Failed'),
+            (cls.FETCHED.value, "Fetched"),
+            (cls.PROCESSING.value, "Processing"),
+            (cls.SUCCESS.value, "Success"),
+            (cls.FAILED.value, "Failed"),
         ]
+
 
 # Email state machine - simplified for LangGraph workflow
 EMAIL_STATE_MACHINE = {
     EmailStatus.FETCHED: {
-        'next': [
+        "next": [
             EmailStatus.PROCESSING,
             EmailStatus.FAILED,
         ],
-        'description': 'Email has been fetched and ready for processing'
+        "description": "Email has been fetched and ready for processing",
     },
-
     EmailStatus.PROCESSING: {
-        'next': [
+        "next": [
             EmailStatus.SUCCESS,
             EmailStatus.FAILED,
         ],
-        'description': 'Email is being processed by the workflow'
+        "description": "Email is being processed by the workflow",
     },
-
     EmailStatus.FAILED: {
-        'next': [
+        "next": [
             EmailStatus.PROCESSING,
         ],
-        'description': 'Email processing failed, can be retried'
+        "description": "Email processing failed, can be retried",
     },
-
     EmailStatus.SUCCESS: {
-        'next': [
+        "next": [
             EmailStatus.PROCESSING,
         ],
-        'description': (
-            'Email processing completed successfully. '
-            'Can be retried to PROCESSING state.'
-        )
+        "description": (
+            "Email processing completed successfully. "
+            "Can be retried to PROCESSING state."
+        ),
     },
 }
 
-def can_transition_to(current_status: str, target_status: str,
-                     state_machine: Dict) -> bool:
+
+def can_transition_to(
+    current_status: str, target_status: str, state_machine: Dict
+) -> bool:
     """
     Check if status transition is allowed.
 
@@ -154,13 +111,11 @@ def can_transition_to(current_status: str, target_status: str,
     if current_enum not in state_machine:
         return False
 
-    allowed_next = state_machine[current_enum]['next']
+    allowed_next = state_machine[current_enum]["next"]
     return target_enum in allowed_next
 
-def get_next_states(
-    current_status: str,
-    state_machine: Dict
-) -> List[str]:
+
+def get_next_states(current_status: str, state_machine: Dict) -> List[str]:
     """
     Get all possible next states for current status.
 
@@ -181,7 +136,8 @@ def get_next_states(
     if current_enum not in state_machine:
         return []
 
-    return [state.value for state in state_machine[current_enum]['next']]
+    return [state.value for state in state_machine[current_enum]["next"]]
+
 
 def get_status_description(status: str, state_machine: Dict) -> str:
     """
@@ -204,7 +160,8 @@ def get_status_description(status: str, state_machine: Dict) -> str:
     if current_enum not in state_machine:
         return "Unknown status"
 
-    return state_machine[current_enum]['description']
+    return state_machine[current_enum]["description"]
+
 
 def get_initial_email_status() -> str:
     """

@@ -20,6 +20,7 @@ from .views import (
     SettingsIssueTestAPIView,
     EmailMessageAPIView,
     EmailMessageDetailAPIView,
+    EmailMessageIssueClusterAPIView,
     EmailMessageMetadataAPIView,
     EmailTodoAPIView,
     EmailTodoDetailAPIView,
@@ -33,7 +34,7 @@ from .views import (
 from .views.email_alias import (
     EmailAliasAPIView,
     EmailAliasDetailAPIView,
-    EmailAliasValidationAPIView
+    EmailAliasValidationAPIView,
 )
 from .views.monitoring import (
     task_metrics,
@@ -43,76 +44,110 @@ from .views.monitoring import (
     clear_metrics_cache,
     health_check,
     simple_metrics,
-    simple_health
+    simple_health,
 )
 
 # URL patterns for Threadline API endpoints
 urlpatterns = [
     # Settings endpoints
-    path('settings', SettingsAPIView.as_view(), name='settings-list'),
-    path('settings/test-imap', SettingsImapValidateAPIView.as_view(),
-         name='settings-test-imap'),
-    path('settings/test-issue', SettingsIssueTestAPIView.as_view(),
-         name='settings-test-issue'),
-    path('settings/<int:pk>', SettingsDetailAPIView.as_view(),
-         name='settings-detail'),
-
+    path("settings", SettingsAPIView.as_view(), name="settings-list"),
+    path(
+        "settings/test-imap",
+        SettingsImapValidateAPIView.as_view(),
+        name="settings-test-imap",
+    ),
+    path(
+        "settings/test-issue",
+        SettingsIssueTestAPIView.as_view(),
+        name="settings-test-issue",
+    ),
+    path(
+        "settings/<int:pk>",
+        SettingsDetailAPIView.as_view(),
+        name="settings-detail",
+    ),
     # Email alias management endpoints (under settings)
-    path('settings/email-aliases', EmailAliasAPIView.as_view(),
-         name='email-aliases-list'),
-    path('settings/email-aliases/<int:alias_id>',
-         EmailAliasDetailAPIView.as_view(),
-         name='email-aliases-detail'),
-    path('settings/email-aliases/validate',
-         EmailAliasValidationAPIView.as_view(),
-         name='email-aliases-validate'),
-
+    path(
+        "settings/email-aliases",
+        EmailAliasAPIView.as_view(),
+        name="email-aliases-list",
+    ),
+    path(
+        "settings/email-aliases/<int:alias_id>",
+        EmailAliasDetailAPIView.as_view(),
+        name="email-aliases-detail",
+    ),
+    path(
+        "settings/email-aliases/validate",
+        EmailAliasValidationAPIView.as_view(),
+        name="email-aliases-validate",
+    ),
     # Threadlines endpoints (EmailMessage with attachments)
-    path('threadlines', EmailMessageAPIView.as_view(),
-         name='threadlines-list'),
-    path('threadlines/<uuid:uuid>', EmailMessageDetailAPIView.as_view(),
-         name='threadlines-detail'),
-    path('threadlines/<uuid:uuid>/retry',
-         EmailMessageDetailAPIView.as_view(),
-         name='threadlines-retry'),
-    path('threadlines/<uuid:uuid>/metadata',
-         EmailMessageMetadataAPIView.as_view(),
-         name='threadlines-metadata'),
-    path('threadlines/<uuid:uuid>/share-link',
-         ThreadlineShareLinkAPIView.as_view(),
-         name='threadlines-share-link'),
-
+    path(
+        "threadlines", EmailMessageAPIView.as_view(), name="threadlines-list"
+    ),
+    path(
+        "threadlines/<uuid:uuid>",
+        EmailMessageDetailAPIView.as_view(),
+        name="threadlines-detail",
+    ),
+    path(
+        "threadlines/<uuid:uuid>/retry",
+        EmailMessageDetailAPIView.as_view(),
+        name="threadlines-retry",
+    ),
+    path(
+        "threadlines/<uuid:uuid>/metadata",
+        EmailMessageMetadataAPIView.as_view(),
+        name="threadlines-metadata",
+    ),
+    path(
+        "threadlines/<uuid:uuid>/issue-cluster",
+        EmailMessageIssueClusterAPIView.as_view(),
+        name="threadlines-issue-cluster",
+    ),
+    path(
+        "threadlines/<uuid:uuid>/share-link",
+        ThreadlineShareLinkAPIView.as_view(),
+        name="threadlines-share-link",
+    ),
     # TODO endpoints
-    path('todos', EmailTodoAPIView.as_view(), name='todos-list'),
-    path('todos/stats', EmailTodoStatsAPIView.as_view(), name='todos-stats'),
-    path('todos/batch', EmailTodoBatchAPIView.as_view(),
-         name='todos-batch'),
-    path('todos/<int:pk>', EmailTodoDetailAPIView.as_view(),
-         name='todos-detail'),
-
+    path("todos", EmailTodoAPIView.as_view(), name="todos-list"),
+    path("todos/stats", EmailTodoStatsAPIView.as_view(), name="todos-stats"),
+    path("todos/batch", EmailTodoBatchAPIView.as_view(), name="todos-batch"),
+    path(
+        "todos/<int:pk>", EmailTodoDetailAPIView.as_view(), name="todos-detail"
+    ),
     # Share link management
-    path('share-links/<uuid:share_uuid>',
-         ThreadlineShareLinkDetailAPIView.as_view(),
-         name='share-links-detail'),
-
+    path(
+        "share-links/<uuid:share_uuid>",
+        ThreadlineShareLinkDetailAPIView.as_view(),
+        name="share-links-detail",
+    ),
     # Public share endpoints
-    path('public/share/<uuid:share_uuid>',
-         PublicShareLinkAPIView.as_view(),
-         name='public-share'),
-    path('public/share/<uuid:share_uuid>/verify',
-         PublicShareLinkVerifyAPIView.as_view(),
-         name='public-share-verify'),
-
+    path(
+        "public/share/<uuid:share_uuid>",
+        PublicShareLinkAPIView.as_view(),
+        name="public-share",
+    ),
+    path(
+        "public/share/<uuid:share_uuid>/verify",
+        PublicShareLinkVerifyAPIView.as_view(),
+        name="public-share-verify",
+    ),
     # Monitoring endpoints
     # API endpoints (require authentication)
-    path('api/task-metrics/', task_metrics, name='task_metrics'),
-    path('api/task-status/', task_status_summary, name='task_status_summary'),
-    path('api/email-metrics/', email_processing_metrics, name='email_processing_metrics'),
-    path('api/dashboard/', monitoring_dashboard, name='monitoring_dashboard'),
-    path('api/clear-cache/', clear_metrics_cache, name='clear_metrics_cache'),
-    path('api/health/', health_check, name='health_check'),
-
+    path("api/task-metrics/", task_metrics, name="task_metrics"),
+    path("api/task-status/", task_status_summary, name="task_status_summary"),
+    path(
+        "api/email-metrics/",
+        email_processing_metrics,
+        name="email_processing_metrics",
+    ),
+    path("api/dashboard/", monitoring_dashboard, name="monitoring_dashboard"),
+    path("api/clear-cache/", clear_metrics_cache, name="clear_metrics_cache"),
+    path("api/health/", health_check, name="health_check"),
     # Simple endpoints for external monitoring
-    path('metrics/', simple_metrics, name='simple_metrics'),
-    path('health/', simple_health, name='simple_health'),
+    path("metrics/", simple_metrics, name="simple_metrics"),
+    path("health/", simple_health, name="simple_health"),
 ]

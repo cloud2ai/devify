@@ -42,6 +42,8 @@
       "failed": "失败",
       "processing": "处理中",
       "fetched": "待处理",
+      "canonical": "主记录",
+      "merged": "已合并",
       "pending": "等待中",
       "completed": "已完成",
       "unknown": "未知"
@@ -236,6 +238,18 @@
     "participants": "参与者",
     "locations": "位置",
     "timeline": "时间线",
+    "merge": {
+      "mergedInto": "已并入主记录",
+      "viewMainRecord": "查看主记录",
+      "sources": "合并来源",
+      "sourceCount": "{count} 条",
+      "sourceDate": "接收时间"
+    },
+    "issue": {
+      "label": "问题链接",
+      "openInNewWindow": "在新窗口打开",
+      "reference": "问题"
+    },
     "errorLoading": "加载对话详情失败",
     "errorLoadingDesc": "无法加载对话详情"
   },

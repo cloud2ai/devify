@@ -44,7 +44,7 @@ def test_get_periodic_task_settings_includes_existing_database_value(db):
     )
 
     client = _auth_client(admin)
-    response = client.get("/api/v1/admin/periodic-tasks/")
+    response = client.get("/api/v1/admin/threadline/periodic-tasks/")
 
     assert response.status_code == 200
     data = response.json()
@@ -52,7 +52,9 @@ def test_get_periodic_task_settings_includes_existing_database_value(db):
         data = data["data"]
     data = data["tasks"]
     email_fetch = next(
-        item for item in data if item["name"] == "threadline-schedule-email-fetch"
+        item
+        for item in data
+        if item["name"] == "threadline-schedule-email-fetch"
     )
     assert email_fetch["enabled"] is False
     assert email_fetch["crontab"] == "*/5 * * * *"
@@ -76,7 +78,7 @@ def test_patch_periodic_task_settings_updates_rows(db):
 
     client = _auth_client(admin)
     response = client.patch(
-        "/api/v1/admin/periodic-tasks/",
+        "/api/v1/admin/threadline/periodic-tasks/",
         data={
             "tasks": [
                 {
@@ -104,9 +106,7 @@ def test_patch_periodic_task_settings_updates_rows(db):
     assert haraka.crontab.minute == "0"
     assert haraka.crontab.hour == "1"
 
-    share_link = PeriodicTask.objects.get(
-        name="threadline-share-link-cleanup"
-    )
+    share_link = PeriodicTask.objects.get(name="threadline-share-link-cleanup")
     assert share_link.enabled is False
     assert share_link.crontab.minute == "10"
 
@@ -129,7 +129,7 @@ def test_patch_periodic_task_settings_rejects_invalid_crontab(db):
 
     client = _auth_client(admin)
     response = client.patch(
-        "/api/v1/admin/periodic-tasks/",
+        "/api/v1/admin/threadline/periodic-tasks/",
         data={
             "tasks": [
                 {

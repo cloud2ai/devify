@@ -69,6 +69,39 @@
         d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
       />
     </svg>
+    <!-- Canonical icon -->
+    <svg
+      v-else-if="status === 'canonical'"
+      class="w-3 h-3 flex-shrink-0"
+      fill="none"
+      stroke="currentColor"
+      viewBox="0 0 24 24"
+    >
+      <path
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        stroke-width="2"
+        d="M5 13l4 4L19 7"
+      />
+    </svg>
+    <!-- Merged icon -->
+    <svg
+      v-else-if="status === 'merged'"
+      class="w-3.5 h-3.5 flex-shrink-0"
+      fill="none"
+      stroke="currentColor"
+      viewBox="0 0 24 24"
+    >
+      <path
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        stroke-width="2"
+        d="M7 7h3a2 2 0 012 2v2m5-4h-3a2 2 0 00-2 2v2M12 11v6"
+      />
+      <circle cx="7" cy="7" r="1.5" fill="currentColor" />
+      <circle cx="17" cy="7" r="1.5" fill="currentColor" />
+      <circle cx="12" cy="17" r="1.5" fill="currentColor" />
+    </svg>
     <!-- Unknown status icon -->
     <svg
       v-else
@@ -93,7 +126,7 @@ import { useI18n } from 'vue-i18n'
 
 const { t } = useI18n()
 
-const props = defineProps({
+defineProps({
   status: {
     type: String,
     default: 'unknown'
@@ -106,6 +139,8 @@ const getStatusClass = (status) => {
     failed: 'bg-red-50 text-red-700',
     processing: 'bg-yellow-50 text-yellow-700',
     fetched: 'bg-blue-50 text-blue-700',
+    canonical: 'bg-green-50 text-green-700',
+    merged: 'bg-gray-50 text-gray-700',
     pending: 'bg-yellow-50 text-yellow-700',
     completed: 'bg-green-50 text-green-700'
   }
@@ -118,6 +153,8 @@ const getStatusText = (status) => {
     failed: t('common.status.failed'),
     processing: t('common.status.processing'),
     fetched: t('common.status.fetched'),
+    canonical: t('common.status.canonical'),
+    merged: t('common.status.merged'),
     pending: t('common.status.pending'),
     completed: t('common.status.completed')
   }

@@ -3,7 +3,7 @@ import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { usePreferencesStore } from '@/store/preferences'
 import { formatDate as formatDateUtil } from '@/utils/timezone'
-import { extractErrorMessage } from '@/utils/api'
+import { isThreadlineProcessing } from '@/utils/threadlineStatus'
 import { chatApi } from '@/api/chat'
 
 /**
@@ -34,9 +34,7 @@ export function useThreadline(
   const shareStatus = computed(() => threadline.value?.share_status || null)
 
   // Computed: Check if email is currently processing
-  const isProcessing = computed(() => {
-    return threadline.value?.status === 'processing'
-  })
+  const isProcessing = computed(() => isThreadlineProcessing(threadline.value))
 
   // Computed: Format detection
   const hasNewFormat = computed(() => {
@@ -136,7 +134,7 @@ export function useThreadline(
       threadline.value = data
 
       // If status is processing, start polling and show loading state
-      if (data.status === 'processing') {
+      if (isThreadlineProcessing(data)) {
         if (startPolling) {
           startPolling()
         }
@@ -179,11 +177,7 @@ export function useThreadline(
 
   // Go back
   const goBack = () => {
-    if (window.history.length > 1) {
-      router.back()
-    } else {
-      router.push('/dashboard')
-    }
+    router.push('/chats')
   }
 
   // Handle click outside

@@ -8,6 +8,9 @@ Existing Beat rows are left untouched so manual edits are preserved.
 
 import json
 import logging
+import hashlib
+
+from django.db import connection, transaction
 
 logger = logging.getLogger(__name__)
 
@@ -20,11 +23,7 @@ def _get_or_create_crontab(schedule):
     from django.conf import settings
     from django_celery_beat.models import CrontabSchedule
 
-    try:
-        obj, created = CrontabSchedule.from_schedule(schedule)
-        if created:
-            obj.save()
-    except (AttributeError, TypeError):
+    def _spec_from_schedule():
         tz = getattr(schedule, "tz", None) or getattr(
             settings, "CELERY_TIMEZONE", None
         )
@@ -37,8 +36,54 @@ def _get_or_create_crontab(schedule):
         }
         if tz:
             spec["timezone"] = tz
-        obj, _ = CrontabSchedule.objects.get_or_create(**spec)
-    return obj
+        return spec
+
+    def _advisory_lock_key(spec):
+        digest = hashlib.sha1(
+            json.dumps(spec, sort_keys=True).encode("utf-8")
+        ).digest()
+        return int.from_bytes(digest[:8], byteorder="big", signed=True)
+
+    try:
+        obj = CrontabSchedule.from_schedule(schedule)
+        if obj.pk:
+            return obj
+        spec = _spec_from_schedule()
+    except (AttributeError, TypeError):
+        spec = _spec_from_schedule()
+
+    if connection.vendor == "postgresql":
+        with transaction.atomic():
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    "SELECT pg_advisory_xact_lock(%s)",
+                    [_advisory_lock_key(spec)],
+                )
+            matches = CrontabSchedule.objects.filter(**spec).order_by("id")
+            obj = matches.first()
+            if obj:
+                if matches.count() > 1:
+                    logger.warning(
+                        "Found duplicate crontab schedules for %s; "
+                        "reusing id=%s",
+                        spec,
+                        obj.id,
+                    )
+                return obj
+            return CrontabSchedule.objects.create(**spec)
+
+    matches = CrontabSchedule.objects.filter(**spec).order_by("id")
+    obj = matches.first()
+    if obj:
+        if matches.count() > 1:
+            logger.warning(
+                "Found duplicate crontab schedules for %s; reusing id=%s",
+                spec,
+                obj.id,
+            )
+        return obj
+
+    return CrontabSchedule.objects.create(**spec)
 
 
 def _get_or_create_interval_seconds(seconds):

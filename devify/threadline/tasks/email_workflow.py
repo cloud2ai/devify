@@ -78,7 +78,9 @@ def process_email_workflow(
         Exception: For workflow execution errors
     """
     try:
-        email = EmailMessage.objects.get(id=email_id)
+        email = EmailMessage.objects.select_related("user", "merged_into").get(
+            id=email_id
+        )
         if not email:
             raise ValueError(f"Email with id {email_id} not found")
 

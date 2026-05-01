@@ -50,7 +50,10 @@ class TestImageValidation:
 
         # Test zero width
         mock_image.size = (0, 100)
-        with patch('devify.threadline.utils.email.parsers.enhanced.Image.open', return_value=mock_image):
+        with patch(
+            "devify.threadline.utils.email.parsers.enhanced.Image.open",
+            return_value=mock_image,
+        ):
             is_valid, reason = parser._validate_image_attachment(
                 large_payload, "zero_width.jpg"
             )
@@ -59,7 +62,10 @@ class TestImageValidation:
 
         # Test zero height
         mock_image.size = (100, 0)
-        with patch('devify.threadline.utils.email.parsers.enhanced.Image.open', return_value=mock_image):
+        with patch(
+            "devify.threadline.utils.email.parsers.enhanced.Image.open",
+            return_value=mock_image,
+        ):
             is_valid, reason = parser._validate_image_attachment(
                 large_payload, "zero_height.jpg"
             )
@@ -75,7 +81,10 @@ class TestImageValidation:
         mock_image.__enter__ = lambda self: self
         mock_image.__exit__ = lambda *args: None
 
-        with patch('devify.threadline.utils.email.parsers.enhanced.Image.open', return_value=mock_image):
+        with patch(
+            "devify.threadline.utils.email.parsers.enhanced.Image.open",
+            return_value=mock_image,
+        ):
             is_valid, reason = parser._validate_image_attachment(
                 large_payload, "small_dim.jpg"
             )
@@ -93,7 +102,10 @@ class TestImageValidation:
         mock_image.__enter__ = lambda self: self
         mock_image.__exit__ = lambda *args: None
 
-        with patch('devify.threadline.utils.email.parsers.enhanced.Image.open', return_value=mock_image):
+        with patch(
+            "devify.threadline.utils.email.parsers.enhanced.Image.open",
+            return_value=mock_image,
+        ):
             is_valid, reason = parser._validate_image_attachment(
                 large_payload, "wide_image.jpg"
             )
@@ -110,7 +122,10 @@ class TestImageValidation:
         mock_image.__enter__ = lambda self: self
         mock_image.__exit__ = lambda *args: None
 
-        with patch('devify.threadline.utils.email.parsers.enhanced.Image.open', return_value=mock_image):
+        with patch(
+            "devify.threadline.utils.email.parsers.enhanced.Image.open",
+            return_value=mock_image,
+        ):
             is_valid, reason = parser._validate_image_attachment(
                 large_payload, "tall_image.jpg"
             )
@@ -127,7 +142,10 @@ class TestImageValidation:
         mock_image.__enter__ = lambda self: self
         mock_image.__exit__ = lambda *args: None
 
-        with patch('devify.threadline.utils.email.parsers.enhanced.Image.open', return_value=mock_image):
+        with patch(
+            "devify.threadline.utils.email.parsers.enhanced.Image.open",
+            return_value=mock_image,
+        ):
             is_valid, reason = parser._validate_image_attachment(
                 large_payload, "max_aspect_image.jpg"
             )
@@ -144,7 +162,10 @@ class TestImageValidation:
         mock_image.__enter__ = lambda self: self
         mock_image.__exit__ = lambda *args: None
 
-        with patch('devify.threadline.utils.email.parsers.enhanced.Image.open', return_value=mock_image):
+        with patch(
+            "devify.threadline.utils.email.parsers.enhanced.Image.open",
+            return_value=mock_image,
+        ):
             is_valid, reason = parser._validate_image_attachment(
                 large_payload, "over_max_aspect_image.jpg"
             )
@@ -161,7 +182,10 @@ class TestImageValidation:
         # Test with exact minimum size and dimensions
         exact_size_payload = b"x" * parser.MIN_IMAGE_ATTACHMENT_SIZE
         mock_image.size = (50, 50)
-        with patch('devify.threadline.utils.email.parsers.enhanced.Image.open', return_value=mock_image):
+        with patch(
+            "devify.threadline.utils.email.parsers.enhanced.Image.open",
+            return_value=mock_image,
+        ):
             is_valid, reason = parser._validate_image_attachment(
                 exact_size_payload, "min_size_dim.jpg"
             )
@@ -171,7 +195,10 @@ class TestImageValidation:
         # Test with larger size and dimensions
         large_payload = b"x" * (parser.MIN_IMAGE_ATTACHMENT_SIZE + 1000)
         mock_image.size = (200, 200)
-        with patch('devify.threadline.utils.email.parsers.enhanced.Image.open', return_value=mock_image):
+        with patch(
+            "devify.threadline.utils.email.parsers.enhanced.Image.open",
+            return_value=mock_image,
+        ):
             is_valid, reason = parser._validate_image_attachment(
                 large_payload, "valid_image.jpg"
             )
@@ -182,7 +209,10 @@ class TestImageValidation:
         """Test that unreadable image formats are handled gracefully."""
         large_payload = b"This is not an image file" * 1000
 
-        with patch('devify.threadline.utils.email.parsers.enhanced.Image.open', side_effect=Exception("Cannot read image")):
+        with patch(
+            "devify.threadline.utils.email.parsers.enhanced.Image.open",
+            side_effect=Exception("Cannot read image"),
+        ):
             is_valid, reason = parser._validate_image_attachment(
                 large_payload, "invalid.txt"
             )
@@ -207,9 +237,9 @@ class TestInvalidImagePlaceholderCleanup:
 
         attachments = [
             {
-                'is_image': True,
-                'safe_filename': 'valid_image.png',
-                'filename': 'valid_image.png'
+                "is_image": True,
+                "safe_filename": "valid_image.png",
+                "filename": "valid_image.png",
             }
         ]
 
@@ -235,15 +265,15 @@ class TestInvalidImagePlaceholderCleanup:
 
         attachments = [
             {
-                'is_image': True,
-                'safe_filename': 'valid_image1.png',
-                'filename': 'valid_image1.png'
+                "is_image": True,
+                "safe_filename": "valid_image1.png",
+                "filename": "valid_image1.png",
             },
             {
-                'is_image': True,
-                'safe_filename': 'valid_image2.jpg',
-                'filename': 'valid_image2.jpg'
-            }
+                "is_image": True,
+                "safe_filename": "valid_image2.jpg",
+                "filename": "valid_image2.jpg",
+            },
         ]
 
         cleaned = parser._clean_invalid_image_placeholders(
@@ -270,15 +300,15 @@ class TestInvalidImagePlaceholderCleanup:
 
         attachments = [
             {
-                'is_image': True,
-                'safe_filename': 'valid1.png',
-                'filename': 'valid1.png'
+                "is_image": True,
+                "safe_filename": "valid1.png",
+                "filename": "valid1.png",
             },
             {
-                'is_image': True,
-                'safe_filename': 'valid2.png',
-                'filename': 'valid2.png'
-            }
+                "is_image": True,
+                "safe_filename": "valid2.png",
+                "filename": "valid2.png",
+            },
         ]
 
         cleaned = parser._clean_invalid_image_placeholders(
@@ -308,11 +338,19 @@ class TestInvalidImagePlaceholderCleanup:
         text_content = "This email has [IMAGE: but incomplete placeholder."
         cleaned = parser._clean_invalid_image_placeholders(
             text_content,
-            [{'is_image': True, 'safe_filename': 'image1.png', 'filename': 'image1.png'}]
+            [
+                {
+                    "is_image": True,
+                    "safe_filename": "image1.png",
+                    "filename": "image1.png",
+                }
+            ],
         )
         assert cleaned == text_content
 
-    def test_clean_invalid_placeholders_handles_empty_attachments(self, parser):
+    def test_clean_invalid_placeholders_handles_empty_attachments(
+        self, parser
+    ):
         """Test cleanup when attachments list is empty."""
         text_content = (
             "Email with images.\n"
@@ -329,7 +367,9 @@ class TestInvalidImagePlaceholderCleanup:
         assert "[IMAGE: image2.jpg]" not in cleaned
         assert "Email with images" in cleaned
 
-    def test_clean_invalid_placeholders_ignores_non_image_attachments(self, parser):
+    def test_clean_invalid_placeholders_ignores_non_image_attachments(
+        self, parser
+    ):
         """Test that non-image attachments don't affect placeholder cleanup."""
         text_content = (
             "Email content.\n"
@@ -339,9 +379,9 @@ class TestInvalidImagePlaceholderCleanup:
 
         attachments = [
             {
-                'is_image': False,
-                'safe_filename': 'document.pdf',
-                'filename': 'document.pdf'
+                "is_image": False,
+                "safe_filename": "document.pdf",
+                "filename": "document.pdf",
             }
         ]
 
@@ -363,3 +403,31 @@ class TestImageFilteringConstants:
         assert parser.MIN_IMAGE_WIDTH == 50
         assert parser.MIN_IMAGE_HEIGHT == 50
         assert parser.MAX_IMAGE_ASPECT_RATIO == 10
+
+
+@pytest.mark.unit
+class TestThreadHeaders:
+    """Test thread header extraction in the enhanced parser."""
+
+    def test_parse_from_bytes_includes_thread_headers(self, parser):
+        raw_email = (
+            b"Subject: Re: Thread subject\r\n"
+            b"From: sender@example.com\r\n"
+            b"To: recipient@example.com\r\n"
+            b"Date: Mon, 01 Apr 2024 10:00:00 +0000\r\n"
+            b"Message-ID: <message-1@example.com>\r\n"
+            b"In-Reply-To: <parent@example.com>\r\n"
+            b"References: <root@example.com> <parent@example.com>\r\n"
+            b"\r\n"
+            b"Hello world\r\n"
+        )
+
+        parsed = parser.parse_from_bytes(raw_email)
+
+        assert parsed is not None
+        assert parsed["raw_message_id"] == "<message-1@example.com>"
+        assert parsed["in_reply_to"] == "<parent@example.com>"
+        assert parsed["references"] == [
+            "<root@example.com>",
+            "<parent@example.com>",
+        ]

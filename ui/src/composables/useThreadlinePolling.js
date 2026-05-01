@@ -2,6 +2,7 @@ import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useToast } from '@/composables/useToast'
 import { chatApi } from '@/api/chat'
+import { isThreadlineProcessing } from '@/utils/threadlineStatus'
 
 const MAX_POLL_DURATION = 5 * 60 * 1000 // 5 minutes max polling
 
@@ -46,16 +47,14 @@ export function useThreadlinePolling(threadline, route) {
       threadline.value = data
 
       // Check if processing is complete
-      const status = data.status
-
       // Keep retrying state true if status is processing
-      if (status === 'processing') {
+      if (isThreadlineProcessing(data)) {
         retrying.value = true
         // Continue polling, don't stop
         return
       }
 
-      if (status === 'success' || status === 'failed') {
+      if (data.status === 'success' || data.status === 'failed') {
         // Processing complete, stop polling
         stopRetryPolling()
         retrying.value = false
