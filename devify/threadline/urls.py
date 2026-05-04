@@ -20,6 +20,7 @@ from .views import (
     SettingsIssueTestAPIView,
     EmailMessageAPIView,
     EmailMessageDetailAPIView,
+    EmailMessageBatchMergeAPIView,
     EmailMessageIssueClusterAPIView,
     EmailMessageMetadataAPIView,
     EmailTodoAPIView,
@@ -85,6 +86,11 @@ urlpatterns = [
     # Threadlines endpoints (EmailMessage with attachments)
     path(
         "threadlines", EmailMessageAPIView.as_view(), name="threadlines-list"
+    ),
+    path(
+        "threadlines/merge",
+        EmailMessageBatchMergeAPIView.as_view(),
+        name="threadlines-merge",
     ),
     path(
         "threadlines/<uuid:uuid>",

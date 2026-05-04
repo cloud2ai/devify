@@ -1,6 +1,6 @@
 <template>
   <AppLayout>
-    <div class="space-y-6">
+    <div :class="selectedCount > 0 ? 'space-y-6 pb-28' : 'space-y-6'">
       <VirtualEmailBanner
         :virtual-email="userStore.userInfo?.virtual_email"
         :label="t('settings.emailAddressDesc')"
@@ -156,35 +156,11 @@
       <!-- Chat Messages List -->
       <BaseCard :header-muted="true">
         <template #header>
-          <div class="flex items-center justify-between gap-4">
-            <div class="flex items-center gap-2 text-gray-800">
-              <svg
-                class="w-5 h-5 -mt-px flex-none"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                />
-              </svg>
-              <h3 class="text-base font-semibold leading-5">
-                {{ t('dashboard.recentMessages') }}
-              </h3>
-            </div>
-            <div class="flex items-center gap-2 flex-1 max-w-md">
-              <div class="relative flex-1">
-                <input
-                  v-model="searchQuery"
-                  type="text"
-                  :placeholder="t('chats.searchPlaceholderDetailed')"
-                  class="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent text-sm"
-                />
+          <div class="space-y-3">
+            <div class="flex items-center justify-between gap-4">
+              <div class="flex items-center gap-2 text-gray-800">
                 <svg
-                  class="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400"
+                  class="w-5 h-5 -mt-px flex-none"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -193,19 +169,23 @@
                     stroke-linecap="round"
                     stroke-linejoin="round"
                     stroke-width="2"
-                    d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                    d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
                   />
                 </svg>
+                <h3 class="text-base font-semibold leading-5">
+                  {{ t('dashboard.recentMessages') }}
+                </h3>
               </div>
-              <BaseButton
-                @click="refreshData"
-                :loading="loading"
-                variant="secondary"
-                size="sm"
-              >
-                <template v-if="!loading">
+              <div class="flex items-center gap-2 flex-1 max-w-md">
+                <div class="relative flex-1">
+                  <input
+                    v-model="searchQuery"
+                    type="text"
+                    :placeholder="t('chats.searchPlaceholderDetailed')"
+                    class="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent text-sm"
+                  />
                   <svg
-                    class="w-4 h-4 mr-2"
+                    class="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400"
                     fill="none"
                     stroke="currentColor"
                     viewBox="0 0 24 24"
@@ -214,13 +194,36 @@
                       stroke-linecap="round"
                       stroke-linejoin="round"
                       stroke-width="2"
-                      d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                      d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
                     />
                   </svg>
-                </template>
-                {{ t('common.refresh') }}
-              </BaseButton>
+                </div>
+                <BaseButton
+                  @click="refreshData"
+                  :loading="loading"
+                  variant="secondary"
+                  size="sm"
+                >
+                  <template v-if="!loading">
+                    <svg
+                      class="w-4 h-4 mr-2"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                      />
+                    </svg>
+                  </template>
+                  {{ t('common.refresh') }}
+                </BaseButton>
+              </div>
             </div>
+
           </div>
         </template>
         <div v-if="loading" class="text-center py-8">
@@ -256,190 +259,195 @@
           <div
             v-for="result in results"
             :key="result.id"
-            class="border border-gray-200 rounded-lg p-4 hover:bg-gray-50 transition-colors cursor-pointer"
+            class="border rounded-lg p-4 transition-colors cursor-pointer"
+            :class="
+              selectedIds.includes(result.uuid)
+                ? 'border-blue-300 bg-blue-50 hover:bg-blue-100'
+                : 'border-gray-200 hover:bg-gray-50'
+            "
             @click="viewResult(result.uuid || result.id)"
           >
-            <div
-              class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3"
-            >
-              <div class="flex-1 min-w-0 space-y-2">
-                <h4 class="text-sm font-medium text-gray-900 truncate">
-                  {{
-                    result.summary_title ||
-                    result.subject ||
-                    `Email #${result.id}`
-                  }}
-                </h4>
-                <div class="text-sm text-gray-500 line-clamp-2 break-words">
-                  {{ getPreviewText(result) }}
-                </div>
-                <div
-                  class="flex flex-wrap items-center text-xs text-gray-400 gap-x-2 gap-y-1"
-                >
-                  <span class="whitespace-nowrap">{{
-                    formatDateTime(result.received_at || result.created_at)
-                  }}</span>
-                  <span class="hidden sm:inline">•</span>
-                  <span class="truncate max-w-40"
-                    >{{ t('chats.from') }}: {{ getSender(result.sender) }}</span
-                  >
-                  <span class="hidden sm:inline">•</span>
-                  <span class="whitespace-nowrap">{{
-                    t('chats.attachments', {
-                      count: result.attachments?.length || 0
-                    })
-                  }}</span>
-                  <template v-if="result.issue_external_id">
-                    <span class="hidden sm:inline">•</span>
-                    <a
-                      v-if="result.issue_url"
-                      :href="result.issue_url"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      @click.stop
-                      class="inline-flex max-w-40 items-center gap-1 truncate text-gray-400 transition-colors hover:text-primary-600 hover:underline"
-                      :title="t('chats.issue.openInNewWindow')"
-                    >
-                      <svg
-                        class="h-3 w-3 flex-shrink-0"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                        aria-hidden="true"
-                      >
-                        <path
-                          stroke-linecap="round"
-                          stroke-linejoin="round"
-                          stroke-width="2"
-                          d="M14 3h7v7m0-7L10 14"
-                        />
-                        <path
-                          stroke-linecap="round"
-                          stroke-linejoin="round"
-                          stroke-width="2"
-                          d="M10 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-4"
-                        />
-                      </svg>
-                      <span class="truncate">
-                        {{ t('chats.issue.reference') }}:
-                        {{ result.issue_external_id }}
-                      </span>
-                    </a>
-                    <span
-                      v-else
-                      class="inline-flex max-w-40 items-center gap-1 truncate text-gray-400"
-                    >
-                      <svg
-                        class="h-3 w-3 flex-shrink-0"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                        aria-hidden="true"
-                      >
-                        <path
-                          stroke-linecap="round"
-                          stroke-linejoin="round"
-                          stroke-width="2"
-                          d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"
-                        />
-                      </svg>
-                      <span class="truncate">
-                        {{ t('chats.issue.reference') }}:
-                        {{ result.issue_external_id }}
-                      </span>
-                    </span>
-                  </template>
-                </div>
-                <!-- Tags Display -->
-                <div
-                  v-if="
-                    result.metadata?.keywords &&
-                    result.metadata.keywords.length > 0
-                  "
-                  class="flex flex-wrap items-center gap-2 mt-2"
-                >
-                  <span
-                    v-for="(tag, index) in getVisibleTags(
-                      result.metadata.keywords
-                    )"
-                    :key="index"
-                    class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800"
-                  >
-                    {{ tag }}
-                  </span>
-                  <span
-                    v-if="getRemainingTagsCount(result.metadata.keywords) > 0"
-                    class="text-xs text-gray-500"
-                  >
-                    +{{ getRemainingTagsCount(result.metadata.keywords) }}
-                  </span>
-                </div>
-              </div>
-              <div
-                class="flex items-center justify-between sm:justify-end sm:flex-col sm:items-end space-x-2 sm:space-x-0 sm:space-y-2 flex-shrink-0"
+            <div class="flex items-start gap-3">
+              <label
+                class="mt-1 flex h-5 w-5 flex-none items-center justify-center rounded border border-gray-300 bg-white"
+                @click.stop
               >
-                <div class="flex items-center gap-2">
-                  <span
-                    v-if="result.has_merged_children"
-                    class="inline-flex items-center gap-1 rounded-full border border-yellow-200 bg-yellow-50 px-2 py-0.5 text-xs font-medium text-yellow-800"
+                <input
+                  type="checkbox"
+                  class="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                  :checked="selectedIds.includes(result.uuid)"
+                  :disabled="
+                    !selectedIds.includes(result.uuid) && !canSelectMore
+                  "
+                  @change.stop="toggleSelection(result.uuid)"
+                  @click.stop
+                />
+              </label>
+
+              <div
+                class="flex flex-1 flex-col sm:flex-row sm:items-start sm:justify-between gap-3"
+              >
+                <div class="flex-1 min-w-0 space-y-2">
+                  <h4 class="text-sm font-medium text-gray-900 truncate">
+                    {{
+                      result.summary_title ||
+                      result.subject ||
+                      `Email #${result.id}`
+                    }}
+                  </h4>
+                  <div class="text-sm text-gray-500 line-clamp-2 break-words">
+                    {{ getPreviewText(result) }}
+                  </div>
+                  <div
+                    class="flex flex-wrap items-center text-xs text-gray-400 gap-x-2 gap-y-1"
                   >
-                    <svg
-                      class="h-3.5 w-3.5 flex-shrink-0"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
+                    <span class="whitespace-nowrap">{{
+                      formatDateTime(result.received_at || result.created_at)
+                    }}</span>
+                    <span class="hidden sm:inline">•</span>
+                    <span class="truncate max-w-40"
+                      >{{ t('chats.from') }}:
+                      {{ getSender(result.sender) }}</span
                     >
-                      <path
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        stroke-width="2"
-                        d="M7 7h3a2 2 0 012 2v2m5-4h-3a2 2 0 00-2 2v2M12 11v6"
-                      />
-                      <circle cx="7" cy="7" r="1.5" fill="currentColor" />
-                      <circle cx="17" cy="7" r="1.5" fill="currentColor" />
-                      <circle cx="12" cy="17" r="1.5" fill="currentColor" />
-                    </svg>
-                    {{ t('common.status.merged') }}
-                  </span>
-                  <StatusBadge :status="getThreadlineDisplayStatus(result)" />
-                  <span
-                    v-if="result.share_status?.is_active"
-                    class="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium"
-                    :class="
-                      result.share_status.is_expired
-                        ? 'border-red-200 bg-red-50 text-red-600'
-                        : 'border-green-200 bg-green-50 text-green-700'
+                    <span class="hidden sm:inline">•</span>
+                    <span class="whitespace-nowrap">{{
+                      t('chats.attachments', {
+                        count: result.attachments?.length || 0
+                      })
+                    }}</span>
+                    <template v-if="result.issue_external_id">
+                      <span class="hidden sm:inline">•</span>
+                      <a
+                        v-if="result.issue_url"
+                        :href="result.issue_url"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        @click.stop
+                        class="inline-flex max-w-40 items-center gap-1 truncate text-gray-400 transition-colors hover:text-primary-600 hover:underline"
+                        :title="t('chats.issue.openInNewWindow')"
+                      >
+                        <svg
+                          class="h-3 w-3 flex-shrink-0"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                          aria-hidden="true"
+                        >
+                          <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="2"
+                            d="M14 3h7v7m0-7L10 14"
+                          />
+                          <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="2"
+                            d="M10 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-4"
+                          />
+                        </svg>
+                        <span class="truncate">
+                          {{ t('chats.issue.reference') }}:
+                          {{ result.issue_external_id }}
+                        </span>
+                      </a>
+                      <span
+                        v-else
+                        class="inline-flex max-w-40 items-center gap-1 truncate text-gray-400"
+                      >
+                        <svg
+                          class="h-3 w-3 flex-shrink-0"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                          aria-hidden="true"
+                        >
+                          <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="2"
+                            d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"
+                          />
+                        </svg>
+                        <span class="truncate">
+                          {{ t('chats.issue.reference') }}:
+                          {{ result.issue_external_id }}
+                        </span>
+                      </span>
+                    </template>
+                  </div>
+                  <!-- Tags Display -->
+                  <div
+                    v-if="
+                      result.metadata?.keywords &&
+                      result.metadata.keywords.length > 0
                     "
+                    class="flex flex-wrap items-center gap-2 mt-2"
                   >
-                    <svg
-                      class="w-3 h-3"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
+                    <span
+                      v-for="(tag, index) in getVisibleTags(
+                        result.metadata.keywords
+                      )"
+                      :key="index"
+                      class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800"
                     >
-                      <path
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        stroke-width="2"
-                        d="M15 8a3 3 0 11-6 0 3 3 0 016 0zM5.5 20a6.5 6.5 0 0113 0M4 4l16 16"
-                      />
-                    </svg>
-                    {{ t('share.statusShared') }}
-                  </span>
+                      {{ tag }}
+                    </span>
+                    <span
+                      v-if="getRemainingTagsCount(result.metadata.keywords) > 0"
+                      class="text-xs text-gray-500"
+                    >
+                      +{{ getRemainingTagsCount(result.metadata.keywords) }}
+                    </span>
+                  </div>
                 </div>
-                <svg
-                  class="w-5 h-5 text-gray-400 flex-shrink-0"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
+                <div
+                  class="flex items-center justify-between sm:justify-end sm:flex-col sm:items-end space-x-2 sm:space-x-0 sm:space-y-2 flex-shrink-0"
                 >
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                    d="M9 5l7 7-7 7"
-                  />
-                </svg>
+                  <div class="flex items-center gap-2">
+                    <MergeStateBadge
+                      :state="getThreadlineMergeState(result)"
+                    />
+                    <StatusBadge :status="getThreadlineDisplayStatus(result)" />
+                    <span
+                      v-if="result.share_status?.is_active"
+                      class="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium"
+                      :class="
+                        result.share_status.is_expired
+                          ? 'border-red-200 bg-red-50 text-red-600'
+                          : 'border-green-200 bg-green-50 text-green-700'
+                      "
+                    >
+                      <svg
+                        class="w-3 h-3"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          stroke-width="2"
+                          d="M15 8a3 3 0 11-6 0 3 3 0 016 0zM5.5 20a6.5 6.5 0 0113 0M4 4l16 16"
+                        />
+                      </svg>
+                      {{ t('share.statusShared') }}
+                    </span>
+                  </div>
+                  <svg
+                    class="w-5 h-5 text-gray-400 flex-shrink-0"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M9 5l7 7-7 7"
+                    />
+                  </svg>
+                </div>
               </div>
             </div>
           </div>
@@ -458,11 +466,118 @@
         </div>
       </BaseCard>
     </div>
+
+    <ConfirmDialog
+      :show="showMergeConfirm"
+      :title="t('chats.bulkMerge.confirmTitle')"
+      :message="mergeConfirmMessage"
+      :confirm-text="t('chats.bulkMerge.merge')"
+      variant="primary"
+      :loading="mergeLoading"
+      @close="showMergeConfirm = false"
+      @confirm="confirmMerge"
+    >
+      <div
+        v-if="selectedMergeItems.length > 0"
+        class="mt-4 rounded-xl border border-gray-200 bg-gray-50 p-3"
+      >
+        <div class="mb-2 text-xs font-medium text-gray-500">
+          {{ t('chats.bulkMerge.selectedItems') }}
+        </div>
+        <div class="space-y-2">
+          <div
+            v-for="item in selectedMergeItems"
+            :key="item.uuid"
+            class="flex flex-col gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 sm:flex-row sm:items-start sm:justify-between"
+          >
+            <div class="min-w-0 flex-1">
+              <div class="truncate text-sm font-medium text-gray-900">
+                {{ item.summary_title || item.subject || `Email #${item.id}` }}
+              </div>
+              <div class="mt-1 text-xs text-gray-500">
+                {{ formatDateTime(item.received_at || item.created_at) }}
+                <span class="mx-1">•</span>
+                {{ t('chats.from') }}: {{ getSender(item.sender) }}
+              </div>
+            </div>
+            <MergeStateBadge :state="item.mergeState" />
+          </div>
+        </div>
+      </div>
+      <div class="mt-4 space-y-2">
+        <label class="block text-sm font-medium text-gray-700">
+          {{ t('chats.bulkMerge.noteLabel') }}
+        </label>
+        <textarea
+          v-model="mergeNote"
+          rows="3"
+          maxlength="100"
+          class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500"
+          :placeholder="t('chats.bulkMerge.notePlaceholder')"
+        ></textarea>
+        <div class="text-xs text-gray-500">
+          {{
+            t('chats.bulkMerge.noteHint', {
+              count: mergeNote.length,
+              max: 100
+            })
+          }}
+        </div>
+      </div>
+    </ConfirmDialog>
+
+    <Transition
+      enter-active-class="transition duration-200 ease-out"
+      enter-from-class="translate-y-4 opacity-0"
+      enter-to-class="translate-y-0 opacity-100"
+      leave-active-class="transition duration-150 ease-in"
+      leave-from-class="translate-y-0 opacity-100"
+      leave-to-class="translate-y-4 opacity-0"
+    >
+      <div
+        v-if="selectedCount > 0"
+        class="fixed inset-x-0 bottom-3 z-40 flex justify-center px-3 pointer-events-none sm:bottom-4 sm:px-4"
+      >
+        <div
+          class="pointer-events-auto flex w-full max-w-3xl flex-col gap-3 rounded-2xl border border-blue-200 bg-white/95 px-3 py-3 shadow-lg shadow-blue-100 backdrop-blur sm:flex-row sm:items-center sm:justify-between sm:px-4"
+        >
+          <div class="min-w-0 text-center sm:text-left">
+            <div class="text-sm font-medium text-gray-900">
+              {{ t('chats.bulkMerge.selectedCount', { count: selectedCount }) }}
+            </div>
+            <div class="text-xs text-gray-500">
+              {{ t('chats.bulkMerge.selectedHint', { max: 5 }) }}
+            </div>
+          </div>
+
+          <div class="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-shrink-0">
+            <BaseButton
+              variant="secondary"
+              size="sm"
+              class="w-full sm:w-auto"
+              @click="clearSelection"
+            >
+              {{ t('chats.bulkMerge.clear') }}
+            </BaseButton>
+            <BaseButton
+              variant="primary"
+              size="sm"
+              class="w-full sm:w-auto"
+              :disabled="selectedCount < 2 || mergeLoading"
+              :loading="mergeLoading"
+              @click="openMergeConfirm"
+            >
+              {{ t('chats.bulkMerge.merge') }}
+            </BaseButton>
+          </div>
+        </div>
+      </div>
+    </Transition>
   </AppLayout>
 </template>
 
 <script setup>
-import { ref, onMounted, watch } from 'vue'
+import { computed, ref, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { usePreferencesStore } from '@/store/preferences'
@@ -472,19 +587,28 @@ import { formatDate } from '@/utils/timezone'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import BaseCard from '@/components/ui/BaseCard.vue'
 import BaseButton from '@/components/ui/BaseButton.vue'
+import ConfirmDialog from '@/components/ConfirmDialog.vue'
+import MergeStateBadge from '@/components/ui/MergeStateBadge.vue'
 import VirtualEmailBanner from '@/components/ui/VirtualEmailBanner.vue'
 import StatusBadge from '@/components/ui/StatusBadge.vue'
+import { useToast } from '@/composables/useToast'
 import { getThreadlineDisplayStatus } from '@/utils/threadlineStatus'
+import { getThreadlineMergeState } from '@/utils/threadlineMergeState'
 
 const { t } = useI18n()
 const router = useRouter()
 const preferencesStore = usePreferencesStore()
 const userStore = useUserStore()
+const toast = useToast()
 
 const loading = ref(false)
 const loadingMore = ref(false)
+const mergeLoading = ref(false)
+const showMergeConfirm = ref(false)
+const mergeNote = ref('')
 const searchQuery = ref('')
 const results = ref([])
+const selectedIds = ref([])
 const pagination = ref({
   page: 1,
   pageSize: 20,
@@ -496,6 +620,34 @@ const stats = ref({
   thisWeek: 0,
   pending: 0,
   completed: 0
+})
+const maxMergeCount = 5
+
+const selectedCount = computed(() => selectedIds.value.length)
+const canSelectMore = computed(() => selectedCount.value < maxMergeCount)
+const selectedMergeItems = computed(() =>
+  results.value
+    .filter((item) => selectedIds.value.includes(item.uuid))
+    .map((item) => ({
+      ...item,
+      mergeState: getThreadlineMergeState(item)
+    }))
+)
+
+const mergeConfirmMessage = computed(() => {
+  const titles = results.value
+    .filter((item) => selectedIds.value.includes(item.uuid))
+    .map((item) => item.summary_title || item.subject || `Email #${item.id}`)
+    .slice(0, 3)
+
+  if (!titles.length) {
+    return t('chats.bulkMerge.confirmMessage')
+  }
+
+  const titleList = titles.join('、')
+  const suffix = selectedCount.value > titles.length ? '...' : ''
+
+  return `${t('chats.bulkMerge.confirmMessage')} ${titleList}${suffix}`
 })
 
 // Debounce function for search
@@ -521,6 +673,7 @@ const loadData = async (isLoadMore = false) => {
     loading.value = true
     pagination.value.page = 1
     results.value = []
+    selectedIds.value = []
   }
 
   try {
@@ -586,6 +739,68 @@ const refreshData = () => {
 
 const viewResult = (id) => {
   router.push(`/chats/${id}`)
+}
+
+const clearSelection = () => {
+  selectedIds.value = []
+  mergeNote.value = ''
+}
+
+const toggleSelection = (uuid) => {
+  if (!uuid) return
+
+  const existingIndex = selectedIds.value.indexOf(uuid)
+  if (existingIndex >= 0) {
+    const next = [...selectedIds.value]
+    next.splice(existingIndex, 1)
+    selectedIds.value = next
+    return
+  }
+
+  if (!canSelectMore.value) {
+    toast.showWarning(t('chats.bulkMerge.limitReached', { max: maxMergeCount }))
+    return
+  }
+
+  selectedIds.value = [...selectedIds.value, uuid]
+}
+
+const openMergeConfirm = () => {
+  if (selectedCount.value < 2) {
+    toast.showWarning(t('chats.bulkMerge.needTwo'))
+    return
+  }
+
+  showMergeConfirm.value = true
+}
+
+const confirmMerge = async () => {
+  if (selectedCount.value < 2 || mergeLoading.value) {
+    return
+  }
+
+  mergeLoading.value = true
+  try {
+    const response = await chatApi.mergeThreadlines(
+      selectedIds.value,
+      mergeNote.value.trim()
+    )
+    const responseData = response.data.data || response.data || {}
+    const canonical = responseData.threadline || responseData
+    clearSelection()
+    showMergeConfirm.value = false
+    toast.showSuccess(
+      t('chats.bulkMerge.success', { count: responseData.source_count || 0 })
+    )
+    if (canonical?.uuid) {
+      router.push(`/chats/${canonical.uuid}`)
+    }
+  } catch (error) {
+    console.error('Failed to merge threadlines:', error)
+    toast.showError(error.response?.data?.message || t('common.error'))
+  } finally {
+    mergeLoading.value = false
+  }
 }
 
 const formatDateTime = (dateString) => {

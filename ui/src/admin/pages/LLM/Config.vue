@@ -213,6 +213,17 @@
                             )
                           }}
                         </span>
+                        <span
+                          class="inline-flex items-center rounded-md bg-gray-100 px-2 py-0.5 text-xs text-gray-700"
+                        >
+                          {{ t('llm.config.requestTimeout') }}:
+                          {{
+                            formatDefaultValue(
+                              getEffectiveRowConfig(row).request_timeout_seconds,
+                              DEFAULT_REQUEST_TIMEOUT_SECONDS
+                            )
+                          }}
+                        </span>
                       </div>
                     </td>
                     <td class="px-4 py-4 text-sm">
@@ -919,6 +930,21 @@
                     class="block w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-primary-500 focus:ring-1 focus:ring-primary-500"
                   />
                 </div>
+                <div>
+                  <label class="block text-xs font-medium text-gray-600 mb-1">{{
+                    t('llm.config.requestTimeout')
+                  }}</label>
+                  <input
+                    v-model.number="form.config.request_timeout_seconds"
+                    type="number"
+                    min="1"
+                    class="block w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-primary-500 focus:ring-1 focus:ring-primary-500"
+                    :placeholder="String(DEFAULT_REQUEST_TIMEOUT_SECONDS)"
+                  />
+                  <p class="mt-1 text-[11px] text-gray-500">
+                    {{ t('llm.config.requestTimeoutHint') }}
+                  </p>
+                </div>
               </div>
               <template v-if="form.provider === 'azure_openai'">
                 <div
@@ -1062,6 +1088,7 @@ function maskApiKey(value) {
 }
 
 const { t } = useI18n()
+const DEFAULT_REQUEST_TIMEOUT_SECONDS = 60
 
 const loading = ref(true)
 const modelsLoading = ref(true)
@@ -1103,7 +1130,8 @@ const form = reactive({
     api_version: '2024-02-15-preview',
     max_tokens: null,
     temperature: null,
-    top_p: null
+    top_p: null,
+    request_timeout_seconds: null
   },
   is_active: true
 })
@@ -1266,9 +1294,14 @@ function refPriceLine(rp) {
   return [inStr, outStr].filter(Boolean).join(' · ')
 }
 
-function formatDefaultValue(value) {
+function formatDefaultValue(value, fallback = null) {
+  if (value === null || value === undefined || value === '') {
+    if (fallback === null || fallback === undefined || fallback === '') {
+      return '–'
+    }
+    return String(fallback)
+  }
   if (value === 0) return '0'
-  if (value === null || value === undefined || value === '') return '–'
   return String(value)
 }
 
@@ -1287,7 +1320,8 @@ function buildProviderDefaultConfig(provider) {
     api_version: '2024-02-15-preview',
     max_tokens: schema.default_max_tokens ?? null,
     temperature: schema.default_temperature ?? null,
-    top_p: schema.default_top_p ?? null
+    top_p: schema.default_top_p ?? null,
+    request_timeout_seconds: null
   }
 }
 
@@ -1302,11 +1336,16 @@ function getEffectiveRowConfig(row) {
     model: config.model || schema.default_model || '',
     max_tokens: config.max_tokens ?? schema.default_max_tokens ?? null,
     temperature: config.temperature ?? schema.default_temperature ?? null,
-    top_p: config.top_p ?? schema.default_top_p ?? null
+    top_p: config.top_p ?? schema.default_top_p ?? null,
+    request_timeout_seconds:
+      config.request_timeout_seconds === ''
+        ? DEFAULT_REQUEST_TIMEOUT_SECONDS
+        : (config.request_timeout_seconds ?? DEFAULT_REQUEST_TIMEOUT_SECONDS)
   }
 }
 
 function buildConfigPayloadFrom(config) {
+  const timeoutSeconds = Number(config?.request_timeout_seconds)
   const payload = {
     api_base: config?.api_base || undefined,
     model: config?.model || undefined,
@@ -1319,6 +1358,9 @@ function buildConfigPayloadFrom(config) {
   const apiKey = (config?.api_key || config?.key || '').trim()
   if (apiKey && !isMaskedSecretValue(apiKey)) {
     payload.api_key = apiKey
+  }
+  if (Number.isFinite(timeoutSeconds) && timeoutSeconds > 0) {
+    payload.request_timeout_seconds = Math.floor(timeoutSeconds)
   }
   return payload
 }
@@ -1449,7 +1491,8 @@ async function editConfig(row) {
       api_version: c.api_version ?? '2024-02-15-preview',
       max_tokens: c.max_tokens ?? null,
       temperature: c.temperature ?? null,
-      top_p: c.top_p ?? null
+      top_p: c.top_p ?? null,
+      request_timeout_seconds: c.request_timeout_seconds ?? null
     }
     form.is_active = data?.is_active !== false
   } catch (e) {

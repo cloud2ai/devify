@@ -73,6 +73,14 @@ export const chatApi = {
     })
   },
 
+  // Manually merge up to 5 threadlines into one new canonical record
+  mergeThreadlines(sourceUuids, mergeNote = '') {
+    return api.post('/v1/threadlines/merge', {
+      source_uuids: sourceUuids,
+      merge_note: mergeNote
+    })
+  },
+
   // Create or refresh share link for a threadline
   createShareLink(id, data) {
     return api.post(`/v1/threadlines/${id}/share-link`, data)

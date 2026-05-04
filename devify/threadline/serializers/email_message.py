@@ -761,3 +761,36 @@ class EmailMessageUpdateSerializer(serializers.ModelSerializer):
             "status",
             "error_message",
         ]
+
+
+class EmailMessageMergeSerializer(serializers.Serializer):
+    """
+    Request serializer for manual batch merge operations.
+    """
+
+    source_uuids = serializers.ListField(
+        child=serializers.UUIDField(),
+        min_length=2,
+        max_length=5,
+    )
+    merge_note = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        max_length=100,
+        trim_whitespace=True,
+    )
+
+    def validate_source_uuids(self, value):
+        """
+        Deduplicate UUIDs while preserving input order.
+        """
+        unique_values = list(dict.fromkeys(value))
+        if len(unique_values) < 2:
+            raise serializers.ValidationError(
+                _("At least two unique messages are required")
+            )
+        if len(unique_values) > 5:
+            raise serializers.ValidationError(
+                _("You can merge at most five messages at a time")
+            )
+        return unique_values

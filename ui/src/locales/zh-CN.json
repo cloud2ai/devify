@@ -243,7 +243,34 @@
       "viewMainRecord": "查看主记录",
       "sources": "合并来源",
       "sourceCount": "{count} 条",
-      "sourceDate": "接收时间"
+      "sourceDate": "接收时间",
+      "state": {
+        "original": "原始",
+        "canonical": "合并",
+        "mergedSource": "已并入",
+        "mergedAgain": "再次合并"
+      },
+      "stateTitle": {
+        "original": "未合并",
+        "canonical": "合并后的主记录",
+        "mergedSource": "已并入其他记录",
+        "mergedAgain": "先前合并过，后来再次并入"
+      }
+    },
+    "bulkMerge": {
+      "selectedCount": "已选择 {count} 条",
+      "selectedHint": "最多选择 {max} 条消息进行合并",
+      "merge": "合并所选",
+      "clear": "清空选择",
+      "confirmTitle": "确认合并消息",
+      "confirmMessage": "将把所选消息合并成一条新的主记录，原始消息会保留为子记录。",
+      "selectedItems": "当前选择的消息状态",
+      "noteLabel": "合并备注",
+      "notePlaceholder": "例如：内容高度重复，需合并为同一问题",
+      "noteHint": "备注将直接写入新记录正文顶部，{count}/{max} 字",
+      "success": "已将 {count} 条消息合并为新记录",
+      "limitReached": "一次最多只能选择 {max} 条消息",
+      "needTwo": "至少选择 2 条消息才能合并"
     },
     "issue": {
       "label": "问题链接",

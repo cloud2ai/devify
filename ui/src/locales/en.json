@@ -233,7 +233,34 @@
       "viewMainRecord": "View main record",
       "sources": "Merge sources",
       "sourceCount": "{count} items",
-      "sourceDate": "Received"
+      "sourceDate": "Received",
+      "state": {
+        "original": "Original",
+        "canonical": "Merged",
+        "mergedSource": "Merged into",
+        "mergedAgain": "Merged again"
+      },
+      "stateTitle": {
+        "original": "Not merged",
+        "canonical": "Merged main record",
+        "mergedSource": "Already merged into another record",
+        "mergedAgain": "Previously canonical, then merged again"
+      }
+    },
+    "bulkMerge": {
+      "selectedCount": "{count} selected",
+      "selectedHint": "Select up to {max} messages to merge",
+      "merge": "Merge selected",
+      "clear": "Clear selection",
+      "confirmTitle": "Merge selected messages",
+      "confirmMessage": "This will create a new canonical message and keep the selected messages as merged children.",
+      "selectedItems": "Selected message states",
+      "noteLabel": "Merge note",
+      "notePlaceholder": "For example: the content is highly overlapping, so merge into one issue",
+      "noteHint": "The note will be written at the top of the new record body, {count}/{max} chars",
+      "success": "Merged {count} messages into a new record",
+      "limitReached": "You can select at most {max} messages",
+      "needTwo": "Select at least 2 messages to merge"
     },
     "issue": {
       "label": "Issue link",

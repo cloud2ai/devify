@@ -276,6 +276,7 @@ class EmailMessage(models.Model):
         THREAD_RELATION = "thread_relation", _("Thread Relation")
         FORWARD_CHAIN = "forward_chain", _("Forward Chain")
         TEXT_SIMILARITY = "text_similarity", _("Text Similarity")
+        MANUAL = "manual", _("Manual")
 
     uuid = models.UUIDField(
         unique=True,

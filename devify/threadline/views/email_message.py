@@ -6,20 +6,27 @@ This module contains APIView classes for EmailMessage model CRUD operations.
 
 import logging
 import re
+
 from rest_framework import status, serializers
 from rest_framework.response import Response
 from django.db.models import Q
+from django.db import transaction
 from drf_spectacular.utils import extend_schema, OpenApiParameter
 from drf_spectacular.types import OpenApiTypes
 from core.swagger import response, error_response, pagination_response
 
 from .base import BaseAPIView
-from ..models import EmailMessage, EmailStatus
+from ..models import EmailMessage
 from ..serializers import (
     EmailMessageSerializer,
     EmailMessageListSerializer,
     EmailMessageCreateSerializer,
     EmailMessageUpdateSerializer,
+    EmailMessageMergeSerializer,
+)
+from ..services import (
+    ManualMergeService,
+    enqueue_merge_workflow as _enqueue_merge_workflow,
 )
 
 logger = logging.getLogger(__name__)
@@ -93,48 +100,14 @@ def _serialize_issue_cluster(message: EmailMessage) -> dict:
     }
 
 
-def _enqueue_merge_workflow(
-    message: EmailMessage,
-    *,
-    force: bool = False,
-    language: str | None = None,
-    scene: str | None = None,
-) -> EmailMessage:
-    """
-    Mark an email as processing and enqueue the merge workflow.
-    """
-    from ..tasks.email_merge import process_email_merge
-
-    target_message = message
-    target_message.set_status(EmailStatus.PROCESSING.value)
-
-    try:
-        process_email_merge.delay(
-            str(target_message.id),
-            force=force,
-            language=language,
-            scene=scene,
-        )
-    except Exception as exc:
-        logger.error(
-            "Failed to trigger merge workflow for email %s: %s",
-            target_message.uuid,
-            exc,
-        )
-        try:
-            target_message.set_status(
-                EmailStatus.FAILED.value,
-                error_message=str(exc),
-            )
-        except Exception as status_error:
-            logger.error(
-                "Failed to mark email %s as FAILED after dispatch error: %s",
-                target_message.uuid,
-                status_error,
-            )
-        raise
-
-    return target_message
+def _serialize_merge_response(message: EmailMessage, request, result):
+    serializer = EmailMessageSerializer(message, context={"request": request})
+    return {
+        "threadline": serializer.data,
+        "source_count": len(result.source_messages),
+        "attachment_count": result.attachment_count,
+        "source_uuids": [str(item.uuid) for item in result.source_messages],
+    }
 
 
 class EmailMessageAPIView(BaseAPIView):
@@ -158,7 +131,10 @@ class EmailMessageAPIView(BaseAPIView):
     @extend_schema(
         operation_id="threadlines_list",
         summary="List threadlines",
-        description="Get paginated list of user threadlines (email messages with attachments)",
+        description=(
+            "Get paginated list of user threadlines "
+            "(email messages with attachments)"
+        ),
         parameters=[
             OpenApiParameter(
                 name="search",
@@ -208,7 +184,7 @@ class EmailMessageAPIView(BaseAPIView):
                 logger.info(f"Search query parsed into keywords: {keywords}")
 
                 if keywords:
-                    # Build AND logic: each keyword must match at least one field
+                # Build AND logic: each keyword must match at least one field.
                     for keyword in keywords:
                         logger.debug(f"Filtering by keyword: '{keyword}'")
                         queryset = queryset.filter(
@@ -310,11 +286,13 @@ class EmailMessageAPIView(BaseAPIView):
                 try:
                     _enqueue_merge_workflow(message)
                     logger.info(
-                        f"Triggered merge workflow for newly created threadline {message.id}"
+                        f"Triggered merge workflow for newly created "
+                        f"threadline {message.id}"
                     )
                 except Exception as workflow_error:
                     logger.error(
-                        f"Failed to trigger workflow for threadline {message.id}: {workflow_error}"
+                        f"Failed to trigger workflow for threadline "
+                        f"{message.id}: {workflow_error}"
                     )
                     return Response(
                         {
@@ -345,6 +323,135 @@ class EmailMessageAPIView(BaseAPIView):
             return Response(
                 {"code": 400, "message": str(e), "data": None},
                 status=status.HTTP_400_BAD_REQUEST,
+            )
+
+
+class EmailMessageBatchMergeAPIView(BaseAPIView):
+    """
+    APIView for manual batch merge operations.
+    """
+
+    def get_queryset(self):
+        return (
+            EmailMessage.objects.select_related("user", "merged_into")
+            .prefetch_related("attachments")
+            .all()
+        )
+
+    @extend_schema(
+        operation_id="threadlines_merge",
+        summary="Manually merge threadlines",
+        description="Merge 2 to 5 threadlines into a new canonical record",
+        request=EmailMessageMergeSerializer,
+        responses={
+            201: response(EmailMessageSerializer),
+            400: error_response(),
+            401: error_response(),
+        },
+    )
+    def post(self, request):
+        try:
+            self.request = request
+            serializer = EmailMessageMergeSerializer(data=request.data)
+            serializer.is_valid(raise_exception=True)
+
+            source_uuids = serializer.validated_data["source_uuids"]
+            with transaction.atomic():
+                queryset = self.filter_by_user(self.get_queryset())
+                source_messages = list(
+                    queryset.select_for_update()
+                    .filter(uuid__in=source_uuids)
+                    .order_by("received_at", "id")
+                )
+
+                if len(source_messages) != len(source_uuids):
+                    found_uuids = {
+                        str(message.uuid) for message in source_messages
+                    }
+                    missing = [
+                        str(uuid)
+                        for uuid in source_uuids
+                        if str(uuid) not in found_uuids
+                    ]
+                    raise serializers.ValidationError(
+                        {
+                            "source_uuids": [
+                                "One or more selected messages were not "
+                                "found or are not accessible"
+                            ],
+                            "missing_source_uuids": missing,
+                        }
+                    )
+
+                if any(message.merged_into_id for message in source_messages):
+                    raise serializers.ValidationError(
+                        {
+                            "source_uuids": [
+                                "Merged child messages cannot be merged again"
+                            ]
+                        }
+                    )
+
+                merge_service = ManualMergeService()
+                result = merge_service.merge(
+                    user=request.user,
+                    source_messages=source_messages,
+                    merge_note=serializer.validated_data.get("merge_note"),
+                )
+
+            try:
+                _enqueue_merge_workflow(result.canonical_message)
+            except Exception as workflow_error:
+                logger.warning(
+                    "Failed to trigger workflow for manual merge %s: %s",
+                    result.canonical_message.uuid,
+                    workflow_error,
+                )
+                return Response(
+                    {
+                        "code": 201,
+                        "message": (
+                            "Threadlines merged successfully, but "
+                            "workflow dispatch failed"
+                        ),
+                        "data": _serialize_merge_response(
+                            result.canonical_message,
+                            request,
+                            result,
+                        ),
+                        "workflow_dispatched": False,
+                        "workflow_error": str(workflow_error),
+                    },
+                    status=status.HTTP_201_CREATED,
+                )
+
+            return Response(
+                {
+                    "code": 201,
+                    "message": "Threadlines merged successfully",
+                    "data": _serialize_merge_response(
+                        result.canonical_message,
+                        request,
+                        result,
+                    ),
+                },
+                status=status.HTTP_201_CREATED,
+            )
+
+        except serializers.ValidationError as exc:
+            return Response(
+                {
+                    "code": 400,
+                    "message": "Validation failed",
+                    "data": exc.detail,
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        except Exception as exc:
+            logger.error(f"Error merging email messages: {exc}")
+            return Response(
+                {"code": 500, "message": str(exc), "data": None},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
 
@@ -541,7 +648,10 @@ class EmailMessageDetailAPIView(BaseAPIView):
     @extend_schema(
         operation_id="threadlines_retry",
         summary="Retry email processing",
-        description="Retry processing an email with optional language and scene override",
+        description=(
+            "Retry processing an email with optional language "
+            "and scene override"
+        ),
         request=serializers.Serializer,
         parameters=[
             OpenApiParameter(
@@ -562,7 +672,10 @@ class EmailMessageDetailAPIView(BaseAPIView):
                 name="force",
                 type=OpenApiTypes.BOOL,
                 location=OpenApiParameter.QUERY,
-                description="Force retry (re-process OCR and LLM even if already done)",
+                description=(
+                    "Force retry (re-process OCR and LLM even if "
+                    "already done)"
+                ),
                 required=False,
             ),
         ],
@@ -574,8 +687,8 @@ class EmailMessageDetailAPIView(BaseAPIView):
         },
     )
     def post(self, request, uuid):
-        """
-        Retry processing an email message with optional language and scene override
+        """Retry processing an email message with optional language and scene
+        override.
 
         This endpoint allows retrying email processing with different
         language and scene settings. The force parameter determines
@@ -584,9 +697,9 @@ class EmailMessageDetailAPIView(BaseAPIView):
         try:
             message = self.get_object(uuid)
 
-            language = request.data.get(
-                "language"
-            ) or request.query_params.get("language")
+            language = request.data.get("language") or (
+                request.query_params.get("language")
+            )
             scene = request.data.get("scene") or request.query_params.get(
                 "scene"
             )
@@ -596,7 +709,8 @@ class EmailMessageDetailAPIView(BaseAPIView):
 
             logger.info(
                 f"Retry requested for email {uuid}, "
-                f"language={language}, scene={scene}, force={force}"
+                f"language={language}, scene={scene}, force={force}, "
+                f"trigger_source=api_retry"
             )
 
             target_message = _enqueue_merge_workflow(
@@ -604,6 +718,7 @@ class EmailMessageDetailAPIView(BaseAPIView):
                 force=force,
                 language=language,
                 scene=scene,
+                trigger_source="api_retry",
             )
 
             return Response(

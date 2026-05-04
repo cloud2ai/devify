@@ -6,6 +6,7 @@ results to the database and sets the final processing status.
 """
 
 import logging
+import time
 from typing import Dict, Any
 
 from django.conf import settings
@@ -21,7 +22,6 @@ from threadline.agents.email_state import (
 from threadline.agents.nodes.base_node import BaseLangGraphNode
 from threadline.models import EmailAttachment, EmailMessage, Issue, EmailTodo
 from threadline.state_machine import EmailStatus
-
 
 logger = logging.getLogger(__name__)
 
@@ -114,6 +114,9 @@ class WorkflowFinalizeNode(BaseLangGraphNode):
         """
         has_errors = has_node_errors(state)
         force = state.get("force", False)
+        started_at = time.monotonic()
+        error_summary = None
+        error_nodes = []
 
         if has_errors:
             error_nodes = get_all_node_names_with_errors(state)
@@ -122,6 +125,11 @@ class WorkflowFinalizeNode(BaseLangGraphNode):
 
             logger.error(
                 f"Workflow failed with errors in nodes: {error_nodes}"
+            )
+            logger.error(
+                "Workflow finalization entering failed branch "
+                f"email_id={state.get('id')} user_id={state.get('user_id')} "
+                f"error_summary={error_summary}"
             )
 
             # Sync partial data even when workflow fails
@@ -147,6 +155,10 @@ class WorkflowFinalizeNode(BaseLangGraphNode):
                 f"[{self.node_name}] Workflow completed successfully for "
                 f"email {email_id}, user {user_id}"
             )
+            logger.info(
+                "Workflow finalization entering success branch "
+                f"email_id={email_id} user_id={user_id}"
+            )
 
             self._sync_data_to_database(state, email=self.email)
             self._finalize_issue(state, email=self.email)
@@ -162,9 +174,12 @@ class WorkflowFinalizeNode(BaseLangGraphNode):
 
         email_id = state.get("id")
         user_id = state.get("user_id")
+        elapsed = time.monotonic() - started_at
         logger.info(
             f"[{self.node_name}] Workflow finalized for "
-            f"email {email_id}, user {user_id}"
+            f"email {email_id}, user {user_id}, elapsed_sec={elapsed:.2f}, "
+            f"final_status={self.email.status if self.email else 'unknown'}, "
+            f"error_summary={error_summary or ''}"
         )
         return state
 

@@ -2,12 +2,12 @@ import logging
 from celery import shared_task
 from django.utils import timezone
 
+from agentcore_task.adapters.django import prevent_duplicate_task
 from threadline.tasks.email_fetch import imap_email_fetch, haraka_email_fetch
 from threadline.tasks.cleanup import (
     EmailCleanupManager,
     ShareLinkCleanupManager,
 )
-from threadline.utils.task_lock import prevent_duplicate_task
 from threadline.utils.task_tracer import TaskTracer, use_task_tracer
 from django.conf import settings
 
@@ -15,7 +15,9 @@ logger = logging.getLogger(__name__)
 
 
 @shared_task
-@prevent_duplicate_task("email_fetch", timeout=settings.TASK_TIMEOUT_MINUTES)
+@prevent_duplicate_task(
+    "email_fetch", timeout=settings.TASK_TIMEOUT_MINUTES * 60
+)
 def schedule_email_fetch():
     """
     Unified email fetch scheduler
@@ -29,7 +31,7 @@ def schedule_email_fetch():
     Responsibilities:
     1. Check task locks (handled by decorator)
     2. Schedule both IMAP and Haraka email fetch tasks
-    3. Task lock mechanism (TASK_TIMEOUT_MINUTES timeout)
+    3. Task lock mechanism (TASK_TIMEOUT_MINUTES converted to seconds)
     4. Error handling and monitoring
     """
     tracer = TaskTracer(
@@ -49,7 +51,8 @@ def schedule_email_fetch():
             {"started_at": timezone.now().isoformat()},
         )
         logger.info(
-            f"{tracer.context_summary()} Starting unified email fetch scheduling"
+            f"{tracer.context_summary()} "
+            "Starting unified email fetch scheduling"
         )
 
         # Schedule both email fetch tasks
@@ -65,11 +68,15 @@ def schedule_email_fetch():
             },
         )
 
+        imap_context = tracer.context_summary({"task_id": imap_result.id})
+        haraka_context = tracer.context_summary({"task_id": haraka_result.id})
         logger.info(
-            f"{tracer.context_summary({'task_id': imap_result.id})} IMAP email fetch task started: {imap_result.id}"
+            f"{imap_context} IMAP email fetch task started: "
+            f"{imap_result.id}"
         )
         logger.info(
-            f"{tracer.context_summary({'task_id': haraka_result.id})} Haraka email fetch task started: {haraka_result.id}"
+            f"{haraka_context} Haraka email fetch task started: "
+            f"{haraka_result.id}"
         )
         tracer.complete_task(
             {
@@ -100,7 +107,7 @@ def schedule_email_fetch():
 
 
 @shared_task
-@prevent_duplicate_task("haraka_cleanup", timeout=30)
+@prevent_duplicate_task("haraka_cleanup", timeout=30 * 60)
 def schedule_haraka_cleanup():
     """
     Haraka email files cleanup scheduler
@@ -115,7 +122,8 @@ def schedule_haraka_cleanup():
     try:
         with use_task_tracer(tracer):
             logger.info(
-                f"{tracer.context_summary()} Starting Haraka email files cleanup scheduler"
+                f"{tracer.context_summary()} "
+                "Starting Haraka email files cleanup scheduler"
             )
             cleanup_manager = EmailCleanupManager()
             result = cleanup_manager.cleanup_haraka_files()
@@ -128,7 +136,8 @@ def schedule_haraka_cleanup():
     except Exception as exc:
         tracer.fail_task({"error": str(exc)}, str(exc))
         logger.error(
-            f"{tracer.context_summary()} Haraka cleanup scheduling failed: {exc}"
+            f"{tracer.context_summary()} "
+            f"Haraka cleanup scheduling failed: {exc}"
         )
         raise
 
@@ -148,19 +157,22 @@ def schedule_share_link_cleanup():
     try:
         with use_task_tracer(tracer):
             logger.info(
-                f"{tracer.context_summary()} Starting share link cleanup scheduler"
+                f"{tracer.context_summary()} "
+                "Starting share link cleanup scheduler"
             )
             cleanup_manager = ShareLinkCleanupManager()
             result = cleanup_manager.cleanup_expired_share_links()
 
         logger.info(
-            f"{tracer.context_summary()} Share link cleanup completed: {result}"
+            f"{tracer.context_summary()} "
+            f"Share link cleanup completed: {result}"
         )
         return result
 
     except Exception as exc:
         tracer.fail_task({"error": str(exc)}, str(exc))
         logger.error(
-            f"{tracer.context_summary()} Share link cleanup scheduling failed: {exc}"
+            f"{tracer.context_summary()} "
+            f"Share link cleanup scheduling failed: {exc}"
         )
         raise

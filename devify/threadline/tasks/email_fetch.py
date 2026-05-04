@@ -15,15 +15,11 @@ from django.utils import timezone
 from django.conf import settings
 from django.db.models import Prefetch
 
+from agentcore_task.adapters.django import prevent_duplicate_task
 from threadline.models import EmailMessage, Settings
 from threadline.utils.email import (
     EmailProcessor,
     EmailSaveService,
-)
-from threadline.utils.task_lock import (
-    acquire_task_lock,
-    prevent_duplicate_task,
-    release_task_lock,
 )
 from threadline.utils.task_tracer import TaskTracer
 from threadline.tasks.email_merge import process_email_merge
@@ -46,7 +42,7 @@ def _queue_merge_for_saved_email(email_msg: EmailMessage) -> None:
 
 @shared_task
 @prevent_duplicate_task(
-    "imap_email_fetch", timeout=settings.TASK_TIMEOUT_MINUTES
+    "imap_email_fetch", timeout=settings.TASK_TIMEOUT_MINUTES * 60
 )
 def imap_email_fetch():
     """
@@ -71,10 +67,9 @@ def imap_email_fetch():
         logger.info(f"{context} Starting IMAP email fetch task")
         tracer.append_task("INIT", "IMAP email fetch task started")
 
-        # Query users with IMAP configuration
-        # Use __contains for MySQL JSONField compatibility
-        # This queries for Settings where value contains {"mode": "custom_imap"}
-        # and value contains an "imap_config" key
+        # Query users with IMAP configuration.
+        # Use __contains for MySQL JSONField compatibility.
+        # The filter matches settings with mode=custom_imap and imap_config.
         users_with_imap_config = (
             User.objects.filter(
                 is_active=True,
@@ -109,7 +104,8 @@ def imap_email_fetch():
                 email_config_setting = user.settings.first()
                 if not email_config_setting:
                     logger.warning(
-                        f"{context} User {user_display} has no email_config, skipping"
+                        f"{context} User {user_display} has no email_config, "
+                        "skipping"
                     )
                     continue
 
@@ -117,7 +113,8 @@ def imap_email_fetch():
 
                 if "imap_config" not in email_config:
                     logger.warning(
-                        f"{context} User {user_display} email_config missing imap_config, skipping"
+                        f"{context} User {user_display} email_config missing "
+                        "imap_config, skipping"
                     )
                     continue
 
@@ -192,7 +189,7 @@ def imap_email_fetch():
 
 @shared_task
 @prevent_duplicate_task(
-    "haraka_email_fetch", timeout=settings.TASK_TIMEOUT_MINUTES
+    "haraka_email_fetch", timeout=settings.TASK_TIMEOUT_MINUTES * 60
 )
 def haraka_email_fetch():
     """
@@ -232,7 +229,8 @@ def haraka_email_fetch():
                 user = save_service.find_user_by_recipient(email_data)
                 if not user:
                     logger.warning(
-                        f"{context} No user found for recipients: {email_data.get('recipients')}"
+                        f"{context} No user found for recipients: "
+                        f"{email_data.get('recipients')}"
                     )
                     tracer.append_task(
                         "EMAIL_SKIP",
@@ -248,7 +246,9 @@ def haraka_email_fetch():
 
                 if email_msg is None:
                     logger.info(
-                        f"{context} Duplicate email skipped for user {user.username}({user.id}): {email_data['message_id']}"
+                        f"{context} Duplicate email skipped for user "
+                        f"{user.username}({user.id}): "
+                        f"{email_data['message_id']}"
                     )
                     continue
 
@@ -261,7 +261,8 @@ def haraka_email_fetch():
                     f"Email saved: {email_msg.id} for user {user.id}",
                 )
                 logger.info(
-                    f"{context} Haraka email saved: email_id={email_msg.id} for user {user.username}({user.id})"
+                    f"{context} Haraka email saved: email_id={email_msg.id} "
+                    f"for user {user.username}({user.id})"
                 )
 
             except Exception as exc:
@@ -313,7 +314,9 @@ def haraka_email_fetch():
 
 @shared_task
 @prevent_duplicate_task(
-    "fetch_user_imap_emails", lock_param="user_id", timeout=300
+    "fetch_user_imap_emails",
+    lock_param="user_id",
+    timeout=settings.TASK_TIMEOUT_MINUTES * 60,
 )
 def fetch_user_imap_emails(
     user_id: int, email_config: dict, user_display: str = None
@@ -323,7 +326,7 @@ def fetch_user_imap_emails(
 
     Args:
         user_id: User ID
-        email_config: Pre-fetched email configuration (required for optimization)
+        email_config: Pre-fetched email configuration for optimization.
         user_display: User display string for logging (optional, e.g.
                       "admin (ID: 1)")
     """
@@ -343,7 +346,8 @@ def fetch_user_imap_emails(
         folder = imap_config.get("folder", "INBOX")
 
         logger.info(
-            f"{context} Starting IMAP fetch for {user_display} from {imap_host}:{imap_port} (SSL: {use_ssl}), folder: {folder}"
+            f"{context} Starting IMAP fetch for {user_display} from "
+            f"{imap_host}:{imap_port} (SSL: {use_ssl}), folder: {folder}"
         )
 
         processor = EmailProcessor(
@@ -364,7 +368,8 @@ def fetch_user_imap_emails(
 
                 if email_msg is None:
                     logger.info(
-                        f"{context} Duplicate email skipped for {user_display}: {email_data['message_id']}"
+                        f"{context} Duplicate email skipped for "
+                        f"{user_display}: {email_data['message_id']}"
                     )
                     continue
 
@@ -385,7 +390,9 @@ def fetch_user_imap_emails(
         }
 
         logger.info(
-            f"{context} IMAP fetch completed for {user_display} from {imap_host}:{imap_port}: {processed_count} emails, {error_count} errors"
+            f"{context} IMAP fetch completed for {user_display} from "
+            f"{imap_host}:{imap_port}: {processed_count} emails, "
+            f"{error_count} errors"
         )
         return result
 

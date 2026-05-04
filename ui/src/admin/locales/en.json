@@ -185,6 +185,8 @@
       "per1MTokens": "per 1M tokens",
       "temperature": "Temperature",
       "topP": "Top P",
+      "requestTimeout": "Request timeout (seconds)",
+      "requestTimeoutHint": "Leave empty to use the system default of 60 seconds.",
       "advancedOptions": "Advanced Options",
       "errors": {
         "invalid_api_key": "Invalid or expired API key. Please check and try again.",

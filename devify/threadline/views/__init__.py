@@ -29,6 +29,7 @@ from .email_message import (
     EmailMessageDetailAPIView,
     EmailMessageMetadataAPIView,
     EmailMessageIssueClusterAPIView,
+    EmailMessageBatchMergeAPIView,
 )
 from .email_todo import (
     EmailTodoAPIView,
@@ -62,6 +63,7 @@ __all__ = [
     "EmailMessageDetailAPIView",
     "EmailMessageMetadataAPIView",
     "EmailMessageIssueClusterAPIView",
+    "EmailMessageBatchMergeAPIView",
     "EmailTodoAPIView",
     "EmailTodoDetailAPIView",
     "EmailTodoStatsAPIView",

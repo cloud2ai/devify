@@ -436,24 +436,8 @@
                   </svg>
                 </h2>
               </button>
-              <div
-                v-if="threadline.has_merged_children && threadline.merge_reason"
-                class="mt-3 inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700"
-              >
-                <svg
-                  class="w-3.5 h-3.5"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                    d="M7 11l5-5m0 0l5 5m-5-5v12"
-                  />
-                </svg>
-                {{ t('common.status.merged') }}
+              <div v-if="threadlineMergeState !== 'original'" class="mt-3">
+                <MergeStateBadge :state="threadlineMergeState" />
               </div>
               <!-- Share Info Area -->
               <div v-if="shareStatus?.is_active" class="mt-4">
@@ -1408,26 +1392,7 @@
                         }}
                       </div>
                     </div>
-                    <span
-                      class="inline-flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full border border-amber-200 bg-amber-50 text-amber-600"
-                      :title="t('common.status.merged')"
-                      :aria-label="t('common.status.merged')"
-                    >
-                      <svg
-                        class="h-3.5 w-3.5"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                        aria-hidden="true"
-                      >
-                        <path
-                          stroke-linecap="round"
-                          stroke-linejoin="round"
-                          stroke-width="2"
-                          d="M7 11l5-5m0 0l5 5m-5-5v12"
-                        />
-                      </svg>
-                    </span>
+                    <MergeStateBadge state="merged_source" />
                   </router-link>
                 </div>
                 <div
@@ -1487,29 +1452,9 @@
                           {{ formatDate(child.received_at) }}
                         </div>
                       </div>
-                      <span
-                        class="inline-flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full border border-amber-200 bg-amber-50 text-amber-600"
-                        :title="t('common.status.merged')"
-                        :aria-label="t('common.status.merged')"
-                      >
-                        <svg
-                          class="h-3.5 w-3.5"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                          aria-hidden="true"
-                        >
-                          <path
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                            stroke-width="2"
-                            d="M7 7h3a2 2 0 012 2v2m5-4h-3a2 2 0 00-2 2v2M12 11v6"
-                          />
-                          <circle cx="7" cy="7" r="1.5" fill="currentColor" />
-                          <circle cx="17" cy="7" r="1.5" fill="currentColor" />
-                          <circle cx="12" cy="17" r="1.5" fill="currentColor" />
-                        </svg>
-                      </span>
+                      <MergeStateBadge
+                        :state="getThreadlineMergeState(child)"
+                      />
                     </router-link>
                   </div>
                 </div>
@@ -2426,6 +2371,7 @@ import AppLayout from '@/components/layout/AppLayout.vue'
 import BaseCard from '@/components/ui/BaseCard.vue'
 import BaseButton from '@/components/ui/BaseButton.vue'
 import BaseModal from '@/components/ui/BaseModal.vue'
+import MergeStateBadge from '@/components/ui/MergeStateBadge.vue'
 import MarkdownRenderer from '@/components/ui/MarkdownRenderer.vue'
 import { useThreadline } from '@/composables/useThreadline'
 import { useThreadlinePolling } from '@/composables/useThreadlinePolling'
@@ -2434,6 +2380,7 @@ import { useThreadlineTodos } from '@/composables/useThreadlineTodos'
 import { useThreadlineMetadata } from '@/composables/useThreadlineMetadata'
 import { useThreadlineContent } from '@/composables/useThreadlineContent'
 import { getThreadlineDisplayStatus } from '@/utils/threadlineStatus'
+import { getThreadlineMergeState } from '@/utils/threadlineMergeState'
 
 const route = useRoute()
 const { t } = useI18n()
@@ -2500,6 +2447,9 @@ const tempExpiration = share.tempExpiration
 const showShareLink = share.showShareLink
 const shareExpirationOptions = share.shareExpirationOptions
 const shareExpirationDisplay = share.shareExpirationDisplay
+const threadlineMergeState = computed(() =>
+  getThreadlineMergeState(threadline.value)
+)
 
 const retrying = polling.retrying
 const showRetryDialog = polling.showRetryDialog

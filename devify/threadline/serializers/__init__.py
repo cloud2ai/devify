@@ -40,6 +40,7 @@ from .email_message import (
     EmailMessageListSerializer,
     EmailMessageCreateSerializer,
     EmailMessageUpdateSerializer,
+    EmailMessageMergeSerializer,
 )
 from .share_link import (
     ThreadlineShareLinkSerializer,
@@ -78,38 +79,39 @@ from .email_todo import (
 
 __all__ = [
     # Base
-    'UserSerializer',
+    "UserSerializer",
     # Settings
-    'SettingsSerializer',
-    'SettingsCreateSerializer',
-    'SettingsUpdateSerializer',
+    "SettingsSerializer",
+    "SettingsCreateSerializer",
+    "SettingsUpdateSerializer",
     # EmailTask
-    'EmailTaskSerializer',
-    'EmailTaskCreateSerializer',
-    'EmailTaskUpdateSerializer',
+    "EmailTaskSerializer",
+    "EmailTaskCreateSerializer",
+    "EmailTaskUpdateSerializer",
     # EmailMessage
-    'EmailMessageSerializer',
-    'EmailMessageListSerializer',
-    'EmailMessageCreateSerializer',
-    'EmailMessageUpdateSerializer',
-    'ThreadlineShareLinkSerializer',
-    'ThreadlineShareLinkCreateSerializer',
-    'SharePasswordSerializer',
+    "EmailMessageSerializer",
+    "EmailMessageListSerializer",
+    "EmailMessageCreateSerializer",
+    "EmailMessageUpdateSerializer",
+    "EmailMessageMergeSerializer",
+    "ThreadlineShareLinkSerializer",
+    "ThreadlineShareLinkCreateSerializer",
+    "SharePasswordSerializer",
     # EmailAttachment
-    'EmailAttachmentSerializer',
-    'EmailAttachmentNestedSerializer',
-    'EmailAttachmentMinimalSerializer',
-    'EmailAttachmentCreateSerializer',
-    'EmailAttachmentUpdateSerializer',
+    "EmailAttachmentSerializer",
+    "EmailAttachmentNestedSerializer",
+    "EmailAttachmentMinimalSerializer",
+    "EmailAttachmentCreateSerializer",
+    "EmailAttachmentUpdateSerializer",
     # Issue
-    'IssueSerializer',
-    'IssueCreateSerializer',
-    'IssueUpdateSerializer',
+    "IssueSerializer",
+    "IssueCreateSerializer",
+    "IssueUpdateSerializer",
     # EmailAlias
-    'EmailAliasSerializer',
-    'EmailAliasCreateSerializer',
+    "EmailAliasSerializer",
+    "EmailAliasCreateSerializer",
     # EmailTodo
-    'EmailTodoSerializer',
-    'EmailTodoListSerializer',
-    'EmailTodoFilterSerializer',
+    "EmailTodoSerializer",
+    "EmailTodoListSerializer",
+    "EmailTodoFilterSerializer",
 ]

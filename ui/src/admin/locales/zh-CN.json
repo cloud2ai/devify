@@ -185,6 +185,8 @@
       "per1MTokens": "每百万 token",
       "temperature": "Temperature",
       "topP": "Top P",
+      "requestTimeout": "请求超时（秒）",
+      "requestTimeoutHint": "留空则使用系统默认 60 秒。",
       "advancedOptions": "高级选项",
       "errors": {
         "invalid_api_key": "API Key 无效或已过期，请检查后重试。",

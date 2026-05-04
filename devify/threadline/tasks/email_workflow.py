@@ -15,12 +15,13 @@ File: devify/threadline/tasks/email_workflow.py
 """
 
 import logging
+import time
 from celery import shared_task
 from django.conf import settings
 
+from agentcore_task.adapters.django import prevent_duplicate_task
 from threadline.models import EmailMessage
 from threadline.agents.workflow import execute_email_processing_workflow
-from threadline.utils.task_lock import prevent_duplicate_task
 from threadline.utils.task_tracer import TaskTracer
 
 logger = logging.getLogger(__name__)
@@ -30,10 +31,14 @@ logger = logging.getLogger(__name__)
 @prevent_duplicate_task(
     "process_email_workflow",
     lock_param="email_id",
-    timeout=settings.TASK_TIMEOUT_MINUTES,
+    timeout=settings.TASK_TIMEOUT_MINUTES * 60,
 )
 def process_email_workflow(
-    email_id: str, force: bool = False, language: str = None, scene: str = None
+    email_id: str,
+    force: bool = False,
+    language: str = None,
+    scene: str = None,
+    trigger_source: str | None = None,
 ) -> str:
     """
     Execute LangGraph-based email processing workflow.
@@ -78,6 +83,7 @@ def process_email_workflow(
         Exception: For workflow execution errors
     """
     try:
+        started_at = time.monotonic()
         email = EmailMessage.objects.select_related("user", "merged_into").get(
             id=email_id
         )
@@ -88,9 +94,20 @@ def process_email_workflow(
         tracer = TaskTracer("EMAIL_WORKFLOW")
         task_id = getattr(process_email_workflow.request, "id", "") or ""
         tracer.set_task_id(task_id)
+        workflow_context = tracer.context_summary(
+            {
+                "email_id": str(email_id),
+                "user_id": str(email.user_id),
+                "force": force,
+                "language": language,
+                "scene": scene,
+                "trigger_source": trigger_source,
+            }
+        )
         logger.info(
-            f"{tracer.context_summary({'email_id': str(email_id), 'user_id': str(email.user_id), 'force': force, 'language': language, 'scene': scene})} "
-            f"[Workflow] Starting for email {email_id}, user {user_info}, status: {email.status}, force: {force}, language: {language}, scene: {scene}"
+            f"{workflow_context} [Workflow] Starting for email {email_id}, "
+            f"user {user_info}, status: {email.status}, force: {force}, "
+            f"language: {language}, scene: {scene}"
         )
 
         tracer.create_task(
@@ -99,6 +116,7 @@ def process_email_workflow(
                 "force": force,
                 "language": language,
                 "scene": scene,
+                "trigger_source": trigger_source,
                 "status": "starting",
             }
         )
@@ -110,11 +128,19 @@ def process_email_workflow(
             scene=scene,
             tracer=tracer,
         )
+        elapsed = time.monotonic() - started_at
 
         if result["success"]:
+            success_context = tracer.context_summary(
+                {
+                    "email_id": str(email_id),
+                    "user_id": str(email.user_id),
+                }
+            )
             logger.info(
-                f"{tracer.context_summary({'email_id': str(email_id), 'user_id': str(email.user_id)})} "
-                f"[Workflow] Completed successfully for email {email_id}, user {user_info}"
+                f"{success_context} [Workflow] Completed successfully for "
+                f"email {email_id}, user {user_info}, "
+                f"elapsed_sec={elapsed:.2f}"
             )
             tracer.complete_task(
                 {
@@ -122,14 +148,22 @@ def process_email_workflow(
                     "force": force,
                     "language": language,
                     "scene": scene,
+                    "trigger_source": trigger_source,
                     "status": "completed",
                     "workflow_success": True,
                 }
             )
         else:
+            error_context = tracer.context_summary(
+                {
+                    "email_id": str(email_id),
+                    "user_id": str(email.user_id),
+                }
+            )
             logger.error(
-                f"{tracer.context_summary({'email_id': str(email_id), 'user_id': str(email.user_id)})} "
-                f"[Workflow] Failed for email {email_id}, user {user_info}: {result.get('error')}"
+                f"{error_context} [Workflow] Failed for email {email_id}, "
+                f"user {user_info}, elapsed_sec={elapsed:.2f}: "
+                f"{result.get('error')}"
             )
             tracer.fail_task(
                 {
@@ -137,6 +171,7 @@ def process_email_workflow(
                     "force": force,
                     "language": language,
                     "scene": scene,
+                    "trigger_source": trigger_source,
                     "status": "failed",
                     "workflow_success": False,
                     "workflow_error": result.get("error"),
@@ -171,4 +206,8 @@ def retry_failed_email_workflow(email_id: str) -> str:
         str: The email_id
     """
     logger.info(f"[Workflow] Retrying failed workflow for email {email_id}")
-    return process_email_workflow(email_id, force=True)
+    return process_email_workflow(
+        email_id,
+        force=True,
+        trigger_source="retry_task",
+    )

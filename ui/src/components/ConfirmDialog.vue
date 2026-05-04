@@ -6,6 +6,7 @@
     :closeOnBackdrop="false"
   >
     <p class="text-sm text-gray-700">{{ message }}</p>
+    <slot />
     <template #footer>
       <div
         class="w-full flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2"
@@ -36,7 +37,7 @@ import { useI18n } from 'vue-i18n'
 import BaseModal from '@/components/ui/BaseModal.vue'
 import BaseButton from '@/components/ui/BaseButton.vue'
 
-const props = defineProps({
+defineProps({
   show: {
     type: Boolean,
     default: false

@@ -133,6 +133,48 @@ class EmailMergeTaskTest(TestCase):
     @patch("threadline.tasks.email_merge.process_email_workflow.delay")
     @patch("threadline.tasks.email_merge.TaskTracer")
     @patch("threadline.tasks.email_merge.EmailMergeService")
+    def test_process_email_merge_skips_auto_merge_for_manual_canonical(
+        self,
+        mock_service_class,
+        mock_tracer_class,
+        mock_workflow_delay,
+    ):
+        email = self._create_email(
+            message_id="<manual-canonical@example.com>",
+            status="processing",
+            metadata={
+                "manual_merge": {
+                    "source_count": 2,
+                    "source_ids": [1, 2],
+                    "source_uuids": ["a", "b"],
+                    "merged_at": timezone.now().isoformat(),
+                }
+            },
+        )
+
+        tracer = Mock()
+        tracer.context_summary.return_value = "EMAIL_MERGE"
+        mock_tracer_class.return_value = tracer
+
+        from threadline.tasks.email_merge import process_email_merge
+
+        result = process_email_merge(str(email.id), force=False)
+
+        assert result == str(email.id)
+        mock_service_class.assert_not_called()
+        mock_workflow_delay.assert_called_once_with(
+            str(email.id),
+            force=False,
+            language=None,
+            scene=None,
+        )
+        tracer.complete_task.assert_called_once()
+        email.refresh_from_db()
+        assert email.merged_into_id is None
+
+    @patch("threadline.tasks.email_merge.process_email_workflow.delay")
+    @patch("threadline.tasks.email_merge.TaskTracer")
+    @patch("threadline.tasks.email_merge.EmailMergeService")
     def test_process_email_merge_marks_email_failed_on_reconcile_error(
         self,
         mock_service_class,

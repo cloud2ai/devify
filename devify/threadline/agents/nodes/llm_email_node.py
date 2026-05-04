@@ -7,6 +7,7 @@ information. It operates purely on State without database access.
 
 import logging
 import re
+import time
 from typing import Dict, Any
 
 from core.tracking import LLMTracker
@@ -108,10 +109,21 @@ class LLMEmailNode(BaseLangGraphNode):
             logger.error(error_message)
             return add_node_error(state, self.node_name, error_message)
 
+        started_at = None
         try:
-            logger.info("Processing email content with LLM")
+            attachment_count = len(state.get("attachments", []) or [])
+            prompt_size = len(email_content_prompt or "")
+            content_size = len(content_with_attachment_content or "")
+            logger.info(
+                "Processing email content with LLM "
+                f"attachments={attachment_count} "
+                f"prompt_chars={prompt_size} "
+                f"content_chars={content_size} "
+                f"text_llm_config_uuid={text_llm_config_uuid}"
+            )
 
             logger.debug(f"Before LLM call: {content_with_attachment_content}")
+            started_at = time.monotonic()
             llm_result, usage = LLMTracker.call_and_track(
                 prompt=email_content_prompt,
                 content=content_with_attachment_content,
@@ -120,7 +132,22 @@ class LLMEmailNode(BaseLangGraphNode):
                 node_name=self.node_name,
                 model_uuid=text_llm_config_uuid,
             )
+            elapsed = time.monotonic() - started_at
             logger.debug(f"After LLM call: {llm_result}")
+            usage_model = (
+                usage.get("model") if isinstance(usage, dict) else "unknown"
+            )
+            total_tokens = (
+                usage.get("total_tokens")
+                if isinstance(usage, dict)
+                else "unknown"
+            )
+            logger.info(
+                "LLM email processing call completed "
+                f"elapsed_sec={elapsed:.2f} "
+                f"usage_model={usage_model} "
+                f"total_tokens={total_tokens}"
+            )
             llm_content = llm_result.strip() if llm_result else ""
 
             if llm_content:
@@ -133,8 +160,18 @@ class LLMEmailNode(BaseLangGraphNode):
                 return {**state, "llm_content": ""}
 
         except Exception as e:
+            elapsed = None
+            try:
+                elapsed = time.monotonic() - started_at
+            except Exception:
+                pass
+            if elapsed is not None:
+                logger.error(
+                    "LLM email processing failed after " f"{elapsed:.2f}s: {e}"
+                )
+            else:
+                logger.error(f"LLM email processing failed: {e}")
             logger.exception(e)
-            logger.error(f"LLM email processing failed: {e}")
             error_message = f"LLM email processing failed: {str(e)}"
             updated_state = add_node_error(
                 state, self.node_name, error_message
@@ -195,7 +232,8 @@ class LLMEmailNode(BaseLangGraphNode):
                 )
 
         logger.info(
-            f"Created attachment content map with {len(attachment_content_map)} entries"
+            "Created attachment content map with "
+            f"{len(attachment_content_map)} entries"
         )
 
         # Add attachment content as context without removing placeholders
@@ -208,8 +246,8 @@ class LLMEmailNode(BaseLangGraphNode):
                 placeholder = f"[IMAGE: {filename}]"
                 attachment_content = attachment_content_map[filename_stripped]
 
-                # Add attachment content AFTER the placeholder with clear delimiters
-                # This keeps the placeholder for Jira processing
+                # Add attachment content after the placeholder with clear
+                # delimiters. This keeps the placeholder for Jira processing.
                 content = content.replace(
                     placeholder,
                     f"{placeholder}\n"

@@ -1,7 +1,7 @@
 """
 Tests for Threadlines API endpoints
 
-This module contains comprehensive tests for the Threadlines API CRUD operations.
+This module contains tests for the Threadlines API CRUD operations.
 Threadlines are EmailMessage objects with their attachments.
 """
 
@@ -11,6 +11,7 @@ from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APIClient
 from unittest.mock import patch
+from datetime import datetime, timezone as dt_timezone
 
 from threadline.models import EmailMessage, EmailAttachment, Issue
 from threadline.state_machine import EmailStatus
@@ -190,7 +191,7 @@ class TestThreadlinesAPI:
         self, authenticated_api_client, test_user
     ):
         """
-        Test that merged child detail only shows its direct issue, not cluster fallback.
+        Test that merged child detail only shows its direct issue.
         """
         parent = EmailMessageFactory(
             user=test_user,
@@ -225,7 +226,7 @@ class TestThreadlinesAPI:
         self, authenticated_api_client, test_user
     ):
         """
-        Test that the on-demand issue cluster endpoint exposes merged child issues.
+        Test that the issue cluster endpoint exposes merged child issues.
         """
         parent = EmailMessageFactory(
             user=test_user,
@@ -307,7 +308,7 @@ class TestThreadlinesAPI:
         test_user,
     ):
         """
-        Test that retrying a merged child dispatches canonical and fails cleanly.
+        Test that retrying a merged child dispatches canonical.
         """
         parent = EmailMessageFactory(
             user=test_user,
@@ -335,6 +336,195 @@ class TestThreadlinesAPI:
         assert child.status == EmailStatus.FETCHED.value
         assert mock_delay.call_count == 1
         assert mock_delay.call_args.args[0] == str(parent.id)
+
+    @patch("threadline.services.manual_merge.timezone.now")
+    @patch("threadline.tasks.email_merge.process_email_merge.delay")
+    def test_manual_merge_creates_canonical_message_and_reuses_attachment_data(
+        self,
+        mock_delay,
+        mock_now,
+        authenticated_api_client,
+        test_user,
+    ):
+        """
+        Test manual merge creates a canonical message and clones attachments.
+        """
+        merged_at = datetime(2024, 1, 3, 12, 0, 0, tzinfo=dt_timezone.utc)
+        mock_now.return_value = merged_at
+
+        source_1 = EmailMessageFactory(
+            user=test_user,
+            subject="Merge source one",
+            status=EmailStatus.SUCCESS.value,
+            text_content="First message body",
+        )
+        source_2 = EmailMessageFactory(
+            user=test_user,
+            subject="Merge source two",
+            status=EmailStatus.FAILED.value,
+            text_content="Second message body",
+        )
+        image_attachment = EmailAttachmentFactory(
+            user=test_user,
+            email_message=source_2,
+            filename="image.png",
+            safe_filename="image.png",
+            content_type="image/png",
+            file_size=2048,
+            file_path="/uploads/image.png",
+            is_image=True,
+            ocr_content="OCR result for image",
+            llm_content="LLM result for image",
+        )
+
+        url = reverse("threadlines-merge")
+        merge_note = "内容重复，合并到一个主记录"
+        response = authenticated_api_client.post(
+            url,
+            {
+                "source_uuids": [str(source_1.uuid), str(source_2.uuid)],
+                "merge_note": merge_note,
+            },
+            format="json",
+        )
+
+        assert response.status_code == status.HTTP_201_CREATED
+        payload = response.data["data"]
+        assert "threadline" in payload
+        canonical_uuid = payload["threadline"]["uuid"]
+        canonical = EmailMessage.objects.get(uuid=canonical_uuid)
+        canonical.refresh_from_db()
+
+        assert payload["source_count"] == 2
+        assert payload["attachment_count"] == 1
+        assert payload["threadline"]["status"] == EmailStatus.PROCESSING.value
+        assert payload["threadline"]["subject"] == source_1.subject
+        assert canonical.received_at == merged_at
+        assert payload["threadline"][
+            "received_at"
+        ] == merged_at.isoformat().replace("+00:00", "Z")
+        assert canonical.text_content.startswith(
+            "[Manual merge note]\n内容重复，合并到一个主记录"
+        )
+        assert "First message body" in canonical.text_content
+        assert "Second message body" in canonical.text_content
+        assert mock_delay.call_count == 1
+        assert mock_delay.call_args.args[0] == str(canonical.id)
+
+        source_1.refresh_from_db()
+        source_2.refresh_from_db()
+        assert source_1.merged_into_id == canonical.id
+        assert source_2.merged_into_id == canonical.id
+        assert source_1.merge_reason == EmailMessage.MergeReason.MANUAL.value
+        assert source_2.merge_reason == EmailMessage.MergeReason.MANUAL.value
+
+        cloned_attachment = canonical.attachments.get(filename="image.png")
+        assert cloned_attachment.is_image is True
+        assert cloned_attachment.ocr_content == image_attachment.ocr_content
+        assert cloned_attachment.llm_content == image_attachment.llm_content
+        assert cloned_attachment.file_path == image_attachment.file_path
+
+    @patch("threadline.tasks.email_merge.process_email_merge.delay")
+    @patch("threadline.services.manual_merge.timezone.now")
+    def test_manual_merge_returns_success_when_dispatch_fails(
+        self,
+        mock_now,
+        mock_delay,
+        authenticated_api_client,
+        test_user,
+    ):
+        """
+        Test manual merge still reports committed success when dispatch fails.
+        """
+        merged_at = datetime(2024, 1, 3, 12, 0, 0, tzinfo=dt_timezone.utc)
+        mock_now.return_value = merged_at
+        mock_delay.side_effect = RuntimeError("broker down")
+
+        source_1 = EmailMessageFactory(
+            user=test_user,
+            subject="Merge source one",
+            status=EmailStatus.SUCCESS.value,
+            text_content="First message body",
+        )
+        source_2 = EmailMessageFactory(
+            user=test_user,
+            subject="Merge source two",
+            status=EmailStatus.FAILED.value,
+            text_content="Second message body",
+        )
+
+        url = reverse("threadlines-merge")
+        response = authenticated_api_client.post(
+            url,
+            {
+                "source_uuids": [str(source_1.uuid), str(source_2.uuid)],
+            },
+            format="json",
+        )
+
+        assert response.status_code == status.HTTP_201_CREATED
+        payload = response.data["data"]
+        assert payload["threadline"]["status"] == EmailStatus.FAILED.value
+        assert response.data["workflow_dispatched"] is False
+        assert "workflow dispatch failed" in response.data["message"]
+        assert "broker down" in response.data["workflow_error"]
+
+    def test_manual_merge_rejects_overlong_note(
+        self,
+        authenticated_api_client,
+        test_user,
+    ):
+        """
+        Test manual merge validation rejects notes longer than 100 chars.
+        """
+        source_1 = EmailMessageFactory(
+            user=test_user,
+            subject="Merge source one",
+            status=EmailStatus.SUCCESS.value,
+        )
+        source_2 = EmailMessageFactory(
+            user=test_user,
+            subject="Merge source two",
+            status=EmailStatus.SUCCESS.value,
+        )
+
+        url = reverse("threadlines-merge")
+        response = authenticated_api_client.post(
+            url,
+            {
+                "source_uuids": [str(source_1.uuid), str(source_2.uuid)],
+                "merge_note": "x" * 101,
+            },
+            format="json",
+        )
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert "merge_note" in response.data["data"]
+
+    def test_manual_merge_rejects_more_than_five_sources(
+        self,
+        authenticated_api_client,
+        test_user,
+    ):
+        """
+        Test manual merge validation rejects more than five sources.
+        """
+        messages = [
+            EmailMessageFactory(user=test_user, subject=f"Source {idx}")
+            for idx in range(6)
+        ]
+
+        url = reverse("threadlines-merge")
+        response = authenticated_api_client.post(
+            url,
+            {
+                "source_uuids": [str(message.uuid) for message in messages],
+            },
+            format="json",
+        )
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert "source_uuids" in response.data["data"]
 
     def test_list_threadlines_with_attachments(
         self, authenticated_api_client, test_user
@@ -604,7 +794,7 @@ class TestThreadlinesAPI:
         """
         url = reverse("threadlines-list")
         data = {
-            "message_id": test_email_message.message_id,  # Duplicate message ID
+            "message_id": test_email_message.message_id,  # Duplicate ID
             "subject": "Duplicate Message",
             "sender": "sender@example.com",
             "recipients": "recipient@example.com",
@@ -838,9 +1028,7 @@ class TestThreadlinesAPI:
         url = reverse(
             "threadlines-detail", kwargs={"pk": test_email_message.id}
         )
-        data = {
-            "status": "ocr_processing"  # Valid transition
-        }
+        data = {"status": "ocr_processing"}  # Valid transition
         response = authenticated_api_client.patch(url, data, format="json")
 
         assert response.status_code == status.HTTP_200_OK
@@ -864,7 +1052,7 @@ class TestThreadlinesAPI:
             "threadlines-detail", kwargs={"pk": test_email_message.id}
         )
         data = {
-            "status": "completed"  # Invalid transition from 'fetched' to 'completed'
+            "status": "completed"  # Invalid transition from fetched
         }
         response = authenticated_api_client.patch(url, data, format="json")
 
