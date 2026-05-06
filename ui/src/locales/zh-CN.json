@@ -261,6 +261,8 @@
     "bulkMerge": {
       "selectedCount": "已选择 {count} 条",
       "selectedHint": "最多选择 {max} 条消息进行合并",
+      "selectMode": "批量选择",
+      "exitSelectMode": "退出选择",
       "merge": "合并所选",
       "clear": "清空选择",
       "confirmTitle": "确认合并消息",

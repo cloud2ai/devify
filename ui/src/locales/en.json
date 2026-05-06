@@ -251,6 +251,8 @@
     "bulkMerge": {
       "selectedCount": "{count} selected",
       "selectedHint": "Select up to {max} messages to merge",
+      "selectMode": "Select mode",
+      "exitSelectMode": "Exit selection",
       "merge": "Merge selected",
       "clear": "Clear selection",
       "confirmTitle": "Merge selected messages",

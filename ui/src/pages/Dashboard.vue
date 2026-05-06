@@ -1,6 +1,6 @@
 <template>
   <AppLayout>
-    <div :class="selectedCount > 0 ? 'space-y-6 pb-28' : 'space-y-6'">
+    <div :class="selectedCount > 0 ? 'space-y-6 pb-40 sm:pb-28' : 'space-y-6'">
       <VirtualEmailBanner
         :virtual-email="userStore.userInfo?.virtual_email"
         :label="t('settings.emailAddressDesc')"
@@ -157,7 +157,7 @@
       <BaseCard :header-muted="true">
         <template #header>
           <div class="space-y-3">
-            <div class="flex items-center justify-between gap-4">
+            <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
               <div class="flex items-center gap-2 text-gray-800">
                 <svg
                   class="w-5 h-5 -mt-px flex-none"
@@ -176,7 +176,7 @@
                   {{ t('dashboard.recentMessages') }}
                 </h3>
               </div>
-              <div class="flex items-center gap-2 flex-1 max-w-md">
+              <div class="flex flex-wrap items-center gap-2 flex-1 sm:max-w-md">
                 <div class="relative flex-1">
                   <input
                     v-model="searchQuery"
@@ -199,14 +199,67 @@
                   </svg>
                 </div>
                 <BaseButton
+                  class="inline-flex items-center justify-center gap-1 whitespace-nowrap px-3 sm:hidden"
+                  variant="secondary"
+                  size="sm"
+                  :title="
+                    isMobileSelectionMode
+                      ? t('chats.bulkMerge.exitSelectMode')
+                      : t('chats.bulkMerge.selectMode')
+                  "
+                  :aria-label="
+                    isMobileSelectionMode
+                      ? t('chats.bulkMerge.exitSelectMode')
+                      : t('chats.bulkMerge.selectMode')
+                  "
+                  @click="toggleMobileSelectionMode"
+                >
+                  <svg
+                    v-if="!isMobileSelectionMode"
+                    class="h-4 w-4"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M9 3h6a2 2 0 012 2v2H7V5a2 2 0 012-2zm-2 6h10v10a2 2 0 01-2 2H9a2 2 0 01-2-2V9zm2 2v6m4-6v6M9 7h6"
+                    />
+                  </svg>
+                  <svg
+                    v-else
+                    class="h-4 w-4"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M6 18L18 6M6 6l12 12"
+                    />
+                  </svg>
+                  <span>{{
+                    isMobileSelectionMode
+                      ? t('chats.bulkMerge.exitSelectMode')
+                      : t('chats.bulkMerge.selectMode')
+                  }}</span>
+                </BaseButton>
+                <BaseButton
                   @click="refreshData"
                   :loading="loading"
                   variant="secondary"
                   size="sm"
+                  class="inline-flex items-center justify-center px-2"
+                  :title="t('common.refresh')"
+                  :aria-label="t('common.refresh')"
                 >
                   <template v-if="!loading">
                     <svg
-                      class="w-4 h-4 mr-2"
+                      class="h-4 w-4"
                       fill="none"
                       stroke="currentColor"
                       viewBox="0 0 24 24"
@@ -219,7 +272,6 @@
                       />
                     </svg>
                   </template>
-                  {{ t('common.refresh') }}
                 </BaseButton>
               </div>
             </div>
@@ -258,17 +310,21 @@
           <div
             v-for="result in results"
             :key="result.id"
-            class="border rounded-lg p-4 transition-colors cursor-pointer"
+            class="relative border rounded-lg p-4 transition-colors cursor-pointer"
             :class="
               selectedIds.includes(result.uuid)
                 ? 'border-blue-300 bg-blue-50 hover:bg-blue-100'
                 : 'border-gray-200 hover:bg-gray-50'
             "
-            @click="viewResult(result.uuid || result.id)"
+            @click="
+              isMobileSelectionMode
+                ? toggleSelection(result.uuid)
+                : viewResult(result.uuid || result.id)
+            "
           >
             <div class="flex items-start gap-3">
               <label
-                class="mt-1 flex h-5 w-5 flex-none items-center justify-center rounded border border-gray-300 bg-white"
+                class="mt-1 hidden h-5 w-5 flex-none items-center justify-center sm:flex"
                 @click.stop
               >
                 <input
@@ -284,10 +340,10 @@
               </label>
 
               <div
-                class="flex flex-1 flex-col sm:flex-row sm:items-start sm:justify-between gap-3"
+                class="flex min-w-0 flex-1 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"
               >
                 <div class="flex-1 min-w-0 space-y-2">
-                  <h4 class="text-sm font-medium text-gray-900 truncate">
+                  <h4 class="text-sm font-medium text-gray-900 break-words sm:truncate">
                     {{
                       result.summary_title ||
                       result.subject ||
@@ -298,13 +354,13 @@
                     {{ getPreviewText(result) }}
                   </div>
                   <div
-                    class="flex flex-wrap items-center text-xs text-gray-400 gap-x-2 gap-y-1"
+                    class="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs text-gray-400"
                   >
                     <span class="whitespace-nowrap">{{
                       formatDateTime(result.received_at || result.created_at)
                     }}</span>
                     <span class="hidden sm:inline">•</span>
-                    <span class="truncate max-w-40"
+                    <span class="min-w-0 break-words sm:truncate sm:max-w-40"
                       >{{ t('chats.from') }}:
                       {{ getSender(result.sender) }}</span
                     >
@@ -401,9 +457,9 @@
                   </div>
                 </div>
                 <div
-                  class="flex items-center justify-between sm:justify-end sm:flex-col sm:items-end space-x-2 sm:space-x-0 sm:space-y-2 flex-shrink-0"
+                  class="flex w-full min-w-0 items-start justify-between gap-2 flex-shrink-0 sm:w-auto sm:flex-col sm:items-end sm:space-y-2 sm:space-x-0"
                 >
-                  <div class="flex items-center gap-2">
+                  <div class="flex min-w-0 flex-wrap items-center gap-2">
                     <MergeStateBadge :state="getThreadlineMergeState(result)" />
                     <StatusBadge
                       :status="getThreadlineDisplayStatus(result)"
@@ -435,7 +491,7 @@
                     </span>
                   </div>
                   <svg
-                    class="w-5 h-5 text-gray-400 flex-shrink-0"
+                    class="w-5 h-5 flex-shrink-0 text-gray-400"
                     fill="none"
                     stroke="currentColor"
                     viewBox="0 0 24 24"
@@ -543,7 +599,7 @@
     >
       <div
         v-if="selectedCount > 0"
-        class="fixed inset-x-0 bottom-3 z-40 flex justify-center px-3 pointer-events-none sm:bottom-4 sm:px-4"
+        class="fixed inset-x-2 bottom-[calc(0.75rem+env(safe-area-inset-bottom))] z-40 flex justify-center pointer-events-none sm:inset-x-4 sm:bottom-4"
       >
         <div
           class="pointer-events-auto flex w-full max-w-3xl flex-col gap-3 rounded-2xl border border-blue-200 bg-white/95 px-3 py-3 shadow-lg shadow-blue-100 backdrop-blur sm:flex-row sm:items-center sm:justify-between sm:px-4"
@@ -558,7 +614,7 @@
           </div>
 
           <div
-            class="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-shrink-0"
+            class="flex w-full flex-col gap-2 sm:w-auto sm:flex-shrink-0 sm:flex-row"
           >
             <BaseButton
               variant="secondary"
@@ -566,27 +622,71 @@
               class="w-full sm:w-auto"
               @click="clearSelection"
             >
+              <svg
+                class="mr-2 h-4 w-4"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3m-4 0h10"
+                />
+              </svg>
               {{ t('chats.bulkMerge.clear') }}
             </BaseButton>
-            <BaseButton
-              variant="primary"
-              size="sm"
-              class="w-full sm:w-auto"
-              :disabled="!canBatchRetry"
-              @click="openBatchRetryDialog"
-            >
-              {{ t('retry.retryButton') }}
-            </BaseButton>
-            <BaseButton
-              variant="primary"
-              size="sm"
-              class="w-full sm:w-auto"
-              :disabled="selectedCount < 2 || mergeLoading"
-              :loading="mergeLoading"
-              @click="openMergeConfirm"
-            >
-              {{ t('chats.bulkMerge.merge') }}
-            </BaseButton>
+            <div class="grid grid-cols-2 gap-2 sm:flex sm:flex-shrink-0">
+              <BaseButton
+                variant="primary"
+                size="sm"
+                class="w-full sm:w-auto"
+                :disabled="!canBatchRetry"
+                @click="openBatchRetryDialog"
+              >
+                <svg
+                  class="mr-2 h-4 w-4"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                  />
+                </svg>
+                <span>{{ t('retry.retryButton') }}</span>
+              </BaseButton>
+              <BaseButton
+                variant="primary"
+                size="sm"
+                class="w-full sm:w-auto"
+                :disabled="selectedCount < 2 || mergeLoading"
+                :loading="mergeLoading"
+                @click="openMergeConfirm"
+              >
+                <svg
+                  class="mr-2 h-4 w-4"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M7 7h3a2 2 0 012 2v2m5-4h-3a2 2 0 00-2 2v2M12 11v6"
+                  />
+                  <circle cx="7" cy="7" r="1.5" fill="currentColor" />
+                  <circle cx="17" cy="7" r="1.5" fill="currentColor" />
+                  <circle cx="12" cy="17" r="1.5" fill="currentColor" />
+                </svg>
+                <span>{{ t('chats.bulkMerge.merge') }}</span>
+              </BaseButton>
+            </div>
           </div>
         </div>
       </div>
@@ -626,6 +726,7 @@ const mergeLoading = ref(false)
 const batchRetryLoading = ref(false)
 const showMergeConfirm = ref(false)
 const showBatchRetryDialog = ref(false)
+const isMobileSelectionMode = ref(false)
 const mergeNote = ref('')
 const batchRetryTargets = ref([])
 const searchQuery = ref('')
@@ -811,6 +912,7 @@ const loadData = async (isLoadMore = false) => {
     pagination.value.page = 1
     results.value = []
     selectedIds.value = []
+    isMobileSelectionMode.value = false
   }
 
   try {
@@ -945,6 +1047,16 @@ const viewResult = (id) => {
 const clearSelection = () => {
   selectedIds.value = []
   mergeNote.value = ''
+  isMobileSelectionMode.value = false
+}
+
+const toggleMobileSelectionMode = () => {
+  if (isMobileSelectionMode.value) {
+    clearSelection()
+    return
+  }
+
+  isMobileSelectionMode.value = true
 }
 
 const toggleSelection = (uuid) => {
