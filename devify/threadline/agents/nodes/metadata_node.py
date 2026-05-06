@@ -17,6 +17,8 @@ logger = logging.getLogger(__name__)
 
 
 class MetadataNode(BaseLangGraphNode):
+    progress_stage = "metadata"
+
     """
     Metadata extraction node.
 
@@ -120,6 +122,13 @@ class MetadataNode(BaseLangGraphNode):
         try:
             if not existing_metadata or force:
                 logger.info("Generating metadata from summary")
+                self._record_progress_step(
+                    self.workflow_stage,
+                    "METADATA_START",
+                    "Extracting structured metadata from summary",
+                    state=state,
+                    ratio=0.2,
+                )
 
                 metadata_json, usage = LLMTracker.call_and_track(
                     prompt=metadata_prompt,
@@ -173,15 +182,42 @@ class MetadataNode(BaseLangGraphNode):
                     f"{', '.join(list_fields_info) if list_fields_info else 'no list fields'}"
                 )
 
+                self._record_progress_step(
+                    self.workflow_stage,
+                    "METADATA_COMPLETE",
+                    "Metadata extraction completed",
+                    state=state,
+                    ratio=1.0,
+                    field_count=len(metadata),
+                    list_fields=list_fields_info,
+                )
+
                 return {**state, "metadata": metadata}
             else:
                 logger.info(
                     "Metadata already exists and force mode is disabled, "
                     "skipping extraction"
                 )
+                self._record_progress_step(
+                    self.workflow_stage,
+                    "METADATA_SKIP",
+                    "Existing metadata reused",
+                    state=state,
+                    ratio=1.0,
+                    level="WARNING",
+                )
                 return state
 
         except Exception as e:
             logger.error(f"Metadata extraction failed: {e}", exc_info=True)
+            self._record_progress_step(
+                self.workflow_stage,
+                "METADATA_ERROR",
+                f"Metadata extraction failed: {str(e)}",
+                state=state,
+                ratio=0.0,
+                level="ERROR",
+                error=str(e),
+            )
             error_message = f"Metadata extraction failed: {str(e)}"
             return add_node_error(state, self.node_name, error_message)

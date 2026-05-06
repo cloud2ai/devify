@@ -2,6 +2,7 @@
   "common": {
     "appName": "AImyChats",
     "loading": "Loading...",
+    "currentProgress": "Current progress",
     "save": "Save",
     "saving": "Saving",
     "cancel": "Cancel",
@@ -620,7 +621,10 @@
     "retryButton": "Retry",
     "retrying": "Retrying...",
     "retrySuccess": "Retry task triggered successfully",
-    "retryError": "Failed to trigger retry, please try again"
+    "retryError": "Failed to trigger retry, please try again",
+    "batchRetrySuccess": "Triggered retry for {count} items",
+    "batchRetryPartial": "Triggered retry for {success} items, {failed} failed",
+    "batchRetryError": "Failed to trigger batch retry, please try again"
   },
   "billing": {
     "menuTitle": "Plan & Billing",

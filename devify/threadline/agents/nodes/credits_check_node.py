@@ -14,6 +14,8 @@ logger = logging.getLogger(__name__)
 
 
 class CreditsCheckNode(BaseLangGraphNode):
+    progress_stage = "credits"
+
     """
     Check and consume credits for Email Workflow execution
     """
@@ -25,12 +27,35 @@ class CreditsCheckNode(BaseLangGraphNode):
         """
         Check credits and consume if available
         """
+        self._record_progress_step(
+            self.workflow_stage,
+            "CREDITS_START",
+            "Checking workflow credits",
+            state=state,
+            ratio=0.2,
+        )
         if not settings.BILLING_ENABLED:
             logger.info("Billing is disabled, skipping credits check")
+            self._record_progress_step(
+                self.workflow_stage,
+                "CREDITS_SKIPPED",
+                "Billing disabled, credits check skipped",
+                state=state,
+                ratio=1.0,
+                level="WARNING",
+            )
             return state
 
         if not settings.CREDITS_CHECK_ENABLED:
             logger.info("Credits check is disabled, skipping")
+            self._record_progress_step(
+                self.workflow_stage,
+                "CREDITS_SKIPPED",
+                "Credits check disabled",
+                state=state,
+                ratio=1.0,
+                level="WARNING",
+            )
             return state
 
         user_id = state.get('user_id')
@@ -40,6 +65,13 @@ class CreditsCheckNode(BaseLangGraphNode):
         if state.get('credits_consumed'):
             logger.info(
                 f"Credits already consumed for email {email_id}"
+            )
+            self._record_progress_step(
+                self.workflow_stage,
+                "CREDITS_ALREADY_CONSUMED",
+                "Credits already consumed",
+                state=state,
+                ratio=1.0,
             )
             return state
 
@@ -108,6 +140,13 @@ class CreditsCheckNode(BaseLangGraphNode):
                     state['credits_transaction_id'] = str(
                         previous_charge.id
                     )
+                    self._record_progress_step(
+                        self.workflow_stage,
+                        "CREDITS_ALREADY_CHARGED",
+                        "Credits already charged, reusing transaction",
+                        state=state,
+                        ratio=1.0,
+                    )
                     return state
                 else:
                     # SCENARIO B: Already charged BUT WAS refunded
@@ -149,6 +188,14 @@ class CreditsCheckNode(BaseLangGraphNode):
                 f"for email {email_id} (UUID: {email_uuid}), "
                 f"transaction {transaction.id}"
             )
+            self._record_progress_step(
+                self.workflow_stage,
+                "CREDITS_CONSUMED",
+                "Workflow credits consumed",
+                state=state,
+                ratio=1.0,
+                transaction_id=str(transaction.id),
+            )
 
         except InsufficientCreditsError as e:
             logger.warning(
@@ -158,6 +205,14 @@ class CreditsCheckNode(BaseLangGraphNode):
                 state,
                 self.node_name,
                 f"INSUFFICIENT_CREDITS: {str(e)}"
+            )
+            self._record_progress_step(
+                self.workflow_stage,
+                "CREDITS_INSUFFICIENT",
+                f"Insufficient credits: {str(e)}",
+                state=state,
+                ratio=1.0,
+                level="ERROR",
             )
 
         return state

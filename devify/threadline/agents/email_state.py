@@ -102,6 +102,7 @@ class EmailState(TypedDict, total=False):
     error_message: str | None
     node_errors: Dict[str, List[NodeError]] | None
     force: bool | None
+    progress_plan: Dict[str, Dict[str, Any]] | None
 
     # Retry configuration (temporary override)
     retry_language: str | None
@@ -166,6 +167,7 @@ def create_email_state(
         "error_message": None,
         "node_errors": {},
         "force": force,
+        "progress_plan": None,
         "retry_language": None,
         "retry_scene": None,
         "image_llm_config_uuid": None,

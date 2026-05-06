@@ -2,6 +2,7 @@
   "common": {
     "appName": "AImyChats",
     "loading": "Cargando...",
+    "currentProgress": "Progreso actual",
     "save": "Guardar",
     "cancel": "Cancelar",
     "delete": "Eliminar",
@@ -378,7 +379,10 @@
     "retryButton": "Reintentar",
     "retrying": "Reintentando...",
     "retrySuccess": "Tarea de reintento iniciada correctamente",
-    "retryError": "Error al iniciar el reintento, inténtelo de nuevo"
+    "retryError": "Error al iniciar el reintento, inténtelo de nuevo",
+    "batchRetrySuccess": "Se reintentaron correctamente {count} elementos",
+    "batchRetryPartial": "Se reintentaron {success} elementos, {failed} fallaron",
+    "batchRetryError": "Error al iniciar el reintento en lote, inténtelo de nuevo"
   },
   "share": {
     "title": "Compartir",

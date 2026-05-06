@@ -37,6 +37,19 @@ class BaseLangGraphNode(ABC):
     - after_processing(): Post-processing cleanup and finalization
     """
 
+    progress_stage: Optional[str] = None
+
+    @property
+    def workflow_stage(self) -> Optional[str]:
+        """
+        Return the workflow stage identifier for this node.
+
+        Subclasses keep declaring the stage as a class attribute, but node
+        implementations should read this property instead of referring to the
+        class attribute directly.
+        """
+        return type(self).progress_stage
+
     def __init__(self, node_name: str):
         """
         Initialize the base node.
@@ -62,7 +75,11 @@ class BaseLangGraphNode(ABC):
         try:
             prefix = self._task_context_prefix()
             logger.info(f"{prefix}[{self.node_name}] Starting processing")
-            self._record_task_step("NODE_START", f"{self.node_name} started")
+            self._record_task_step(
+                "NODE_START",
+                f"{self.node_name} started",
+                state=state,
+            )
 
             if not self.can_enter_node(state):
                 logger.warning(
@@ -72,6 +89,7 @@ class BaseLangGraphNode(ABC):
                     "NODE_SKIP",
                     f"{self.node_name} skipped due to existing errors",
                     level="WARNING",
+                    state=state,
                 )
                 return state
 
@@ -85,6 +103,7 @@ class BaseLangGraphNode(ABC):
             self._record_task_step(
                 "NODE_COMPLETE",
                 f"{self.node_name} completed",
+                state=state,
             )
             return state
 
@@ -97,6 +116,7 @@ class BaseLangGraphNode(ABC):
                 f"{self.node_name} failed: {e}",
                 level="ERROR",
                 exception=str(e),
+                state=state,
             )
             return self._handle_error(e, state)
 
@@ -194,6 +214,7 @@ class BaseLangGraphNode(ABC):
         action: str,
         message: str,
         level: str = "INFO",
+        state: Optional[EmailState] = None,
         **data: Any,
     ) -> None:
         tracer = get_current_task_tracer()
@@ -201,9 +222,51 @@ class BaseLangGraphNode(ABC):
             return
 
         payload = {"level": level, **data}
+        progress_stage = payload.pop("progress_stage", None) or self.workflow_stage
+        if state is not None:
+            payload["progress_plan"] = state.get("progress_plan")
+        if progress_stage:
+            payload["progress_stage"] = progress_stage
+        if "progress_ratio" not in payload:
+            if action == "NODE_START":
+                payload["progress_ratio"] = 0.0
+            elif action in {"NODE_COMPLETE", "NODE_SKIP"}:
+                payload["progress_ratio"] = 1.0
+            elif action == "NODE_ERROR":
+                payload["progress_ratio"] = 0.0
         try:
             tracer.append_task(action, message, payload)
         except Exception:
-            logger.debug(
-                f"[{self.node_name}] Failed to record task step {action}"
-            )
+            logger.debug(f"[{self.node_name}] Failed to record task step {action}")
+
+    def _record_progress_step(
+        self,
+        stage: str,
+        action: str,
+        message: str,
+        *,
+        state: Optional[EmailState] = None,
+        ratio: float | None = None,
+        step_index: int | None = None,
+        step_total: int | None = None,
+        level: str = "INFO",
+        **data: Any,
+    ) -> None:
+        tracer = get_current_task_tracer()
+        if not tracer:
+            return
+
+        payload = {"level": level, **data}
+        if state is not None:
+            payload["progress_plan"] = state.get("progress_plan")
+        payload["progress_stage"] = stage
+        if ratio is not None:
+            payload["progress_ratio"] = ratio
+        if step_index is not None:
+            payload["progress_current_step"] = step_index
+        if step_total is not None:
+            payload["progress_total_steps"] = step_total
+        try:
+            tracer.append_task(action, message, payload)
+        except Exception:
+            logger.debug(f"[{self.node_name}] Failed to record progress step {action}")

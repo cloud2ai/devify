@@ -18,6 +18,7 @@ export function useThreadlinePolling(threadline, route) {
 
   const retrying = ref(false)
   const showRetryDialog = ref(false)
+  const retryStartedAt = ref(null)
   let retryPollInterval = null
   let retryPollStartTime = null
 
@@ -29,6 +30,13 @@ export function useThreadlinePolling(threadline, route) {
     retryPollStartTime = null
   }
 
+  const resetRetryState = () => {
+    stopRetryPolling()
+    retrying.value = false
+    retryStartedAt.value = null
+    showRetryDialog.value = false
+  }
+
   const pollThreadlineStatus = async () => {
     try {
       // Check if we've been polling too long
@@ -36,8 +44,7 @@ export function useThreadlinePolling(threadline, route) {
         retryPollStartTime &&
         Date.now() - retryPollStartTime > MAX_POLL_DURATION
       ) {
-        stopRetryPolling()
-        retrying.value = false
+        resetRetryState()
         console.warn('Polling timeout: exceeded maximum duration')
         return
       }
@@ -56,14 +63,12 @@ export function useThreadlinePolling(threadline, route) {
 
       if (data.status === 'success' || data.status === 'failed') {
         // Processing complete, stop polling
-        stopRetryPolling()
-        retrying.value = false
+        resetRetryState()
       }
     } catch (err) {
       console.error('Failed to poll threadline status:', err)
       // On error, stop polling
-      stopRetryPolling()
-      retrying.value = false
+      resetRetryState()
     }
   }
 
@@ -87,6 +92,7 @@ export function useThreadlinePolling(threadline, route) {
   const handleRetry = async (options) => {
     showRetryDialog.value = false
     retrying.value = true
+    retryStartedAt.value = Date.now()
 
     try {
       await chatApi.retryThreadline(route.params.id, options)
@@ -101,9 +107,7 @@ export function useThreadlinePolling(threadline, route) {
       await pollThreadlineStatus()
     } catch (err) {
       console.error('Retry failed:', err)
-      stopRetryPolling()
-      retrying.value = false
-      retryPollStartTime = null
+      resetRetryState()
       toast.showError(err.response?.data?.message || t('retry.retryError'))
     }
   }
@@ -112,8 +116,10 @@ export function useThreadlinePolling(threadline, route) {
     // State
     retrying,
     showRetryDialog,
+    retryStartedAt,
     // Methods
     stopRetryPolling,
+    resetRetryState,
     pollThreadlineStatus,
     startPolling,
     handleRetryClick,

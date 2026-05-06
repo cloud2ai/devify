@@ -337,6 +337,91 @@ class TestThreadlinesAPI:
         assert mock_delay.call_count == 1
         assert mock_delay.call_args.args[0] == str(parent.id)
 
+    @patch("threadline.tasks.email_merge.process_email_merge.delay")
+    def test_batch_retry_threadlines_returns_partial_failures(
+        self,
+        mock_delay,
+        authenticated_api_client,
+        test_user,
+    ):
+        """
+        Test that batch retry collects per-item failures without aborting.
+        """
+        mock_delay.side_effect = [None, RuntimeError("broker down")]
+
+        first = EmailMessageFactory(
+            user=test_user,
+            subject="Batch retry one",
+            status="failed",
+        )
+        second = EmailMessageFactory(
+            user=test_user,
+            subject="Batch retry two",
+            status="failed",
+        )
+
+        url = reverse("threadlines-batch-retry")
+        response = authenticated_api_client.post(
+            url,
+            {
+                "source_uuids": [str(first.uuid), str(second.uuid)],
+                "force": True,
+            },
+            format="json",
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        payload = response.data["data"]
+        assert payload["success_count"] == 1
+        assert payload["failure_count"] == 1
+        assert len(payload["results"]) == 2
+
+        first.refresh_from_db()
+        second.refresh_from_db()
+        assert first.status == EmailStatus.PROCESSING.value
+        assert second.status == EmailStatus.FAILED.value
+        assert mock_delay.call_count == 2
+
+    @patch("threadline.tasks.email_merge.process_email_merge.delay")
+    def test_batch_retry_threadlines_returns_503_when_all_fail(
+        self,
+        mock_delay,
+        authenticated_api_client,
+        test_user,
+    ):
+        """
+        Test that batch retry surfaces total dispatch failure as 503.
+        """
+        mock_delay.side_effect = RuntimeError("broker down")
+
+        first = EmailMessageFactory(
+            user=test_user,
+            subject="Batch retry one",
+            status="failed",
+        )
+        second = EmailMessageFactory(
+            user=test_user,
+            subject="Batch retry two",
+            status="failed",
+        )
+
+        url = reverse("threadlines-batch-retry")
+        response = authenticated_api_client.post(
+            url,
+            {
+                "source_uuids": [str(first.uuid), str(second.uuid)],
+                "force": True,
+            },
+            format="json",
+        )
+
+        assert response.status_code == status.HTTP_503_SERVICE_UNAVAILABLE
+        payload = response.data["data"]
+        assert payload["success_count"] == 0
+        assert payload["failure_count"] == 2
+        assert len(payload["results"]) == 2
+        assert mock_delay.call_count == 2
+
     @patch("threadline.services.manual_merge.timezone.now")
     @patch("threadline.tasks.email_merge.process_email_merge.delay")
     def test_manual_merge_creates_canonical_message_and_reuses_attachment_data(

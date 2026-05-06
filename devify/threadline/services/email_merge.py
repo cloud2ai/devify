@@ -577,6 +577,7 @@ class EmailMergeService:
             canonical.uuid,
             reason,
         )
+
         source.merged_into = canonical
         source.merge_reason = reason
         source.last_merged_at = merged_at

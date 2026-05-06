@@ -46,6 +46,8 @@ def _format_node_errors(node_errors: Dict[str, Any]) -> str:
 
 
 class WorkflowFinalizeNode(BaseLangGraphNode):
+    progress_stage = "finalize"
+
     """
     Workflow finalization node for email processing workflow.
 
@@ -131,6 +133,15 @@ class WorkflowFinalizeNode(BaseLangGraphNode):
                 f"email_id={state.get('id')} user_id={state.get('user_id')} "
                 f"error_summary={error_summary}"
             )
+            self._record_progress_step(
+                self.workflow_stage,
+                "FINALIZE_FAILED_START",
+                "Finalizing failed workflow results",
+                state=state,
+                ratio=0.5,
+                error_summary=error_summary,
+                level="ERROR",
+            )
 
             # Sync partial data even when workflow fails
             # Preserves successfully generated content while marking as failed
@@ -143,6 +154,15 @@ class WorkflowFinalizeNode(BaseLangGraphNode):
             # not status updates
             self.email.set_status(
                 EmailStatus.FAILED.value, error_message=error_summary
+            )
+            self._record_progress_step(
+                self.workflow_stage,
+                "FINALIZE_FAILED_COMPLETE",
+                "Failed workflow finalized",
+                state=state,
+                ratio=1.0,
+                error_summary=error_summary,
+                level="ERROR",
             )
             logger.info(
                 f"EmailMessage {self.email.id} status set to FAILED, "
@@ -159,6 +179,13 @@ class WorkflowFinalizeNode(BaseLangGraphNode):
                 "Workflow finalization entering success branch "
                 f"email_id={email_id} user_id={user_id}"
             )
+            self._record_progress_step(
+                self.workflow_stage,
+                "FINALIZE_SUCCESS_START",
+                "Finalizing successful workflow results",
+                state=state,
+                ratio=0.5,
+            )
 
             self._sync_data_to_database(state, email=self.email)
             self._finalize_issue(state, email=self.email)
@@ -167,6 +194,13 @@ class WorkflowFinalizeNode(BaseLangGraphNode):
             # Force mode only controls whether to re-process OCR/LLM, not
             # status updates
             self.email.set_status(EmailStatus.SUCCESS.value)
+            self._record_progress_step(
+                self.workflow_stage,
+                "FINALIZE_SUCCESS_COMPLETE",
+                "Successful workflow finalized",
+                state=state,
+                ratio=1.0,
+            )
             logger.info(
                 f"[{self.node_name}] Status set to SUCCESS for "
                 f"email {self.email.id}, user {user_id}, force={force}"

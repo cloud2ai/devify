@@ -18,6 +18,8 @@ logger = logging.getLogger(__name__)
 
 
 class IssueNode(BaseLangGraphNode):
+    progress_stage = "issue"
+
     """
     Issue creation node.
 
@@ -159,8 +161,24 @@ class IssueNode(BaseLangGraphNode):
         except ValueError as e:
             error_message = str(e)
             logger.error(error_message)
+            self._record_progress_step(
+                self.workflow_stage,
+                "ISSUE_HANDLER_ERROR",
+                error_message,
+                state=state,
+                ratio=0.0,
+                level="ERROR",
+            )
             return add_node_error(state, self.node_name, error_message)
 
+        self._record_progress_step(
+            self.workflow_stage,
+            "ISSUE_PREPARE",
+            "Preparing issue creation payload",
+            state=state,
+            ratio=0.2,
+            issue_engine=issue_engine,
+        )
         provider_result = self._create_issue(
             state, issue_config, issue_handler
         )
@@ -168,11 +186,27 @@ class IssueNode(BaseLangGraphNode):
         if not provider_result:
             error_message = f"{issue_engine} issue creation failed"
             logger.error(error_message)
+            self._record_progress_step(
+                self.workflow_stage,
+                "ISSUE_CREATE_ERROR",
+                error_message,
+                state=state,
+                ratio=0.0,
+                level="ERROR",
+            )
             return add_node_error(state, self.node_name, error_message)
 
         issue_key = provider_result.get('issue_key')
         logger.info(
             f"{issue_engine} issue created successfully: {issue_key}"
+        )
+        self._record_progress_step(
+            self.workflow_stage,
+            "ISSUE_CREATE_COMPLETE",
+            "Issue created successfully",
+            state=state,
+            ratio=1.0,
+            issue_key=issue_key,
         )
 
         # Prepare engine-agnostic issue result data

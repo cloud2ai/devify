@@ -142,14 +142,11 @@ class EmailMergeTaskTest(TestCase):
         email = self._create_email(
             message_id="<manual-canonical@example.com>",
             status="processing",
-            metadata={
-                "manual_merge": {
-                    "source_count": 2,
-                    "source_ids": [1, 2],
-                    "source_uuids": ["a", "b"],
-                    "merged_at": timezone.now().isoformat(),
-                }
-            },
+        )
+        self._create_email(
+            message_id="<manual-child@example.com>",
+            merged_into=email,
+            status="success",
         )
 
         tracer = Mock()

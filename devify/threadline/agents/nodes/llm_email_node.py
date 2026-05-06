@@ -18,6 +18,8 @@ logger = logging.getLogger(__name__)
 
 
 class LLMEmailNode(BaseLangGraphNode):
+    progress_stage = "llm"
+
     """
     LLM Email processing node.
 
@@ -121,9 +123,25 @@ class LLMEmailNode(BaseLangGraphNode):
                 f"content_chars={content_size} "
                 f"text_llm_config_uuid={text_llm_config_uuid}"
             )
+            self._record_progress_step(
+                self.workflow_stage,
+                "LLM_PREPARE",
+                "Preparing email content for LLM processing",
+                state=state,
+                ratio=0.1,
+                attachment_count=attachment_count,
+            )
 
             logger.debug(f"Before LLM call: {content_with_attachment_content}")
             started_at = time.monotonic()
+            self._record_progress_step(
+                self.workflow_stage,
+                "LLM_CALL_START",
+                "Calling LLM to process email content",
+                state=state,
+                ratio=0.25,
+                attachment_count=attachment_count,
+            )
             llm_result, usage = LLMTracker.call_and_track(
                 prompt=email_content_prompt,
                 content=content_with_attachment_content,
@@ -147,6 +165,16 @@ class LLMEmailNode(BaseLangGraphNode):
                 f"elapsed_sec={elapsed:.2f} "
                 f"usage_model={usage_model} "
                 f"total_tokens={total_tokens}"
+            )
+            self._record_progress_step(
+                self.workflow_stage,
+                "LLM_CALL_COMPLETE",
+                "LLM email content processed",
+                state=state,
+                ratio=1.0,
+                elapsed_sec=round(elapsed, 2),
+                usage_model=usage_model,
+                total_tokens=total_tokens,
             )
             llm_content = llm_result.strip() if llm_result else ""
 
@@ -172,6 +200,15 @@ class LLMEmailNode(BaseLangGraphNode):
             else:
                 logger.error(f"LLM email processing failed: {e}")
             logger.exception(e)
+            self._record_progress_step(
+                self.workflow_stage,
+                "LLM_CALL_ERROR",
+                f"LLM email processing failed: {str(e)}",
+                state=state,
+                ratio=0.0,
+                level="ERROR",
+                error=str(e),
+            )
             error_message = f"LLM email processing failed: {str(e)}"
             updated_state = add_node_error(
                 state, self.node_name, error_message

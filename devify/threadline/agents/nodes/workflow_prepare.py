@@ -14,6 +14,10 @@ from django.core.exceptions import ObjectDoesNotExist
 from billing.services.subscription_service import SubscriptionService
 from threadline.agents.nodes.base_node import BaseLangGraphNode
 from threadline.agents.email_state import EmailState
+from threadline.agents.progress import (
+    build_workflow_progress_plan,
+    estimate_prepare_workflow_units,
+)
 from threadline.models import EmailMessage, Issue, Settings, EmailTodo
 from threadline.state_machine import EmailStatus
 from threadline.services.workflow_config import (
@@ -27,6 +31,8 @@ logger = logging.getLogger(__name__)
 
 
 class WorkflowPrepareNode(BaseLangGraphNode):
+    progress_stage = "prepare"
+
     """
     Workflow prepare node for email processing workflow.
 
@@ -315,6 +321,20 @@ class WorkflowPrepareNode(BaseLangGraphNode):
             )
         return todos_data
 
+    def _strip_runtime_metadata(self, metadata: dict | None) -> dict | None:
+        """
+        Remove runtime-only metadata before passing it into the workflow.
+
+        The UI progress snapshot lives inside EmailMessage.metadata, but it
+        should not affect metadata extraction decisions.
+        """
+        if not isinstance(metadata, dict):
+            return metadata
+
+        cleaned = dict(metadata)
+        cleaned.pop("processing_progress", None)
+        return cleaned or None
+
     def _load_threadline_runtime_bindings(self) -> dict:
         """
         Load Threadline admin runtime bindings.
@@ -363,6 +383,10 @@ class WorkflowPrepareNode(BaseLangGraphNode):
         Returns:
             EmailState: Complete state dictionary
         """
+        metadata = self._strip_runtime_metadata(self.email.metadata)
+        if self.email.merged_into_id:
+            metadata = None
+
         return {
             **state,
             "id": str(self.email.id),
@@ -385,7 +409,7 @@ class WorkflowPrepareNode(BaseLangGraphNode):
             "summary_data": summary_data,
             "todos": todos_data if todos_data else None,
             "llm_content": self.email.llm_content or None,
-            "metadata": self.email.metadata or None,
+            "metadata": metadata,
             "issue_id": issue_id,
             "issue_url": issue_url,
             "issue_metadata": issue_metadata,
@@ -467,16 +491,55 @@ class WorkflowPrepareNode(BaseLangGraphNode):
             f"email {self.email.id}, user {self.email.user_id}, "
             f"force={force}"
         )
+        self._record_progress_step(
+            self.workflow_stage,
+            "PREPARE_STATUS",
+            "Email marked as processing",
+            state=state,
+            ratio=0.2,
+        )
 
         prompt_config = self._load_prompt_config(state)
+        self._record_progress_step(
+            self.workflow_stage,
+            "PREPARE_PROMPT_CONFIG",
+            "Prompt configuration loaded",
+            state=state,
+            ratio=0.45,
+            prompt_config=bool(prompt_config),
+        )
         issue_config = self._load_issue_config()
+        self._record_progress_step(
+            self.workflow_stage,
+            "PREPARE_ISSUE_CONFIG",
+            "Issue configuration loaded",
+            state=state,
+            ratio=0.6,
+            issue_config=bool(issue_config),
+        )
         max_attachments = self._get_max_attachments()
         attachments_data = self._load_attachments_data()
+        self._record_progress_step(
+            self.workflow_stage,
+            "PREPARE_ATTACHMENTS",
+            "Attachment data loaded",
+            state=state,
+            ratio=0.8,
+            attachment_count=len(attachments_data),
+        )
         issue_id, issue_url, issue_metadata = (
             self._load_existing_issue_metadata()
         )
         summary_data = self.email.summary_data or None
         todos_data = self._load_todos_data()
+        self._record_progress_step(
+            self.workflow_stage,
+            "PREPARE_COMPLETE",
+            "Workflow preparation completed",
+            state=state,
+            ratio=1.0,
+            attachment_count=len(attachments_data),
+        )
 
         updated_state = self._build_email_state(
             state,
@@ -489,6 +552,9 @@ class WorkflowPrepareNode(BaseLangGraphNode):
             issue_metadata,
             summary_data,
             todos_data,
+        )
+        updated_state["progress_plan"] = build_workflow_progress_plan(
+            estimate_prepare_workflow_units(state=updated_state)
         )
 
         logger.info(

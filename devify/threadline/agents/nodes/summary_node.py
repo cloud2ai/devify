@@ -20,6 +20,8 @@ logger = logging.getLogger(__name__)
 
 
 class SummaryNode(BaseLangGraphNode):
+    progress_stage = "summary"
+
     """
     Summary generation node.
 
@@ -345,6 +347,13 @@ class SummaryNode(BaseLangGraphNode):
             # Generate summary_title (still using Markdown mode)
             if not summary_title or force:
                 logger.info("Generating summary title")
+                self._record_progress_step(
+                    self.workflow_stage,
+                    "SUMMARY_TITLE_START",
+                    "Generating email summary title",
+                    state=state,
+                    ratio=0.15,
+                )
                 summary_title_raw, usage = LLMTracker.call_and_track(
                     prompt=summary_title_prompt,
                     content=content,
@@ -357,10 +366,25 @@ class SummaryNode(BaseLangGraphNode):
                     summary_title = summary_title_raw.strip()
                 else:
                     summary_title = ""
+                self._record_progress_step(
+                    self.workflow_stage,
+                    "SUMMARY_TITLE_COMPLETE",
+                    "Summary title generated",
+                    state=state,
+                    ratio=0.35,
+                    summary_title=summary_title,
+                )
 
             # Generate structured summary (JSON mode)
             if not summary_data or force:
                 logger.info("Generating structured summary (JSON mode)")
+                self._record_progress_step(
+                    self.workflow_stage,
+                    "SUMMARY_JSON_START",
+                    "Generating structured email summary",
+                    state=state,
+                    ratio=0.45,
+                )
                 try:
                     # LLMTracker.call_and_track with json_mode=True
                     # automatically parses JSON and returns dict
@@ -402,6 +426,14 @@ class SummaryNode(BaseLangGraphNode):
                     )
 
                     logger.info("Structured summary generated successfully")
+                    self._record_progress_step(
+                        self.workflow_stage,
+                        "SUMMARY_JSON_COMPLETE",
+                        "Structured email summary generated",
+                        state=state,
+                        ratio=0.85,
+                        todo_count=len(processed_todos),
+                    )
 
                 except Exception as json_error:
                     logger.error(
@@ -425,6 +457,15 @@ class SummaryNode(BaseLangGraphNode):
                     if not summary_data:
                         summary_data = {}
                     processed_todos = []
+                    self._record_progress_step(
+                        self.workflow_stage,
+                        "SUMMARY_JSON_FALLBACK",
+                        "Structured summary fallback completed",
+                        state=state,
+                        ratio=0.85,
+                        level="WARNING",
+                        fallback="markdown",
+                    )
 
             else:
                 # Use existing data, but ensure todos are processed
@@ -436,6 +477,14 @@ class SummaryNode(BaseLangGraphNode):
                         processed_todos=processed_todos,
                         existing_summary_content=summary_content,
                     )
+                self._record_progress_step(
+                    self.workflow_stage,
+                    "SUMMARY_REUSE",
+                    "Existing summary data reused",
+                    state=state,
+                    ratio=0.8,
+                    todo_count=len(processed_todos),
+                )
 
             return {
                 **state,
@@ -447,6 +496,15 @@ class SummaryNode(BaseLangGraphNode):
 
         except Exception as e:
             logger.error(f"Summary generation failed: {e}", exc_info=True)
+            self._record_progress_step(
+                self.workflow_stage,
+                "SUMMARY_ERROR",
+                f"Summary generation failed: {str(e)}",
+                state=state,
+                ratio=0.0,
+                level="ERROR",
+                error=str(e),
+            )
             error_message = f"Summary generation failed: {str(e)}"
             updated_state = add_node_error(
                 state, self.node_name, error_message

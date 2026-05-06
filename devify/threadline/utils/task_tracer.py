@@ -8,6 +8,7 @@ from agentcore only.
 
 from __future__ import annotations
 
+import math
 import logging
 from contextlib import contextmanager
 from contextvars import ContextVar
@@ -31,6 +32,40 @@ def _normalize_metadata(details) -> Dict:
     if details is None:
         return {}
     return {"details": deepcopy(details)}
+
+
+def _stage_percent(
+    plan: Dict[str, dict] | None,
+    stage: str,
+    *,
+    ratio: float | None = None,
+    step_index: int | None = None,
+    step_total: int | None = None,
+) -> int:
+    stage_plan = (plan or {}).get(stage) or {}
+    start = int(stage_plan.get("start", 0) or 0)
+    span = int(stage_plan.get("span", 0) or 0)
+
+    if span <= 0:
+        return max(0, min(100, start))
+
+    if step_index is not None and step_total:
+        try:
+            step_index = max(0, int(step_index))
+            step_total = max(1, int(step_total))
+            ratio = step_index / step_total
+        except (TypeError, ValueError, ZeroDivisionError):
+            ratio = None
+
+    if ratio is None:
+        ratio = 1.0
+
+    try:
+        normalized_ratio = max(0.0, min(1.0, float(ratio)))
+    except (TypeError, ValueError):
+        normalized_ratio = 1.0
+
+    return max(0, min(100, int(round(start + (span * normalized_ratio)))))
 
 
 _CONTEXT_KEYS = (
@@ -87,6 +122,9 @@ class TaskTracer:
         self._agentcore_task_id: Optional[str] = None
         self._agentcore_metadata: Dict = {}
         self._context: Dict[str, object] = {}
+        self._progress_total_steps: Optional[int] = None
+        self._progress_current_step: int = 0
+        self._threadline_progress_percent: Optional[int] = None
 
     @property
     def task_id(self) -> Optional[str]:
@@ -154,6 +192,99 @@ class TaskTracer:
         except Exception as exc:
             logger.debug(f"Failed to sync agentcore task update: {exc}")
 
+    def _sync_threadline_progress_snapshot(
+        self,
+        details: Optional[Dict] = None,
+    ) -> None:
+        """
+        Mirror workflow progress onto the user-facing EmailMessage row.
+
+        Only the email workflow should surface progress to normal users.
+        The snapshot stays intentionally small: a single percentage and
+        timestamp, so the detail page can render a stable progress bar.
+        """
+        if self.task_type not in {"EMAIL_MERGE", "EMAIL_WORKFLOW"}:
+            return
+
+        email_id = self._context.get("email_id")
+        if not email_id:
+            return
+
+        payload = _normalize_metadata(details)
+        percent = payload.get("progress_percent")
+
+        if percent is None:
+            percent = self._agentcore_metadata.get("progress_percent")
+
+        if percent is None and self._progress_total_steps:
+            try:
+                percent = int(
+                    math.floor(
+                        (
+                            max(self._progress_current_step, 0)
+                            / self._progress_total_steps
+                        )
+                        * 100
+                    )
+                )
+            except Exception:
+                percent = None
+
+        if percent is None:
+            return
+
+        try:
+            normalized = max(0, min(100, int(percent)))
+        except (TypeError, ValueError):
+            return
+
+        if self._threadline_progress_percent is not None:
+            normalized = max(self._threadline_progress_percent, normalized)
+        self._threadline_progress_percent = normalized
+
+        # Scale task-local progress into an end-to-end progress bar.
+        if self.task_type == "EMAIL_MERGE":
+            normalized = max(0, min(20, int(round(normalized * 0.2))))
+        else:
+            if normalized == 0 and payload.get("status") == "starting":
+                normalized = 0
+            else:
+                normalized = max(
+                    20,
+                    min(100, int(round(20 + normalized * 0.8))),
+                )
+
+        try:
+            from threadline.models import EmailMessage
+
+            message = (
+                EmailMessage.objects.filter(id=email_id)
+                .only("id", "metadata")
+                .first()
+            )
+            if not message:
+                return
+
+            message.set_processing_progress(normalized)
+            logger.info(
+                "%s synced threadline progress percent=%s step=%s",
+                self.context_summary(
+                    {
+                        "email_id": email_id,
+                        "progress_percent": normalized,
+                        "progress_step": payload.get("progress_step"),
+                    }
+                ),
+                normalized,
+                payload.get("progress_step"),
+            )
+        except Exception as exc:
+            logger.debug(
+                "Failed to sync threadline progress snapshot for %s: %s",
+                email_id,
+                exc,
+            )
+
     def _extract_context(
         self, details: Optional[Dict] = None
     ) -> Dict[str, object]:
@@ -181,6 +312,136 @@ class TaskTracer:
 
         self._context.update(context)
         self._agentcore_metadata["context"] = deepcopy(self._context)
+
+    def set_progress_total_steps(self, total_steps: Optional[int]) -> None:
+        try:
+            normalized = int(total_steps) if total_steps is not None else None
+        except (TypeError, ValueError):
+            return
+
+        if normalized is None or normalized <= 0:
+            return
+
+        self._progress_total_steps = normalized
+        self._agentcore_metadata["progress_total_steps"] = normalized
+        if self._progress_current_step > normalized:
+            self._progress_current_step = normalized
+
+    def _build_progress_fields(
+        self,
+        action: str,
+        message: str,
+        data: Optional[Dict] = None,
+        *,
+        advance: bool = False,
+    ) -> Dict[str, object]:
+        payload = _normalize_metadata(data)
+        progress_plan = payload.pop("progress_plan", None)
+        if progress_plan is None:
+            progress_plan = self._agentcore_metadata.get("progress_plan")
+
+        has_explicit_progress_fields = any(
+            key in payload
+            for key in (
+                "progress_percent",
+                "progress_ratio",
+                "progress_stage",
+                "progress_current_step",
+                "progress_total_steps",
+            )
+        )
+
+        if not advance and not has_explicit_progress_fields:
+            return {}
+
+        total_steps = payload.get("progress_total_steps")
+        current_step = payload.get("progress_current_step")
+
+        if total_steps is not None:
+            self.set_progress_total_steps(total_steps)
+        if self._progress_total_steps is not None:
+            payload["progress_total_steps"] = self._progress_total_steps
+
+        stage_name = payload.get("progress_stage")
+        ratio = payload.get("progress_ratio")
+        current_step = payload.get("progress_current_step")
+        total_steps = payload.get("progress_total_steps")
+
+        if "progress_percent" not in payload and stage_name and progress_plan:
+            try:
+                payload["progress_percent"] = _stage_percent(
+                    progress_plan,
+                    stage_name,
+                    ratio=ratio,
+                    step_index=current_step,
+                    step_total=total_steps,
+                )
+            except Exception:
+                payload.pop("progress_percent", None)
+
+        if advance:
+            self._progress_current_step += 1
+            if self._progress_total_steps is not None:
+                self._progress_current_step = min(
+                    self._progress_current_step,
+                    self._progress_total_steps,
+                )
+            current_step = self._progress_current_step
+        elif current_step is not None:
+            try:
+                current_step = int(current_step)
+            except (TypeError, ValueError):
+                current_step = None
+
+        if current_step is not None:
+            self._progress_current_step = max(
+                self._progress_current_step,
+                int(current_step),
+            )
+            payload["progress_current_step"] = int(current_step)
+
+        if self._progress_total_steps is not None and current_step is not None:
+            normalized_current = min(
+                max(int(current_step), 0),
+                self._progress_total_steps,
+            )
+            payload["progress_current_step"] = normalized_current
+            payload["progress_percent"] = 100 if (
+                normalized_current >= self._progress_total_steps
+            ) else int(
+                math.floor(
+                    (normalized_current / self._progress_total_steps) * 100
+                )
+            )
+        elif "progress_percent" in payload:
+            try:
+                payload["progress_percent"] = max(
+                    0,
+                    min(100, int(payload["progress_percent"])),
+                )
+            except (TypeError, ValueError):
+                payload.pop("progress_percent", None)
+        else:
+            payload.pop("progress_percent", None)
+
+        if "progress_message" not in payload and message:
+            payload["progress_message"] = message
+        payload["progress_step"] = action
+        return payload
+
+    def advance_progress(
+        self,
+        action: str,
+        message: str,
+        data: Optional[Dict] = None,
+    ) -> None:
+        progress_payload = self._build_progress_fields(
+            action,
+            message,
+            data,
+            advance=True,
+        )
+        self.append_task(action, message, progress_payload)
 
     def context_summary(self, details: Optional[Dict] = None) -> str:
         context = deepcopy(self._context)
@@ -231,6 +492,7 @@ class TaskTracer:
         }
         if data:
             entry.update(deepcopy(data))
+        entry.pop("progress_plan", None)
         if "level" not in entry or not entry["level"]:
             entry["level"] = "INFO"
         return entry
@@ -257,17 +519,25 @@ class TaskTracer:
                 logger.error(f"Failed to update agentcore task_id: {e}")
 
     def create_task(self, initial_details: Dict = None) -> str:
+        self._threadline_progress_percent = None
         self._merge_context(initial_details)
+        if initial_details:
+            self.set_progress_total_steps(
+                initial_details.get("progress_total_steps")
+            )
 
         self._task_id = self._task_id or _current_celery_task_id()
         if self._task_id:
             self._merge_context({"task_id": self._task_id})
+        self._sync_threadline_progress_snapshot(initial_details)
         self._sync_agentcore_registration(initial_details or {})
         logger.info(f"{self.context_summary(initial_details)} started")
         return self._agentcore_task_id or self._task_id
 
     def update_task(self, details: Dict) -> None:
         self._merge_context(details)
+        if details:
+            self.set_progress_total_steps(details.get("progress_total_steps"))
 
         self._sync_agentcore_update(
             "STARTED",
@@ -277,11 +547,33 @@ class TaskTracer:
     def complete_task(self, details: Dict) -> None:
         self._merge_context(details)
 
+        completion_details = _normalize_metadata(details)
+        if "progress_percent" not in completion_details:
+            completion_details["progress_percent"] = 100
+        if self._progress_total_steps is not None:
+            completion_details.setdefault(
+                "progress_total_steps",
+                self._progress_total_steps,
+            )
+        if self._progress_total_steps is not None:
+            completion_details.setdefault(
+                "progress_current_step",
+                self._progress_total_steps,
+            )
+        completion_details.setdefault("progress_step", "COMPLETE")
+        if completion_details.get("progress_message") is None and details:
+            completion_details["progress_message"] = details.get(
+                "progress_message"
+            ) or "Completed"
+
+        self._agentcore_metadata.update(completion_details)
+
         self._sync_agentcore_update(
             "SUCCESS",
             result=deepcopy(details),
-            metadata=_normalize_metadata(details),
+            metadata=completion_details,
         )
+        self._sync_threadline_progress_snapshot(completion_details)
         logger.info(f"{self.context_summary(details)} completed")
 
     def fail_task(self, details: Dict, error_msg: str) -> None:
@@ -290,11 +582,13 @@ class TaskTracer:
         failure_metadata = _normalize_metadata(details)
         failure_metadata["error"] = error_msg
         failure_metadata["failed_at"] = timezone.now().isoformat()
+        self._agentcore_metadata.update(failure_metadata)
         self._sync_agentcore_update(
             "FAILURE",
             error=error_msg,
             metadata=failure_metadata,
         )
+        self._sync_threadline_progress_snapshot(failure_metadata)
 
         self._queue_failure_notification(failure_metadata, error_msg)
         logger.error(f"{self.context_summary(details)} failed: {error_msg}")
@@ -355,30 +649,56 @@ class TaskTracer:
         self, action: str, message: str, data: dict = None
     ) -> None:
         log_entry = self._build_log_entry(action, message, data)
+        progress_fields = self._build_progress_fields(action, message, data)
+        log_entry.update(progress_fields)
 
-        logger.debug(f"{self.context_summary(data)} step {action}: {message}")
+        context = self.context_summary(data)
+        if progress_fields:
+            logger.info(
+                "%s progress step=%s percent=%s current_step=%s total_steps=%s message=%s",
+                context,
+                log_entry.get("progress_step", action),
+                log_entry.get("progress_percent"),
+                log_entry.get("progress_current_step"),
+                log_entry.get("progress_total_steps"),
+                message,
+            )
+        else:
+            logger.debug(f"{context} step {action}: {message}")
 
         self._agentcore_metadata.setdefault("steps", [])
         self._agentcore_metadata["steps"].append(log_entry)
         self._agentcore_metadata.setdefault("task_logs", [])
         self._agentcore_metadata["task_logs"].append(log_entry)
-        if "progress_percent" in log_entry:
-            self._agentcore_metadata["progress_percent"] = log_entry[
-                "progress_percent"
-            ]
-        if "progress_message" in log_entry:
-            self._agentcore_metadata["progress_message"] = log_entry[
-                "progress_message"
-            ]
-        self._agentcore_metadata["progress_step"] = action
+        for key in (
+            "progress_percent",
+            "progress_message",
+            "progress_step",
+            "progress_total_steps",
+            "progress_current_step",
+        ):
+            if key in log_entry:
+                self._agentcore_metadata[key] = log_entry[key]
+        progress_metadata = {
+            key: log_entry[key]
+            for key in (
+                "progress_percent",
+                "progress_message",
+                "progress_step",
+                "progress_total_steps",
+                "progress_current_step",
+            )
+            if key in log_entry
+        }
         self._sync_agentcore_update(
             "STARTED",
             metadata={
                 "steps": self._agentcore_metadata["steps"],
                 "task_logs": self._agentcore_metadata["task_logs"],
-                "progress_step": action,
+                **progress_metadata,
             },
         )
+        self._sync_threadline_progress_snapshot(progress_metadata)
 
     def update_task_status(self, new_status: str) -> None:
         agentcore_status = "STARTED"

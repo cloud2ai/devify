@@ -1,4 +1,5 @@
 from unittest.mock import Mock
+from unittest.mock import patch
 
 from threadline.utils.task_tracer import TaskTracer
 
@@ -52,3 +53,56 @@ def test_append_task_includes_context_and_raw_message(monkeypatch):
     assert entry["raw_message"] == "Processing email"
     assert entry["context"]["email_id"] == 42
     assert entry["context"]["user_id"] == 7
+
+
+def test_create_task_syncs_initial_zero_progress_snapshot(monkeypatch):
+    tracer = TaskTracer("EMAIL_WORKFLOW")
+    monkeypatch.setattr(tracer, "_sync_agentcore_registration", Mock())
+
+    fake_message = Mock()
+    filter_result = Mock()
+    filter_result.only.return_value.first.return_value = fake_message
+
+    with patch(
+        "threadline.models.EmailMessage.objects.filter",
+        return_value=filter_result,
+    ):
+        tracer.create_task(
+            {
+                "email_id": "123",
+                "status": "starting",
+                "progress_percent": 0,
+            }
+        )
+
+    fake_message.set_processing_progress.assert_called_once_with(0)
+
+
+def test_threadline_progress_snapshot_is_monotonic_within_task(monkeypatch):
+    tracer = TaskTracer("EMAIL_WORKFLOW")
+    tracer._context["email_id"] = "123"
+
+    fake_message = Mock()
+    filter_result = Mock()
+    filter_result.only.return_value.first.return_value = fake_message
+
+    with patch(
+        "threadline.models.EmailMessage.objects.filter",
+        return_value=filter_result,
+    ):
+        tracer._sync_threadline_progress_snapshot(
+            {
+                "progress_percent": 90,
+                "progress_step": "STAGE_A",
+            }
+        )
+        tracer._sync_threadline_progress_snapshot(
+            {
+                "progress_percent": 78,
+                "progress_step": "STAGE_B",
+            }
+        )
+
+    assert fake_message.set_processing_progress.call_count == 2
+    assert fake_message.set_processing_progress.call_args_list[0].args == (90,)
+    assert fake_message.set_processing_progress.call_args_list[1].args == (90,)

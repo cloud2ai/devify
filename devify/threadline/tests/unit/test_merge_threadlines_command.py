@@ -66,7 +66,7 @@ class MergeThreadlinesCommandTest(TestCase):
             id__in=[message1.id, message2.id]
         ).get()
         self.assertEqual(canonical.subject, "Source one")
-        self.assertEqual(canonical.metadata["manual_merge"]["source_count"], 2)
+        self.assertEqual(canonical.metadata, {})
         self.assertEqual(canonical.status, "processing")
         self.assertIn("[Manual merge note]", canonical.text_content)
         self.assertIn(note, canonical.text_content)

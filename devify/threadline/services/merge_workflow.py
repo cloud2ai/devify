@@ -26,6 +26,7 @@ def enqueue_merge_workflow(
 
     target_message = message
     target_message.set_status(EmailStatus.PROCESSING.value)
+    target_message.set_processing_progress(0)
 
     try:
         process_email_merge.delay(
@@ -57,3 +58,49 @@ def enqueue_merge_workflow(
         raise
 
     return target_message
+
+
+def enqueue_merge_workflows(
+    messages: list[EmailMessage],
+    *,
+    force: bool = False,
+    language: str | None = None,
+    scene: str | None = None,
+    trigger_source: str = "unknown",
+) -> list[dict]:
+    """
+    Enqueue merge workflows for multiple messages and collect per-item results.
+    """
+    results: list[dict] = []
+
+    for message in messages:
+        try:
+            target_message = enqueue_merge_workflow(
+                message,
+                force=force,
+                language=language,
+                scene=scene,
+                trigger_source=trigger_source,
+            )
+            results.append(
+                {
+                    "requested_email_id": str(message.id),
+                    "requested_uuid": str(message.uuid),
+                    "email_id": str(target_message.id),
+                    "uuid": str(target_message.uuid),
+                    "status": "success",
+                }
+            )
+        except Exception as exc:
+            results.append(
+                {
+                    "requested_email_id": str(message.id),
+                    "requested_uuid": str(message.uuid),
+                    "email_id": str(message.id),
+                    "uuid": str(message.uuid),
+                    "status": "failed",
+                    "error": str(exc),
+                }
+            )
+
+    return results

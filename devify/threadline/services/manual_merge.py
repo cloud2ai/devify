@@ -148,16 +148,6 @@ class ManualMergeService:
             received_at=merged_at,
             text_content=merged_text,
             html_content="",
-            metadata={
-                "manual_merge": {
-                    "source_count": len(ordered_sources),
-                    "source_ids": [message.id for message in ordered_sources],
-                    "source_uuids": [
-                        str(message.uuid) for message in ordered_sources
-                    ],
-                    "merged_at": merged_at.isoformat(),
-                }
-            },
         )
 
         attachment_count = self._clone_attachments(

@@ -223,7 +223,6 @@
                 </BaseButton>
               </div>
             </div>
-
           </div>
         </template>
         <div v-if="loading" class="text-center py-8">
@@ -405,10 +404,11 @@
                   class="flex items-center justify-between sm:justify-end sm:flex-col sm:items-end space-x-2 sm:space-x-0 sm:space-y-2 flex-shrink-0"
                 >
                   <div class="flex items-center gap-2">
-                    <MergeStateBadge
-                      :state="getThreadlineMergeState(result)"
+                    <MergeStateBadge :state="getThreadlineMergeState(result)" />
+                    <StatusBadge
+                      :status="getThreadlineDisplayStatus(result)"
+                      :progress-percent="getThreadlineProgressPercent(result)"
                     />
-                    <StatusBadge :status="getThreadlineDisplayStatus(result)" />
                     <span
                       v-if="result.share_status?.is_active"
                       class="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium"
@@ -526,6 +526,13 @@
       </div>
     </ConfirmDialog>
 
+    <RetryDialog
+      :show="showBatchRetryDialog"
+      :status="batchRetryDialogStatus"
+      @close="showBatchRetryDialog = false"
+      @confirm="handleBatchRetryConfirm"
+    />
+
     <Transition
       enter-active-class="transition duration-200 ease-out"
       enter-from-class="translate-y-4 opacity-0"
@@ -550,7 +557,9 @@
             </div>
           </div>
 
-          <div class="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-shrink-0">
+          <div
+            class="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-shrink-0"
+          >
             <BaseButton
               variant="secondary"
               size="sm"
@@ -558,6 +567,15 @@
               @click="clearSelection"
             >
               {{ t('chats.bulkMerge.clear') }}
+            </BaseButton>
+            <BaseButton
+              variant="primary"
+              size="sm"
+              class="w-full sm:w-auto"
+              :disabled="!canBatchRetry"
+              @click="openBatchRetryDialog"
+            >
+              {{ t('retry.retryButton') }}
             </BaseButton>
             <BaseButton
               variant="primary"
@@ -577,7 +595,7 @@
 </template>
 
 <script setup>
-import { computed, ref, onMounted, watch } from 'vue'
+import { computed, ref, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { usePreferencesStore } from '@/store/preferences'
@@ -591,6 +609,7 @@ import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import MergeStateBadge from '@/components/ui/MergeStateBadge.vue'
 import VirtualEmailBanner from '@/components/ui/VirtualEmailBanner.vue'
 import StatusBadge from '@/components/ui/StatusBadge.vue'
+import RetryDialog from '@/components/RetryDialog.vue'
 import { useToast } from '@/composables/useToast'
 import { getThreadlineDisplayStatus } from '@/utils/threadlineStatus'
 import { getThreadlineMergeState } from '@/utils/threadlineMergeState'
@@ -604,8 +623,11 @@ const toast = useToast()
 const loading = ref(false)
 const loadingMore = ref(false)
 const mergeLoading = ref(false)
+const batchRetryLoading = ref(false)
 const showMergeConfirm = ref(false)
+const showBatchRetryDialog = ref(false)
 const mergeNote = ref('')
+const batchRetryTargets = ref([])
 const searchQuery = ref('')
 const results = ref([])
 const selectedIds = ref([])
@@ -622,9 +644,48 @@ const stats = ref({
   completed: 0
 })
 const maxMergeCount = 5
+const LIST_POLL_INTERVAL_MS = 2000
+
+let listPollingTimer = null
 
 const selectedCount = computed(() => selectedIds.value.length)
 const canSelectMore = computed(() => selectedCount.value < maxMergeCount)
+const selectedThreadlines = computed(() =>
+  results.value.filter((item) => selectedIds.value.includes(item.uuid))
+)
+const selectedHasActiveThreadlines = computed(() =>
+  selectedThreadlines.value.some((item) => {
+    const status = getThreadlineDisplayStatus(item)
+    return status === 'processing' || status === 'retrying'
+  })
+)
+const canBatchRetry = computed(
+  () =>
+    selectedThreadlines.value.length > 0 &&
+    !selectedHasActiveThreadlines.value &&
+    !mergeLoading.value &&
+    !batchRetryLoading.value
+)
+const batchRetryDialogStatus = computed(() =>
+  batchRetryTargets.value.some((item) => item.status === 'success')
+    ? 'success'
+    : 'failed'
+)
+const hasActiveThreadlines = computed(() =>
+  results.value.some((item) => {
+    const status = getThreadlineDisplayStatus(item)
+    return status === 'processing' || status === 'retrying'
+  })
+)
+const activeThreadlineIds = computed(() =>
+  results.value
+    .filter((item) => {
+      const status = getThreadlineDisplayStatus(item)
+      return status === 'processing' || status === 'retrying'
+    })
+    .map((item) => item.uuid || item.id)
+    .filter(Boolean)
+)
 const selectedMergeItems = computed(() =>
   results.value
     .filter((item) => selectedIds.value.includes(item.uuid))
@@ -665,6 +726,82 @@ const performSearch = () => {
 watch(searchQuery, () => {
   performSearch()
 })
+
+const stopListPolling = () => {
+  if (listPollingTimer) {
+    clearInterval(listPollingTimer)
+    listPollingTimer = null
+  }
+}
+
+const startListPolling = () => {
+  if (listPollingTimer) return
+
+  listPollingTimer = setInterval(async () => {
+    if (!hasActiveThreadlines.value || loading.value || loadingMore.value) {
+      return
+    }
+
+    await refreshActiveThreadlines()
+  }, LIST_POLL_INTERVAL_MS)
+}
+
+const syncListPolling = () => {
+  if (hasActiveThreadlines.value) {
+    startListPolling()
+    return
+  }
+
+  stopListPolling()
+}
+
+const mergeThreadlineUpdate = (updatedThreadline) => {
+  if (!updatedThreadline) return
+
+  const updatedId = updatedThreadline.uuid || updatedThreadline.id
+  if (!updatedId) return
+
+  results.value = results.value.map((item) => {
+    const itemId = item.uuid || item.id
+    if (String(itemId) !== String(updatedId)) {
+      return item
+    }
+
+    return {
+      ...item,
+      ...updatedThreadline
+    }
+  })
+}
+
+const refreshThreadlinesByIds = async (threadlineIds) => {
+  const ids = Array.isArray(threadlineIds) ? threadlineIds.filter(Boolean) : []
+
+  if (!ids.length) {
+    stopListPolling()
+    return
+  }
+
+  try {
+    await Promise.all(
+      ids.map(async (threadlineId) => {
+        try {
+          const response = await chatApi.getThreadline(threadlineId)
+          const responseData = response.data.data || response.data
+          mergeThreadlineUpdate(responseData)
+        } catch {
+          // Ignore per-item polling failures so one stale row doesn't block others
+        }
+      })
+    )
+  } finally {
+    syncListPolling()
+  }
+}
+
+const refreshActiveThreadlines = async () => {
+  await refreshThreadlinesByIds(activeThreadlineIds.value)
+}
 
 const loadData = async (isLoadMore = false) => {
   if (isLoadMore) {
@@ -723,6 +860,7 @@ const loadData = async (isLoadMore = false) => {
   } finally {
     loading.value = false
     loadingMore.value = false
+    syncListPolling()
   }
 }
 
@@ -734,7 +872,70 @@ const loadMoreData = async () => {
 }
 
 const refreshData = () => {
-  loadData()
+  loadData(false)
+}
+
+const openBatchRetryDialog = () => {
+  if (!canBatchRetry.value) {
+    return
+  }
+
+  batchRetryTargets.value = selectedThreadlines.value.map((item) => ({
+    ...item
+  }))
+  showBatchRetryDialog.value = true
+}
+
+const handleBatchRetryConfirm = async (options) => {
+  const targets = batchRetryTargets.value
+    .map((item) => item.uuid || item.id)
+    .filter(Boolean)
+
+  showBatchRetryDialog.value = false
+
+  if (!targets.length) {
+    batchRetryTargets.value = []
+    return
+  }
+
+  batchRetryLoading.value = true
+  try {
+    const response = await chatApi.batchRetryThreadlines(targets, options)
+    const responseData = response.data.data || response.data || {}
+    const successCount = responseData.success_count || 0
+    const failedCount = responseData.failure_count || 0
+
+    await refreshThreadlinesByIds(targets)
+    clearSelection()
+    batchRetryTargets.value = []
+
+    if (failedCount === 0) {
+      toast.showSuccess(
+        t('retry.batchRetrySuccess', {
+          count: successCount
+        })
+      )
+      return
+    }
+
+    if (successCount > 0) {
+      toast.showWarning(
+        t('retry.batchRetryPartial', {
+          success: successCount,
+          failed: failedCount
+        })
+      )
+      return
+    }
+
+    toast.showError(t('retry.batchRetryError'))
+  } catch (error) {
+    console.error('Batch retry failed:', error)
+    await refreshThreadlinesByIds(targets)
+    toast.showError(error.response?.data?.message || t('retry.batchRetryError'))
+  } finally {
+    batchRetryLoading.value = false
+  }
 }
 
 const viewResult = (id) => {
@@ -897,6 +1098,30 @@ const getSender = (sender) => {
   return ''
 }
 
+const getThreadlineProgressPercent = (threadline) => {
+  if (!threadline) return null
+
+  const status = getThreadlineDisplayStatus(threadline)
+  if (status !== 'processing' && status !== 'retrying') {
+    return null
+  }
+
+  const snapshot =
+    threadline.processing_progress || threadline.metadata?.processing_progress
+  const percent = Number(snapshot?.percent ?? snapshot?.progress_percent)
+
+  if (!Number.isFinite(percent)) {
+    return 0
+  }
+
+  const normalized = Math.max(0, Math.min(100, percent))
+  if (normalized >= 100) {
+    return 99
+  }
+
+  return normalized
+}
+
 // Get visible tags based on screen width
 const getVisibleTags = (tags) => {
   if (!tags || !Array.isArray(tags)) return []
@@ -921,5 +1146,18 @@ onMounted(async () => {
     await userStore.checkAuthStatus()
   }
   loadData()
+})
+
+watch(hasActiveThreadlines, () => {
+  syncListPolling()
+})
+
+watch(activeThreadlineIds, () => {
+  syncListPolling()
+})
+
+onUnmounted(() => {
+  stopListPolling()
+  showBatchRetryDialog.value = false
 })
 </script>

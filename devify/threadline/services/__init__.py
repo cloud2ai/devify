@@ -4,7 +4,7 @@ Service helpers for threadline runtime bindings and related admin logic.
 
 from .email_merge import EmailMergeService, MergeDecision
 from .manual_merge import ManualMergeService, ManualMergeResult
-from .merge_workflow import enqueue_merge_workflow
+from .merge_workflow import enqueue_merge_workflow, enqueue_merge_workflows
 
 __all__ = [
     "EmailMergeService",
@@ -12,4 +12,5 @@ __all__ = [
     "ManualMergeService",
     "ManualMergeResult",
     "enqueue_merge_workflow",
+    "enqueue_merge_workflows",
 ]

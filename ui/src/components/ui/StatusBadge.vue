@@ -2,6 +2,7 @@
   <span
     :class="getStatusClass(status)"
     class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium whitespace-nowrap"
+    :title="badgeTitle"
   >
     <!-- Success icon -->
     <svg
@@ -35,7 +36,7 @@
     </svg>
     <!-- Processing icon (spinning) -->
     <svg
-      v-else-if="status === 'processing'"
+      v-else-if="status === 'processing' || status === 'retrying'"
       class="animate-spin w-3 h-3 flex-shrink-0"
       fill="none"
       viewBox="0 0 24 24"
@@ -117,19 +118,24 @@
         d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
       />
     </svg>
-    {{ getStatusText(status) }}
+    {{ badgeText }}
   </span>
 </template>
 
 <script setup>
+import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 const { t } = useI18n()
 
-defineProps({
+const props = defineProps({
   status: {
     type: String,
     default: 'unknown'
+  },
+  progressPercent: {
+    type: Number,
+    default: null
   }
 })
 
@@ -138,6 +144,7 @@ const getStatusClass = (status) => {
     success: 'bg-green-50 text-green-700',
     failed: 'bg-red-50 text-red-700',
     processing: 'bg-yellow-50 text-yellow-700',
+    retrying: 'bg-yellow-50 text-yellow-700',
     fetched: 'bg-blue-50 text-blue-700',
     canonical: 'bg-green-50 text-green-700',
     merged: 'bg-gray-50 text-gray-700',
@@ -147,11 +154,42 @@ const getStatusClass = (status) => {
   return classes[status] || 'bg-gray-50 text-gray-700'
 }
 
+const badgeText = computed(() => {
+  if (
+    (props.status === 'processing' || props.status === 'retrying') &&
+    Number.isFinite(props.progressPercent)
+  ) {
+    const normalized = Math.max(
+      0,
+      Math.min(99, Math.round(props.progressPercent))
+    )
+    return `${normalized}%`
+  }
+
+  return getStatusText(props.status)
+})
+
+const badgeTitle = computed(() => {
+  if (
+    (props.status === 'processing' || props.status === 'retrying') &&
+    Number.isFinite(props.progressPercent)
+  ) {
+    const normalized = Math.max(
+      0,
+      Math.min(99, Math.round(props.progressPercent))
+    )
+    return `${t('common.status.processing')} ${normalized}%`
+  }
+
+  return getStatusText(props.status)
+})
+
 const getStatusText = (status) => {
   const statusTexts = {
     success: t('common.status.success'),
     failed: t('common.status.failed'),
     processing: t('common.status.processing'),
+    retrying: t('common.status.processing'),
     fetched: t('common.status.fetched'),
     canonical: t('common.status.canonical'),
     merged: t('common.status.merged'),

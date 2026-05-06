@@ -794,3 +794,43 @@ class EmailMessageMergeSerializer(serializers.Serializer):
                 _("You can merge at most five messages at a time")
             )
         return unique_values
+
+
+class EmailMessageBatchRetrySerializer(serializers.Serializer):
+    """
+    Request serializer for batch retry operations.
+    """
+
+    source_uuids = serializers.ListField(
+        child=serializers.UUIDField(),
+        min_length=1,
+        max_length=20,
+    )
+    language = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        allow_null=True,
+        max_length=32,
+    )
+    scene = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        allow_null=True,
+        max_length=64,
+    )
+    force = serializers.BooleanField(required=False, default=False)
+
+    def validate_source_uuids(self, value):
+        """
+        Deduplicate UUIDs while preserving input order.
+        """
+        unique_values = list(dict.fromkeys(value))
+        if not unique_values:
+            raise serializers.ValidationError(
+                _("At least one message is required")
+            )
+        if len(unique_values) > 20:
+            raise serializers.ValidationError(
+                _("You can retry at most twenty messages at a time")
+            )
+        return unique_values

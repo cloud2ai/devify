@@ -371,6 +371,33 @@
         </div>
       </div>
 
+      <Transition name="progress-fade">
+        <div
+          v-if="threadlineProgressSnapshot.visible"
+          class="flex items-center gap-3 rounded-md border border-blue-100 bg-blue-50/60 px-3 py-2"
+        >
+          <div class="min-w-0 flex-1">
+            <div class="flex items-center justify-between gap-2">
+              <p class="text-xs font-medium text-blue-700">
+                {{ t('common.currentProgress') }}
+              </p>
+              <p class="text-xs font-semibold tabular-nums text-blue-900">
+                {{ threadlineProgressSnapshot.percentText }}
+              </p>
+            </div>
+            <div
+              class="mt-2 h-1.5 overflow-hidden rounded-full bg-blue-100"
+              aria-hidden="true"
+            >
+              <div
+                class="h-full rounded-full bg-blue-500"
+                :style="{ width: threadlineProgressSnapshot.percentWidth }"
+              />
+            </div>
+          </div>
+        </div>
+      </Transition>
+
       <!-- Title and Metadata Card -->
       <BaseCard>
         <div class="space-y-4">
@@ -2364,7 +2391,6 @@ import MetadataChipsEditor from '@/components/MetadataChipsEditor.vue'
 import RetryDialog from '@/components/RetryDialog.vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import TodoItem from '@/components/TodoItem.vue'
-import TodoEditor from '@/components/TodoEditor.vue'
 import InlineMarkdownEditor from '@/components/InlineMarkdownEditor.vue'
 import InlineArrayEditor from '@/components/InlineArrayEditor.vue'
 import AppLayout from '@/components/layout/AppLayout.vue'
@@ -2405,7 +2431,6 @@ const {
   hasNewFormat,
   summaryData,
   formatDate,
-  getStatusClass,
   loadThreadline,
   deleteThreadline,
   confirmDelete,
@@ -2439,7 +2464,6 @@ const inlinePassword = share.inlinePassword
 const passwordSaving = share.passwordSaving
 const editingPassword = share.editingPassword
 const tempPassword = share.tempPassword
-const inlineExpiration = share.inlineExpiration
 const expirationSaving = share.expirationSaving
 const showPassword = share.showPassword
 const editingExpiration = share.editingExpiration
@@ -2453,6 +2477,303 @@ const threadlineMergeState = computed(() =>
 
 const retrying = polling.retrying
 const showRetryDialog = polling.showRetryDialog
+const retryStartedAt = polling.retryStartedAt
+const isThreadlineActive = computed(() => isProcessing.value || retrying.value)
+const shouldKeepProgressVisible = computed(
+  () => threadline.value?.status === 'success'
+)
+
+function getProgressTargetPercent(snapshot) {
+  const percent = Number(snapshot?.percent ?? snapshot?.progress_percent)
+  const active = isProcessing.value || retrying.value
+
+  if (!Number.isFinite(percent)) {
+    return active ? 0 : null
+  }
+
+  const normalized = Math.max(0, Math.min(100, percent))
+  const snapshotUpdatedAt = snapshot?.updated_at
+    ? Date.parse(snapshot.updated_at)
+    : null
+  const isStaleRetrySnapshot =
+    retrying.value &&
+    Number.isFinite(retryStartedAt.value) &&
+    Number.isFinite(snapshotUpdatedAt) &&
+    snapshotUpdatedAt < retryStartedAt.value
+
+  if (isStaleRetrySnapshot) {
+    return 0
+  }
+
+  if (!active) {
+    return normalized
+  }
+
+  if (normalized >= 100) {
+    return 99
+  }
+
+  return normalized
+}
+
+const threadlineProgressTarget = computed(() => {
+  const snapshot =
+    threadline.value?.processing_progress ||
+    threadline.value?.metadata?.processing_progress ||
+    null
+  return getProgressTargetPercent(snapshot)
+})
+
+const displayedProgressPercent = ref(0)
+const progressPanelVisible = ref(false)
+const progressCompleting = ref(false)
+let progressAnimationFrame = null
+let progressAnimationToken = 0
+let highestTargetProgress = 0
+let progressHideTimer = null
+let progressCreepTimer = null
+const scheduleProgressFrame =
+  typeof window !== 'undefined' && window.requestAnimationFrame
+    ? window.requestAnimationFrame.bind(window)
+    : (callback) => setTimeout(() => callback(Date.now()), 16)
+const cancelScheduledProgressFrame =
+  typeof window !== 'undefined' && window.cancelAnimationFrame
+    ? window.cancelAnimationFrame.bind(window)
+    : clearTimeout
+const getCurrentProgressTime =
+  typeof performance !== 'undefined' && performance.now
+    ? () => performance.now()
+    : () => Date.now()
+
+const clearProgressHideTimer = () => {
+  if (progressHideTimer !== null) {
+    clearTimeout(progressHideTimer)
+    progressHideTimer = null
+  }
+}
+
+const clearProgressCreepTimer = () => {
+  if (progressCreepTimer !== null) {
+    clearTimeout(progressCreepTimer)
+    progressCreepTimer = null
+  }
+}
+
+const cancelProgressAnimation = () => {
+  progressAnimationToken += 1
+
+  if (progressAnimationFrame !== null) {
+    cancelScheduledProgressFrame(progressAnimationFrame)
+    progressAnimationFrame = null
+  }
+
+  clearProgressCreepTimer()
+}
+
+const resetProgressDisplay = () => {
+  cancelProgressAnimation()
+  clearProgressHideTimer()
+  progressPanelVisible.value = false
+  progressCompleting.value = false
+  displayedProgressPercent.value = 0
+  highestTargetProgress = 0
+  clearProgressCreepTimer()
+}
+
+const scheduleProgressCreep = () => {
+  if (
+    !isThreadlineActive.value ||
+    progressCompleting.value ||
+    !progressPanelVisible.value
+  ) {
+    clearProgressCreepTimer()
+    return
+  }
+
+  clearProgressCreepTimer()
+  progressCreepTimer = setTimeout(() => {
+    progressCreepTimer = null
+
+    if (
+      !isThreadlineActive.value ||
+      progressCompleting.value ||
+      !progressPanelVisible.value
+    ) {
+      return
+    }
+
+    const currentValue = Math.max(0, Math.round(displayedProgressPercent.value))
+    if (currentValue >= 99) {
+      return
+    }
+
+    const nextValue = currentValue + 1
+    displayedProgressPercent.value = nextValue
+    highestTargetProgress = Math.max(highestTargetProgress, nextValue)
+    scheduleProgressCreep()
+  }, 1800)
+}
+
+const animateProgressTo = (target, options = {}) => {
+  const normalizedTarget = Math.max(
+    0,
+    Math.min(options.ceiling ?? 99, Number(target ?? 0))
+  )
+
+  cancelProgressAnimation()
+  clearProgressHideTimer()
+  clearProgressCreepTimer()
+
+  const startValue = displayedProgressPercent.value
+  const nextTarget = Math.max(startValue, normalizedTarget)
+
+  if (nextTarget === startValue) {
+    displayedProgressPercent.value = nextTarget
+    highestTargetProgress = Math.max(highestTargetProgress, nextTarget)
+    scheduleProgressCreep()
+    return
+  }
+
+  const minDuration = options.minDuration ?? 220
+  const maxDuration = options.maxDuration ?? 1400
+  const baseDuration = options.baseDuration ?? 180
+  const duration = Math.min(
+    maxDuration,
+    Math.max(minDuration, baseDuration + (nextTarget - startValue) * 45)
+  )
+  const startedAt = getCurrentProgressTime()
+  const token = progressAnimationToken
+
+  const tick = (now) => {
+    if (token !== progressAnimationToken) {
+      return
+    }
+
+    const elapsed = now - startedAt
+    const rawProgress = Math.min(1, elapsed / duration)
+    const easedProgress = 1 - Math.pow(1 - rawProgress, 3)
+    const nextValue = startValue + (nextTarget - startValue) * easedProgress
+
+    displayedProgressPercent.value = Math.min(nextTarget, nextValue)
+
+    if (rawProgress < 1) {
+      progressAnimationFrame = scheduleProgressFrame(tick)
+      return
+    }
+
+    progressAnimationFrame = null
+    displayedProgressPercent.value = nextTarget
+    highestTargetProgress = Math.max(highestTargetProgress, nextTarget)
+    scheduleProgressCreep()
+    options.onComplete?.()
+  }
+
+  progressAnimationFrame = scheduleProgressFrame(tick)
+}
+
+const startCompletionSequence = () => {
+  if (progressCompleting.value) {
+    return
+  }
+
+  progressCompleting.value = true
+  progressPanelVisible.value = true
+  clearProgressCreepTimer()
+
+  animateProgressTo(100, {
+    ceiling: 100,
+    minDuration: 220,
+    maxDuration: 900,
+    baseDuration: 120,
+    onComplete: () => {
+      clearProgressHideTimer()
+      progressHideTimer = setTimeout(() => {
+        progressPanelVisible.value = false
+        progressCompleting.value = false
+        displayedProgressPercent.value = 0
+        highestTargetProgress = 0
+        clearProgressCreepTimer()
+        progressHideTimer = null
+      }, 320)
+    }
+  })
+}
+
+watch(
+  isThreadlineActive,
+  (active, previousActive) => {
+    if (!active) {
+      if (
+        shouldKeepProgressVisible.value &&
+        displayedProgressPercent.value > 0 &&
+        displayedProgressPercent.value < 100
+      ) {
+        startCompletionSequence()
+        return
+      }
+
+      resetProgressDisplay()
+      return
+    }
+
+    if (!previousActive && active) {
+      resetProgressDisplay()
+      progressPanelVisible.value = true
+    }
+  },
+  { immediate: true }
+)
+
+watch(
+  threadlineProgressTarget,
+  (target) => {
+    if (!isThreadlineActive.value) {
+      return
+    }
+
+    if (target == null) {
+      progressPanelVisible.value = true
+      scheduleProgressCreep()
+      return
+    }
+
+    const normalizedTarget = Math.max(0, Math.min(99, target))
+    const currentDisplayed = Math.max(
+      0,
+      Math.round(displayedProgressPercent.value)
+    )
+    const nextTarget = Math.max(
+      highestTargetProgress,
+      normalizedTarget,
+      currentDisplayed
+    )
+    highestTargetProgress = nextTarget
+    progressPanelVisible.value = true
+
+    if (nextTarget <= currentDisplayed) {
+      scheduleProgressCreep()
+      return
+    }
+
+    animateProgressTo(nextTarget, {
+      minDuration: 180,
+      maxDuration: 900,
+      baseDuration: 90
+    })
+  },
+  { immediate: true }
+)
+
+const threadlineProgressSnapshot = computed(() => {
+  const active = progressPanelVisible.value
+  const percentValue = Math.max(0, Math.round(displayedProgressPercent.value))
+
+  return {
+    visible: active,
+    percentText: percentValue != null ? `${percentValue}%` : '0%',
+    percentWidth: percentValue != null ? `${percentValue}%` : '0%'
+  }
+})
 
 const copiedStates = content.copiedStates
 const detailsEditorRef = content.detailsEditorRef
@@ -2461,12 +2782,8 @@ const keyProcessEditorRef = content.keyProcessEditorRef
 const showEditor = metadata.showEditor
 const editorKey = metadata.editorKey
 const editorValue = metadata.editorValue
-const savingKeys = metadata.savingKeys
-const errorsByKey = metadata.errorsByKey
 
 // Use composable methods
-const openEdit = metadata.openEdit
-const openAdd = metadata.openAdd
 const closeEditor = metadata.closeEditor
 const saveEditor = metadata.saveEditor
 const onChipsChange = metadata.onChipsChange
@@ -2475,11 +2792,9 @@ const isSaving = metadata.isSaving
 const fieldError = metadata.fieldError
 
 const handleQuickShare = share.handleQuickShare
-const openShareModal = share.openShareModal
 const closeShareModal = share.closeShareModal
 const handleShareSubmit = share.handleShareSubmit
 const handleStopSharing = share.handleStopSharing
-const confirmStopSharing = share.confirmStopSharing
 const generateLocalPassword = share.generateLocalPassword
 const copyLinkOnly = share.copyLinkOnly
 const copyShareLink = share.copyShareLink
@@ -2497,7 +2812,6 @@ const saveExpiration = share.saveExpiration
 const handleRetryClick = () =>
   polling.handleRetryClick(isProcessing.value, deleting.value)
 const handleRetry = polling.handleRetry
-const stopRetryPolling = polling.stopRetryPolling
 
 onMounted(() => {
   loadThreadline()
@@ -2508,26 +2822,21 @@ watch(
   () => route.params.id,
   (newId, oldId) => {
     if (newId && newId !== oldId) {
-      stopRetryPolling()
+      polling.resetRetryState()
+      resetProgressDisplay()
       loadThreadline()
     }
   }
 )
 
 onUnmounted(() => {
-  stopRetryPolling()
+  polling.resetRetryState()
+  resetProgressDisplay()
   document.removeEventListener('click', handleClickOutside)
 })
 
-const isAnySaving = computed(
-  () => isSaving('category') || isSaving('participants') || isSaving('keywords')
-)
-
 // Use composable methods for todos
 const threadlineTodos = todos.threadlineTodos
-const showTodoEditor = todos.showTodoEditor
-const editingTodo = todos.editingTodo
-const savingTodo = todos.savingTodo
 const todoLoading = todos.todoLoading
 const todoErrorMessage = todos.todoErrorMessage
 const todoSuccessMessage = todos.todoSuccessMessage
@@ -2538,9 +2847,7 @@ const handleAddTodo = todos.handleAddTodo
 const saveNewTodo = todos.saveNewTodo
 const cancelNewTodo = todos.cancelNewTodo
 const handleTodoEditingChange = todos.handleTodoEditingChange
-const handleEditTodo = todos.handleEditTodo
 const handleSaveTodoInline = todos.handleSaveTodoInline
-const handleSaveTodo = todos.handleSaveTodo
 const handleToggleTodo = todos.handleToggleTodo
 const handleDeleteTodo = todos.handleDeleteTodo
 
@@ -2664,5 +2971,18 @@ const handleShareButtonClick = async () => {
 
 .todo-list-move {
   transition: transform 0.3s ease;
+}
+
+.progress-fade-enter-active,
+.progress-fade-leave-active {
+  transition:
+    opacity 0.24s ease,
+    transform 0.24s ease;
+}
+
+.progress-fade-enter-from,
+.progress-fade-leave-to {
+  opacity: 0;
+  transform: translateY(-4px);
 }
 </style>

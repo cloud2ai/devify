@@ -7,6 +7,7 @@ This module contains APIView classes for EmailMessage model CRUD operations.
 import logging
 import re
 
+from django.utils.translation import gettext_lazy as _
 from rest_framework import status, serializers
 from rest_framework.response import Response
 from django.db.models import Q
@@ -23,10 +24,12 @@ from ..serializers import (
     EmailMessageCreateSerializer,
     EmailMessageUpdateSerializer,
     EmailMessageMergeSerializer,
+    EmailMessageBatchRetrySerializer,
 )
 from ..services import (
     ManualMergeService,
     enqueue_merge_workflow as _enqueue_merge_workflow,
+    enqueue_merge_workflows as _enqueue_merge_workflows,
 )
 
 logger = logging.getLogger(__name__)
@@ -449,6 +452,126 @@ class EmailMessageBatchMergeAPIView(BaseAPIView):
             )
         except Exception as exc:
             logger.error(f"Error merging email messages: {exc}")
+            return Response(
+                {"code": 500, "message": str(exc), "data": None},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+
+class EmailMessageBatchRetryAPIView(BaseAPIView):
+    """
+    APIView for batch retry operations.
+    """
+
+    lookup_field = "uuid"
+
+    def get_queryset(self):
+        return (
+            EmailMessage.objects.select_related("user", "merged_into")
+            .prefetch_related("merged_children")
+            .prefetch_related("issues")
+            .prefetch_related("share_links")
+            .all()
+        )
+
+    @extend_schema(
+        operation_id="threadlines_batch_retry",
+        summary="Batch retry email processing",
+        description=(
+            "Retry processing for multiple threadlines with optional "
+            "language and scene override"
+        ),
+        request=EmailMessageBatchRetrySerializer,
+        responses={
+            200: response(serializers.DictField),
+            400: error_response(),
+            401: error_response(),
+        },
+    )
+    def post(self, request):
+        """
+        Retry processing for multiple threadlines.
+        """
+        try:
+            self.request = request
+            serializer = EmailMessageBatchRetrySerializer(data=request.data)
+            serializer.is_valid(raise_exception=True)
+
+            source_uuids = serializer.validated_data["source_uuids"]
+            language = serializer.validated_data.get("language")
+            scene = serializer.validated_data.get("scene")
+            force = serializer.validated_data.get("force", False)
+
+            queryset = self.filter_by_user(self.get_queryset())
+            messages = list(
+                queryset.filter(uuid__in=source_uuids).order_by("id")
+            )
+
+            if len(messages) != len(source_uuids):
+                found_uuids = {str(message.uuid) for message in messages}
+                missing = [
+                    str(uuid)
+                    for uuid in source_uuids
+                    if str(uuid) not in found_uuids
+                ]
+                raise serializers.ValidationError(
+                    {
+                        "source_uuids": [
+                            "One or more selected messages were not "
+                            "found or are not accessible"
+                        ],
+                        "missing_source_uuids": missing,
+                    }
+                )
+
+            results = _enqueue_merge_workflows(
+                messages,
+                force=force,
+                language=language,
+                scene=scene,
+                trigger_source="api_batch_retry",
+            )
+
+            success_count = sum(
+                1 for item in results if item.get("status") == "success"
+            )
+            failure_count = len(results) - success_count
+            if failure_count == 0:
+                message_text = _("Batch retry triggered successfully")
+                response_status = status.HTTP_200_OK
+            elif success_count == 0:
+                message_text = _("Batch retry failed")
+                response_status = status.HTTP_503_SERVICE_UNAVAILABLE
+            else:
+                message_text = _(
+                    "Batch retry triggered with partial failures"
+                )
+                response_status = status.HTTP_200_OK
+
+            return Response(
+                {
+                    "code": response_status,
+                    "message": message_text,
+                    "data": {
+                        "results": results,
+                        "success_count": success_count,
+                        "failure_count": failure_count,
+                    },
+                },
+                status=response_status,
+            )
+
+        except serializers.ValidationError as exc:
+            return Response(
+                {
+                    "code": 400,
+                    "message": "Validation failed",
+                    "data": exc.detail,
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        except Exception as exc:
+            logger.error(f"Error batch retrying email messages: {exc}")
             return Response(
                 {"code": 500, "message": str(exc), "data": None},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,

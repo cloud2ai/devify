@@ -23,6 +23,8 @@ IMAGE_INPUT_CHAR_LIMIT = 8000
 
 
 class ImageIntentNode(BaseLangGraphNode):
+    progress_stage = "images"
+
     """
     Multimodal image understanding node.
 
@@ -184,6 +186,20 @@ class ImageIntentNode(BaseLangGraphNode):
             attachments_to_process = image_attachments
             attachments_over_limit = []
 
+        total_images = max(1, len(attachments_to_process) or len(image_attachments))
+        self._record_progress_step(
+            self.workflow_stage,
+            "IMAGE_BATCH_START",
+            (
+                f"Starting multimodal processing for {len(attachments_to_process)} "
+                "image attachment(s)"
+            ),
+            state=state,
+            ratio=0.0,
+            total_images=total_images,
+            image_count=len(attachments_to_process),
+        )
+
         for attachment in non_image_attachments:
             logger.info(
                 f"Non-image attachment {attachment.get('filename')} "
@@ -213,6 +229,17 @@ class ImageIntentNode(BaseLangGraphNode):
 
         for attachment in attachments_to_process:
             image_count += 1
+            self._record_progress_step(
+                self.workflow_stage,
+                "IMAGE_PROCESS_START",
+                f"Processing image {image_count}/{total_images}",
+                state=state,
+                step_index=image_count - 1,
+                step_total=total_images,
+                image_index=image_count,
+                image_total=total_images,
+                filename=attachment.get("filename"),
+            )
 
             if not force and attachment.get("llm_content"):
                 logger.info(
@@ -221,6 +248,15 @@ class ImageIntentNode(BaseLangGraphNode):
                 )
                 updated_attachments.append(attachment)
                 skipped_count += 1
+                self._record_progress_step(
+                    self.workflow_stage,
+                    "IMAGE_PROCESS_SKIP",
+                    f"Image {image_count}/{total_images} skipped",
+                    state=state,
+                    step_index=image_count,
+                    step_total=total_images,
+                    filename=attachment.get("filename"),
+                )
                 continue
 
             try:
@@ -258,6 +294,15 @@ class ImageIntentNode(BaseLangGraphNode):
                     )
 
                 processed_count += 1
+                self._record_progress_step(
+                    self.workflow_stage,
+                    "IMAGE_PROCESS_COMPLETE",
+                    f"Image {image_count}/{total_images} processed",
+                    state=state,
+                    step_index=image_count,
+                    step_total=total_images,
+                    filename=attachment.get("filename"),
+                )
 
             except Exception as e:
                 logger.error(
@@ -272,6 +317,17 @@ class ImageIntentNode(BaseLangGraphNode):
                         "error": str(e),
                     }
                 )
+                self._record_progress_step(
+                    self.workflow_stage,
+                    "IMAGE_PROCESS_ERROR",
+                    f"Image {image_count}/{total_images} failed",
+                    state=state,
+                    step_index=image_count,
+                    step_total=total_images,
+                    filename=attachment.get("filename"),
+                    error=str(e),
+                    level="ERROR",
+                )
 
             updated_attachments.append(attachment)
 
@@ -280,6 +336,19 @@ class ImageIntentNode(BaseLangGraphNode):
             attachment["llm_content"] = ""
             updated_attachments.append(attachment)
             limit_skipped_count += 1
+            self._record_progress_step(
+                self.workflow_stage,
+                "IMAGE_PLAN_LIMIT_SKIP",
+                (
+                    f"Image {limit_skipped_count}/"
+                    f"{len(attachments_over_limit)} skipped due to plan limit"
+                ),
+                state=state,
+                step_index=image_count + limit_skipped_count,
+                step_total=total_images,
+                filename=attachment.get("filename"),
+                level="WARNING",
+            )
 
         email_id = state.get("id")
         user_id = state.get("user_id")
@@ -295,6 +364,18 @@ class ImageIntentNode(BaseLangGraphNode):
             f"{email_id}, user {user_id}: {image_count} images, "
             f"{processed_count} processed, {skipped_count} skipped, "
             f"{limit_skipped_count} over limit"
+        )
+
+        self._record_progress_step(
+            self.workflow_stage,
+            "IMAGE_BATCH_COMPLETE",
+            f"Completed image processing for {image_count} image(s)",
+            state=state,
+            ratio=1.0,
+            image_count=image_count,
+            processed_count=processed_count,
+            skipped_count=skipped_count,
+            limit_skipped_count=limit_skipped_count,
         )
 
         updated_state = {

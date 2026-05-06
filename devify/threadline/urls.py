@@ -21,6 +21,7 @@ from .views import (
     EmailMessageAPIView,
     EmailMessageDetailAPIView,
     EmailMessageBatchMergeAPIView,
+    EmailMessageBatchRetryAPIView,
     EmailMessageIssueClusterAPIView,
     EmailMessageMetadataAPIView,
     EmailTodoAPIView,
@@ -91,6 +92,11 @@ urlpatterns = [
         "threadlines/merge",
         EmailMessageBatchMergeAPIView.as_view(),
         name="threadlines-merge",
+    ),
+    path(
+        "threadlines/batch-retry",
+        EmailMessageBatchRetryAPIView.as_view(),
+        name="threadlines-batch-retry",
     ),
     path(
         "threadlines/<uuid:uuid>",

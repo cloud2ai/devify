@@ -16,7 +16,6 @@ from threadline.state_machine import (
     EMAIL_STATE_MACHINE,
 )
 
-
 class Settings(models.Model):
     """
     User settings using key-value design with JSON values
@@ -460,6 +459,32 @@ class EmailMessage(models.Model):
             update_fields.append("error_message")
 
         self.save(update_fields=update_fields)
+
+    def set_processing_progress(self, percent: int) -> None:
+        """
+        Persist a user-facing processing progress snapshot.
+
+        The UI only consumes a single percentage value, so we keep the
+        metadata payload intentionally small and stable.
+        """
+        try:
+            normalized = int(percent)
+        except (TypeError, ValueError):
+            normalized = 0
+
+        normalized = max(0, min(100, normalized))
+
+        metadata = dict(self.metadata or {})
+        progress = metadata.get("processing_progress")
+        if not isinstance(progress, dict):
+            progress = {}
+
+        progress["percent"] = normalized
+        progress["updated_at"] = timezone.now().isoformat()
+        metadata["processing_progress"] = progress
+
+        self.metadata = metadata
+        self.save(update_fields=["metadata", "updated_at"])
 
     def save(self, *args, **kwargs):
         """

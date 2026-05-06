@@ -2,6 +2,7 @@
   "common": {
     "appName": "AImyChats",
     "loading": "加载中...",
+    "currentProgress": "当前进度",
     "save": "保存",
     "saving": "保存中",
     "cancel": "取消",
@@ -628,7 +629,10 @@
     "retryButton": "重试",
     "retrying": "重试中...",
     "retrySuccess": "重试任务已触发",
-    "retryError": "触发重试失败，请重试"
+    "retryError": "触发重试失败，请重试",
+    "batchRetrySuccess": "已触发 {count} 条重试",
+    "batchRetryPartial": "已触发 {success} 条重试，{failed} 条失败",
+    "batchRetryError": "批量重试触发失败，请重试"
   },
   "billing": {
     "menuTitle": "订阅与账单",

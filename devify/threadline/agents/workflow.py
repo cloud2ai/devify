@@ -29,6 +29,10 @@ from threadline.agents.email_state import (
     create_email_state,
     has_node_errors,
 )
+from threadline.agents.progress import (
+    build_workflow_progress_plan,
+    estimate_initial_workflow_units,
+)
 from threadline.utils.task_tracer import TaskTracer, use_task_tracer
 
 logger = logging.getLogger(__name__)
@@ -208,6 +212,9 @@ def execute_email_processing_workflow(
             f"starting workflow for email {email_id}, user {user_id}, status: {email.status}, force: {force}, language: {language}, scene: {scene}"
         )
         initial_state = create_email_state(email_id, str(email.user_id), force)
+        initial_state["progress_plan"] = build_workflow_progress_plan(
+            estimate_initial_workflow_units(email=email, force=force)
+        )
 
         if language:
             initial_state["retry_language"] = language
@@ -244,6 +251,7 @@ def execute_email_processing_workflow(
                 "force": force,
                 "language": language,
                 "scene": scene,
+                "progress_percent": 0,
             },
         )
 
@@ -264,19 +272,26 @@ def execute_email_processing_workflow(
                 f"completed with errors for email {email_id}, user {user_id}: {node_errors}"
             )
 
-        tracer.append_task(
-            "WORKFLOW_COMPLETE" if success else "WORKFLOW_FAILED",
-            (
-                "Email processing workflow completed successfully"
-                if success
-                else "Email processing workflow completed with errors"
-            ),
-            {
-                "email_id": str(email_id),
-                "success": success,
-                "node_errors": result.get("node_errors", {}),
-            },
-        )
+        if success:
+            tracer.append_task(
+                "WORKFLOW_COMPLETE",
+                "Email processing workflow completed successfully",
+                {
+                    "email_id": str(email_id),
+                    "success": success,
+                    "node_errors": result.get("node_errors", {}),
+                },
+            )
+        else:
+            tracer.append_task(
+                "WORKFLOW_FAILED",
+                "Email processing workflow completed with errors",
+                {
+                    "email_id": str(email_id),
+                    "success": success,
+                    "node_errors": result.get("node_errors", {}),
+                },
+            )
 
         return {
             "success": success,

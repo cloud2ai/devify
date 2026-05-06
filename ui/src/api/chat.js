@@ -73,6 +73,16 @@ export const chatApi = {
     })
   },
 
+  // Batch retry threadlines
+  batchRetryThreadlines(sourceUuids, options = {}) {
+    return api.post('/v1/threadlines/batch-retry', {
+      source_uuids: sourceUuids,
+      language: options.language,
+      scene: options.scene,
+      force: options.force || false
+    })
+  },
+
   // Manually merge up to 5 threadlines into one new canonical record
   mergeThreadlines(sourceUuids, mergeNote = '') {
     return api.post('/v1/threadlines/merge', {

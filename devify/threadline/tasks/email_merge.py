@@ -80,6 +80,14 @@ def process_email_merge(
         email = EmailMessage.objects.select_related("user", "merged_into").get(
             id=email_id
         )
+        has_merged_children = email.merged_children.exists()
+        merge_result = {
+            "email_id": str(email.id),
+            "anchor_email_id": str(email.id),
+            "should_merge": False,
+            "merge_reason": "manual_merge_skip" if has_merged_children else "",
+            "source_count": 0,
+        }
         user_info = f"{email.user.username}({email.user_id})"
         merge_context = tracer.context_summary(
             {
@@ -124,27 +132,24 @@ def process_email_merge(
                 "status": "starting",
             }
         )
-
-        manual_merge_data = (email.metadata or {}).get("manual_merge")
-        if manual_merge_data:
-            related_email = email
-            decision_reason = "manual_merge_skip"
+        if has_merged_children:
+            merge_result["merge_reason"] = "manual_merge_skip"
             logger.info(
                 (
-                    "[Merge] Skipping automatic reconciliation for manual "
-                    "merge canonical email_id=%s uuid=%s"
+                    "[Merge] Skipping automatic reconciliation for email "
+                    "with merged children email_id=%s uuid=%s"
                 ),
                 email.id,
                 email.uuid,
             )
             tracer.append_task(
                 "MERGE_RECONCILE",
-                "Merge reconciliation skipped for manual merge canonical",
+                "Merge reconciliation skipped for canonical email",
                 {
                     "email_id": str(email.id),
                     "anchor_email_id": str(email.id),
                     "should_merge": False,
-                    "merge_reason": decision_reason,
+                    "merge_reason": merge_result["merge_reason"],
                     "source_count": 0,
                 },
             )
@@ -157,16 +162,14 @@ def process_email_merge(
                 len(candidates),
             )
             for candidate in candidates:
-                matched, reason = merge_service._match_candidate(
-                    email, candidate
-                )
+                matched, reason = merge_service._match_candidate(email, candidate)
                 logger.debug(
-                (
-                    "[Merge] candidate detail "
-                    "email_id=%s candidate_id=%s candidate_uuid=%s "
-                    "subject=%r received_at=%s text_len=%s matched=%s "
-                    "reason=%s"
-                ),
+                    (
+                        "[Merge] candidate detail "
+                        "email_id=%s candidate_id=%s candidate_uuid=%s "
+                        "subject=%r received_at=%s text_len=%s matched=%s "
+                        "reason=%s"
+                    ),
                     email.id,
                     candidate.id,
                     candidate.uuid,
@@ -202,6 +205,13 @@ def process_email_merge(
                     "source_count": len(decision.sources),
                 },
             )
+            merge_result = {
+                **merge_result,
+                "anchor_email_id": str(related_email.id),
+                "should_merge": decision.should_merge,
+                "merge_reason": decision.reason,
+                "source_count": len(decision.sources),
+            }
 
         try:
             process_email_workflow.delay(
@@ -214,48 +224,15 @@ def process_email_merge(
         except Exception as exc:
             merge_failure_logged = True
             logger.error(
-                f"[Merge] Failed to enqueue workflow for email "
-                f"{email.id}: {exc}"
+                f"[Merge] Failed to enqueue workflow for email " f"{email.id}: {exc}"
             )
             _mark_email_failed(email, str(exc))
             tracer.fail_task(
-                {
-                    "email_id": str(email.id),
-                    "anchor_email_id": str(related_email.id),
-                    "should_merge": decision.should_merge,
-                    "merge_reason": decision.reason,
-                    "source_count": len(decision.sources),
-                    "status": "failed",
-                },
+                {**merge_result, "status": "failed"},
                 str(exc),
             )
             raise
-            workflow_context = tracer.context_summary(
-                {
-                    "email_id": str(email.id),
-                    "anchor_email_id": str(related_email.id),
-                }
-            )
-            logger.info(
-                f"{workflow_context} [Merge] Triggered workflow for "
-                f"email {email.id}"
-            )
-        tracer.complete_task(
-            {
-                "email_id": str(email.id),
-                "anchor_email_id": str(related_email.id),
-                "should_merge": (
-                    False if manual_merge_data else decision.should_merge
-                ),
-                "merge_reason": (
-                    decision_reason if manual_merge_data else decision.reason
-                ),
-                "source_count": 0
-                if manual_merge_data
-                else len(decision.sources),
-                "status": "completed",
-            }
-        )
+        tracer.complete_task({**merge_result, "status": "completed"})
         return str(email.id)
 
     except EmailMessage.DoesNotExist:
