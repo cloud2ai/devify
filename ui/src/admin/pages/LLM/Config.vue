@@ -219,7 +219,8 @@
                           {{ t('llm.config.requestTimeout') }}:
                           {{
                             formatDefaultValue(
-                              getEffectiveRowConfig(row).request_timeout_seconds,
+                              getEffectiveRowConfig(row)
+                                .request_timeout_seconds,
                               DEFAULT_REQUEST_TIMEOUT_SECONDS
                             )
                           }}

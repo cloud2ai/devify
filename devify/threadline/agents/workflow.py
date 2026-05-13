@@ -23,7 +23,6 @@ from threadline.agents.nodes.image_intent_node import ImageIntentNode
 from threadline.agents.nodes.llm_email_node import LLMEmailNode
 from threadline.agents.nodes.summary_node import SummaryNode
 from threadline.agents.nodes.metadata_node import MetadataNode
-from threadline.agents.nodes.issue_node import IssueNode
 from threadline.agents.email_state import (
     EmailState,
     create_email_state,
@@ -55,17 +54,15 @@ def _update_email_status_on_fatal_error(
     try:
         email = EmailMessage.objects.get(id=email_id)
 
-        # Directly set status to FAILED regardless of current status
-        # State machine allows FETCHED → FAILED and PROCESSING → FAILED
-        # No need to set PROCESSING first as this is a fatal error
+        previous_status = email.status
         email.set_status(EmailStatus.FAILED.value, error_message=error_message)
         logger.info(
             f"Updated email status to FAILED for email_id: {email_id} "
-            f"(fatal workflow error, previous status: {email.status})"
+            f"(fatal workflow error, previous status: {previous_status})"
         )
     except Exception as update_error:
         logger.error(
-            f"Failed to update email status for {email_id}: " f"{update_error}"
+            f"Failed to update email status for {email_id}: {update_error}"
         )
 
 
@@ -114,9 +111,9 @@ def create_email_processing_graph():
     4. LLMEmailNode - Process email content with LLM
     5. SummaryNode - Generate email summary
     6. MetadataNode - Extract structured metadata from summary
-    7. IssueNode - Validate and prepare issue creation
-    8. ErrorHandlerNode - Handle errors and refund credits (conditional)
-    9. WorkflowFinalizeNode - Sync all results to database
+    7. ErrorHandlerNode - Handle errors and refund credits (conditional)
+    8. WorkflowFinalizeNode - Sync all results to database and publish
+       downstream relay events on success
 
     Returns:
         Compiled LangGraph workflow
@@ -131,7 +128,6 @@ def create_email_processing_graph():
     workflow.add_node("llm_email", LLMEmailNode())
     workflow.add_node("summary", SummaryNode())
     workflow.add_node("metadata", MetadataNode())
-    workflow.add_node("issue", IssueNode())
     workflow.add_node("error_handler", ErrorHandlerNode())
     workflow.add_node("workflow_finalize", WorkflowFinalizeNode())
 
@@ -141,11 +137,9 @@ def create_email_processing_graph():
     workflow.add_edge("image_intent", "llm_email")
     workflow.add_edge("llm_email", "summary")
     workflow.add_edge("summary", "metadata")
-    workflow.add_edge("metadata", "issue")
-
     # CRITICAL: Conditional routing for error handling
     # This is where we decide whether to handle errors or finalize directly
-    # Position: After all business nodes (issue is the last one)
+    # Position: After all business nodes
     # Logic:
     #   - If ANY node had errors → Route to error_handler
     #     → ErrorHandler analyzes errors and refunds if system error
@@ -158,7 +152,7 @@ def create_email_processing_graph():
     # - Unified error analysis (not per-node)
     # - Flexible refund decisions based on all errors
     workflow.add_conditional_edges(
-        "issue",
+        "metadata",
         should_handle_error,
         {
             "error_handler": "error_handler",
@@ -183,6 +177,7 @@ def execute_email_processing_workflow(
     force: bool = False,
     language: str = None,
     scene: str = None,
+    trigger_source: str | None = None,
     tracer: TaskTracer | None = None,
 ) -> Dict[str, Any]:
     """
@@ -209,9 +204,12 @@ def execute_email_processing_workflow(
         tracer = tracer or TaskTracer("EMAIL_WORKFLOW")
         logger.info(
             f"{tracer.context_summary({'email_id': email_id, 'user_id': user_id, 'force': force, 'language': language, 'scene': scene})} "
-            f"starting workflow for email {email_id}, user {user_id}, status: {email.status}, force: {force}, language: {language}, scene: {scene}"
+            f"starting workflow for email {email_id}, user {user_id}, "
+            f"status: {email.status}, force: {force}, "
+            f"language: {language}, scene: {scene}"
         )
         initial_state = create_email_state(email_id, str(email.user_id), force)
+        initial_state["trigger_source"] = trigger_source
         initial_state["progress_plan"] = build_workflow_progress_plan(
             estimate_initial_workflow_units(email=email, force=force)
         )
@@ -269,7 +267,8 @@ def execute_email_processing_workflow(
             node_errors = result.get("node_errors", {})
             logger.error(
                 f"{tracer.context_summary({'email_id': email_id, 'user_id': user_id, 'force': force, 'language': language, 'scene': scene})} "
-                f"completed with errors for email {email_id}, user {user_id}: {node_errors}"
+                f"completed with errors for email {email_id}, user {user_id}: "
+                f"{node_errors}"
             )
 
         if success:

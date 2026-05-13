@@ -20,15 +20,21 @@ def enqueue_merge_workflow(
     trigger_source: str = "unknown",
 ) -> EmailMessage:
     """
-    Mark a message as processing and enqueue the merge workflow.
+    Enqueue the merge workflow and surface processing status immediately.
+
+    Mark the target record as PROCESSING before queueing the workflow so the
+    detail page reflects that work is already in progress instead of waiting
+    for the Celery worker to start.
     """
     from threadline.tasks.email_merge import process_email_merge
 
     target_message = message
-    target_message.set_status(EmailStatus.PROCESSING.value)
-    target_message.set_processing_progress(0)
 
     try:
+        if target_message.status != EmailStatus.PROCESSING.value:
+            target_message.set_status(EmailStatus.PROCESSING.value)
+        target_message.set_processing_progress(0)
+
         process_email_merge.delay(
             str(target_message.id),
             force=force,

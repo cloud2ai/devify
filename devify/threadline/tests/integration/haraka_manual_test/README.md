@@ -76,12 +76,8 @@ haraka_manual_test/
 ### Basic Usage
 
 ```bash
-# Run from inside container
-cd /opt/devify
-python threadline/tests/integration/haraka_manual_test/run_full_test.py
-
-# Run from host
-docker exec devify-api-dev python \\
+# Run inside the devify-api-dev container
+docker exec -w /opt/devify devify-api-dev python \\
     threadline/tests/integration/haraka_manual_test/run_full_test.py
 ```
 

@@ -200,10 +200,11 @@ class TaskTracer:
         Mirror workflow progress onto the user-facing EmailMessage row.
 
         Only the email workflow should surface progress to normal users.
-        The snapshot stays intentionally small: a single percentage and
-        timestamp, so the detail page can render a stable progress bar.
+        Merge coordination stays out of the user-facing percent bar so
+        manual merge does not make the workflow look closer to finished
+        than it really is.
         """
-        if self.task_type not in {"EMAIL_MERGE", "EMAIL_WORKFLOW"}:
+        if self.task_type != "EMAIL_WORKFLOW":
             return
 
         email_id = self._context.get("email_id")
@@ -242,17 +243,13 @@ class TaskTracer:
             normalized = max(self._threadline_progress_percent, normalized)
         self._threadline_progress_percent = normalized
 
-        # Scale task-local progress into an end-to-end progress bar.
-        if self.task_type == "EMAIL_MERGE":
-            normalized = max(0, min(20, int(round(normalized * 0.2))))
+        if normalized == 0 and payload.get("status") == "starting":
+            normalized = 0
         else:
-            if normalized == 0 and payload.get("status") == "starting":
-                normalized = 0
-            else:
-                normalized = max(
-                    20,
-                    min(100, int(round(20 + normalized * 0.8))),
-                )
+            normalized = max(
+                20,
+                min(100, int(round(20 + normalized * 0.8))),
+            )
 
         try:
             from threadline.models import EmailMessage

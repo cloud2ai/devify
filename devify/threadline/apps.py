@@ -20,4 +20,3 @@ class ThreadlineConfig(AppConfig):
         import threadline.tasks.email_fetch  # noqa: F401
         import threadline.tasks.email_workflow  # noqa: F401
         import threadline.tasks.scheduler  # noqa: F401
-        import threadline.signals

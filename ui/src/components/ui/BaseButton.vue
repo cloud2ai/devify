@@ -41,7 +41,7 @@ const props = defineProps({
     type: String,
     default: 'primary',
     validator: (value) =>
-      ['primary', 'secondary', 'danger', 'outline'].includes(value)
+      ['primary', 'secondary', 'danger', 'outline', 'warning'].includes(value)
   },
   size: {
     type: String,
@@ -91,7 +91,8 @@ const buttonClasses = computed(() => {
     primary: 'btn-primary',
     secondary: 'btn-secondary',
     danger: 'btn-danger',
-    outline: 'btn-outline'
+    outline: 'btn-outline',
+    warning: 'btn-warning'
   }
   const sizeClasses = {
     sm: 'px-3 py-1.5 text-xs',

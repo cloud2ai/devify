@@ -1,43 +1,40 @@
 # Use official Python 3.12 on Ubuntu 24.04 LTS
 FROM ubuntu:24.04
 
-# Build argument to control mirror usage
-ARG USE_MIRROR=false
-ARG DEV_MODE=0
+SHELL ["/bin/bash", "-c"]
 
-# Set environment variables
+ARG DEV_MODE=0
+ARG APT_MIRROR_URL=http://archive.ubuntu.com/ubuntu
+ARG PIP_INDEX_URL=https://pypi.org/simple
+ARG PIP_TRUSTED_HOST=pypi.org
+
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
-    DEBIAN_FRONTEND=noninteractive
+    DEBIAN_FRONTEND=noninteractive \
+    DEV_MODE=${DEV_MODE} \
+    PIP_INDEX_URL=${PIP_INDEX_URL} \
+    PIP_TRUSTED_HOST=${PIP_TRUSTED_HOST}
 
 # Install ca-certificates first to avoid SSL certificate issues
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates
 
-# Setup mirrors based on build argument (before installing packages)
+# Setup mirrors before installing the rest of the packages
 RUN set -eux; \
-    if [ "$USE_MIRROR" = "true" ]; then \
-        echo "Setting up Chinese mirrors for Ubuntu 24.04 LTS..."; \
-        # Backup original sources
-        cp /etc/apt/sources.list /etc/apt/sources.list.backup; \
-        # Replace with Chinese mirrors
-        echo "deb https://mirrors.tuna.tsinghua.edu.cn/ubuntu/ noble main restricted universe multiverse" > /etc/apt/sources.list; \
-        echo "deb https://mirrors.tuna.tsinghua.edu.cn/ubuntu/ noble-updates main restricted universe multiverse" >> /etc/apt/sources.list; \
-        echo "deb https://mirrors.tuna.tsinghua.edu.cn/ubuntu/ noble-backports main restricted universe multiverse" >> /etc/apt/sources.list; \
-        echo "deb https://mirrors.tuna.tsinghua.edu.cn/ubuntu/ noble-security main restricted universe multiverse" >> /etc/apt/sources.list; \
-        echo "✓ Chinese mirrors configured for Ubuntu 24.04 LTS (Noble Numbat)"; \
-        echo "Current sources.list content:"; \
-        cat /etc/apt/sources.list; \
-    else \
-        echo "Using default Ubuntu sources"; \
-    fi; \
+    echo "Using Ubuntu mirror: ${APT_MIRROR_URL}"; \
+    printf '%s\n' \
+        "deb ${APT_MIRROR_URL} noble main restricted universe multiverse" \
+        "deb ${APT_MIRROR_URL} noble-updates main restricted universe multiverse" \
+        "deb ${APT_MIRROR_URL} noble-backports main restricted universe multiverse" \
+        "deb ${APT_MIRROR_URL} noble-security main restricted universe multiverse" \
+        > /etc/apt/sources.list; \
     apt-get update
 
 # Install Python 3.12, pip and system dependencies in one step
 # libmagic is for python-magic which is a library for file type detection
 # gettext is for Django i18n (makemessages, compilemessages)
-RUN apt-get install -y --no-install-recommends \
+RUN apt-get update && apt-get install -y --no-install-recommends \
     python3.12 \
     python3.12-dev \
     python3-pip \
@@ -67,46 +64,32 @@ RUN apt-get install -y --no-install-recommends \
 # Disable externally-managed-environment restriction for container environment
 RUN rm -f /usr/lib/python3.12/EXTERNALLY-MANAGED
 
-# Install uv using pip with mirror selection
-RUN set -eux; \
-    if [ "$USE_MIRROR" = "true" ]; then \
-        echo "Installing uv with Chinese PyPI mirror"; \
-        pip install --index-url https://pypi.tuna.tsinghua.edu.cn/simple --trusted-host pypi.tuna.tsinghua.edu.cn uv; \
-    else \
-        echo "Installing uv with default PyPI"; \
-        pip install uv; \
-    fi; \
-    echo 'export PATH="/root/.local/bin:$PATH"' >> /root/.bashrc; \
-    export PATH="/root/.local/bin:$PATH"
-
 # Set working directory
 WORKDIR /opt/devify
 
 # Copy project files
 COPY devify /opt/devify
 COPY pyproject.toml /opt/devify/
+COPY LICENSE /opt/devify/
+COPY README.md /opt/devify/
 
-# Install project dependencies with mirror selection
+# Install uv and project dependencies using the preselected index settings.
 RUN set -eux; \
     export PATH="/root/.local/bin:$PATH"; \
-    if [ "$USE_MIRROR" = "true" ]; then \
-        echo "Using Chinese PyPI mirror for dependencies"; \
-        uv pip compile pyproject.toml -o requirements.txt --index-url https://pypi.tuna.tsinghua.edu.cn/simple; \
-        uv pip install --system -r requirements.txt --index-url https://pypi.tuna.tsinghua.edu.cn/simple; \
-    else \
-        echo "Using default PyPI for dependencies"; \
-        uv pip compile pyproject.toml -o requirements.txt; \
-        uv pip install --system -r requirements.txt; \
-    fi
-
-# In development mode, install agentcore submodules in editable mode so
-# source changes are picked up without publishing packages.
-RUN set -eux; \
+    echo "Installing uv from ${PIP_INDEX_URL}"; \
+    pip install --index-url "$PIP_INDEX_URL" --trusted-host "$PIP_TRUSTED_HOST" uv; \
+    echo 'export PATH="/root/.local/bin:$PATH"' >> /root/.bashrc; \
+    export PATH="/root/.local/bin:$PATH"; \
+    echo "Using Python index: ${PIP_INDEX_URL}"; \
+    uv pip compile pyproject.toml -o requirements.txt --index-url "$PIP_INDEX_URL" --trusted-host "$PIP_TRUSTED_HOST"; \
+    uv pip install --system -r requirements.txt --index-url "$PIP_INDEX_URL" --trusted-host "$PIP_TRUSTED_HOST"; \
     if [ "$DEV_MODE" = "1" ]; then \
+        echo "Development mode enabled: installing development and test dependencies"; \
+        uv pip install --system ".[dev]" --index-url "$PIP_INDEX_URL" --trusted-host "$PIP_TRUSTED_HOST"; \
         for d in /opt/devify/agentcore/*/; do \
             if [ -f "${d}pyproject.toml" ]; then \
                 echo "Dev mode: installing ${d}"; \
-                (cd "$d" && pip install -e .); \
+                (cd "$d" && uv pip install --system -e . --index-url "$PIP_INDEX_URL" --trusted-host "$PIP_TRUSTED_HOST"); \
             fi; \
         done; \
     fi

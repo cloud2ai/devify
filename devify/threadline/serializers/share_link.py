@@ -77,12 +77,10 @@ class ThreadlineShareLinkSerializer(serializers.ModelSerializer):
 
     def get_password(self, obj):
         """
-        Return plain password if available (for owner only).
-
-        Returns plain password from database or from object attribute
-        (set during creation/update).
+        Return plain password only when available on the instance (creation/refresh).
+        Returns empty string on subsequent reads — password is not stored in DB.
         """
-        return obj.password or getattr(obj, 'plain_password', None) or ''
+        return getattr(obj, 'plain_password', None) or ''
 
 
 class ThreadlineShareLinkCreateSerializer(serializers.Serializer):

@@ -37,13 +37,13 @@ class StateMachineTest(TestCase):
         self.assertTrue(
             can_transition_to('fetched', 'processing', EMAIL_STATE_MACHINE)
         )
+        self.assertTrue(
+            can_transition_to('fetched', 'failed', EMAIL_STATE_MACHINE)
+        )
 
         # Test invalid transitions from FETCHED state
         self.assertFalse(
             can_transition_to('fetched', 'success', EMAIL_STATE_MACHINE)
-        )
-        self.assertFalse(
-            can_transition_to('fetched', 'failed', EMAIL_STATE_MACHINE)
         )
 
         # Test valid transitions from PROCESSING state
@@ -72,8 +72,8 @@ class StateMachineTest(TestCase):
             can_transition_to('failed', 'fetched', EMAIL_STATE_MACHINE)
         )
 
-        # Test that SUCCESS is terminal (no outgoing transitions)
-        self.assertFalse(
+        # Test that SUCCESS can transition to PROCESSING (retry)
+        self.assertTrue(
             can_transition_to('success', 'processing', EMAIL_STATE_MACHINE)
         )
         self.assertFalse(
@@ -91,7 +91,7 @@ class StateMachineTest(TestCase):
         all valid next states for given current states.
         """
         # Test next states for FETCHED
-        expected_fetched_states = ['processing']
+        expected_fetched_states = ['processing', 'failed']
         actual_fetched_states = get_next_states('fetched', EMAIL_STATE_MACHINE)
         self.assertEqual(actual_fetched_states, expected_fetched_states)
 
@@ -111,8 +111,8 @@ class StateMachineTest(TestCase):
         actual_failed_states = get_next_states('failed', EMAIL_STATE_MACHINE)
         self.assertEqual(actual_failed_states, expected_failed_states)
 
-        # Test next states for SUCCESS (terminal state)
-        expected_success_states = []
+        # Test next states for SUCCESS (can retry via processing)
+        expected_success_states = ['processing']
         actual_success_states = get_next_states('success', EMAIL_STATE_MACHINE)
         self.assertEqual(actual_success_states, expected_success_states)
 

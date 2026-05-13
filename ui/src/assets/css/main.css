@@ -89,6 +89,10 @@
     @apply btn bg-red-600 text-white border-red-600 hover:bg-red-700 hover:border-red-700 focus:ring-red-500;
   }
 
+  .btn-warning {
+    @apply btn bg-amber-500 text-white border-amber-500 hover:bg-amber-600 hover:border-amber-600 focus:ring-amber-500;
+  }
+
   .input {
     @apply block w-full px-3 py-2 text-sm border border-gray-300 rounded-lg shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 disabled:opacity-50 disabled:cursor-not-allowed;
   }

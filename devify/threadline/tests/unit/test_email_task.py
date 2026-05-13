@@ -28,33 +28,31 @@ class EmailTaskModelTest(TestCase):
         """Test EmailTask creation with all fields"""
         task = EmailTask.objects.create(
             task_type='IMAP_EMAIL_FETCH',
-            status=EmailTask.TaskStatus.PENDING,
+            status=EmailTask.TaskStatus.RUNNING,
             details={'test': 'data'}
         )
 
         self.assertEqual(task.task_type, 'IMAP_EMAIL_FETCH')
-        self.assertEqual(task.status, EmailTask.TaskStatus.PENDING)
+        self.assertEqual(task.status, EmailTask.TaskStatus.RUNNING)
         self.assertEqual(task.details, {'test': 'data'})
 
     def test_email_task_creation_global(self):
         """Test EmailTask creation as global task"""
         task = EmailTask.objects.create(
             task_type='HARAKA_EMAIL_FETCH',
-            status=EmailTask.TaskStatus.PENDING
+            status=EmailTask.TaskStatus.RUNNING
         )
 
         self.assertEqual(task.task_type, 'HARAKA_EMAIL_FETCH')
-        self.assertEqual(task.status, EmailTask.TaskStatus.PENDING)
+        self.assertEqual(task.status, EmailTask.TaskStatus.RUNNING)
 
     def test_task_status_choices(self):
         """Test all task status choices are available"""
         statuses = [
-            EmailTask.TaskStatus.PENDING,
             EmailTask.TaskStatus.RUNNING,
             EmailTask.TaskStatus.COMPLETED,
             EmailTask.TaskStatus.FAILED,
             EmailTask.TaskStatus.CANCELLED,
-            EmailTask.TaskStatus.SKIPPED,
         ]
 
         for status in statuses:
@@ -68,10 +66,10 @@ class EmailTaskModelTest(TestCase):
         """Test string representation"""
         task = EmailTask.objects.create(
             task_type='IMAP_EMAIL_FETCH',
-            status=EmailTask.TaskStatus.PENDING
+            status=EmailTask.TaskStatus.RUNNING
         )
 
-        expected = f"EmailTask({task.id}): IMAP_EMAIL_FETCH-pending"
+        expected = f"EmailTask({task.id}): IMAP_EMAIL_FETCH-running"
         self.assertEqual(str(task), expected)
 
     def test_meta_indexes(self):
@@ -89,7 +87,7 @@ class EmailTaskModelTest(TestCase):
             task_type='IMAP_EMAIL_FETCH'
         )
 
-        self.assertEqual(task.status, EmailTask.TaskStatus.PENDING)
+        self.assertEqual(task.status, EmailTask.TaskStatus.RUNNING)
         self.assertEqual(task.details, [])
         self.assertEqual(task.error_message, '')
 
@@ -97,7 +95,7 @@ class EmailTaskModelTest(TestCase):
         """Test task creation without user (global task)"""
         task = EmailTask.objects.create(
             task_type='HARAKA_EMAIL_FETCH',
-            status=EmailTask.TaskStatus.PENDING
+            status=EmailTask.TaskStatus.RUNNING
         )
 
         self.assertEqual(task.task_type, 'HARAKA_EMAIL_FETCH')
@@ -134,8 +132,8 @@ class EmailTaskModelTest(TestCase):
         """Test string representation for global tasks"""
         task = EmailTask.objects.create(
             task_type='HARAKA_EMAIL_FETCH',
-            status=EmailTask.TaskStatus.PENDING
+            status=EmailTask.TaskStatus.RUNNING
         )
 
-        expected = f"EmailTask({task.id}): HARAKA_EMAIL_FETCH-pending"
+        expected = f"EmailTask({task.id}): HARAKA_EMAIL_FETCH-running"
         self.assertEqual(str(task), expected)

@@ -25,7 +25,6 @@ from core.swagger import (
 
 from .base import BaseAPIView
 from ..models import Settings
-from threadline.utils.issues import get_issue_handler
 from threadline.utils.email.config import EmailConfigManager
 from ..serializers import (
     SettingsSerializer,
@@ -506,83 +505,3 @@ class SettingsImapValidateAPIView(APIView):
         )
 
 
-class SettingsIssueTestAPIView(APIView):
-    """
-    Create a mock task in the configured external sync system.
-    """
-
-    permission_classes = [IsAuthenticated]
-
-    def post(self, request) -> Response:
-        config = (
-            request.data.get('value')
-            if isinstance(request.data, dict)
-            else None
-        )
-        if config is None:
-            try:
-                config = Settings.get_user_config(request.user, 'issue_config')
-            except Exception:
-                config = None
-
-        if not isinstance(config, dict):
-            return Response(
-                {
-                    'code': 400,
-                    'message': 'Issue configuration must be an object',
-                    'data': None
-                },
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        try:
-            issue_handler = get_issue_handler(config)
-            test_title = 'aimychats external system issue creation test'
-            test_description = 'Mock task for external sync verification.'
-            issue_data = {
-                'title': test_title,
-                'description': test_description,
-                'priority': 'Medium'
-            }
-            email_data = {
-                'id': f'settings-test-{request.user.id}',
-                'summary_title': test_title,
-                'summary_content': test_description,
-                'llm_content': test_description,
-                'subject': test_title,
-                'metadata': {
-                    'source': 'settings-test',
-                    'user': request.user.username,
-                },
-                'language': config.get('language', 'Chinese'),
-            }
-
-            issue_key = issue_handler.create_issue(
-                issue_data=issue_data,
-                email_data=email_data,
-                attachments=[],
-                force=True,
-            )
-            issue_url = issue_handler.get_issue_url(issue_key)
-
-            return Response(
-                {
-                    'code': 200,
-                    'message': 'Mock task created successfully',
-                    'data': {
-                        'issue_key': issue_key,
-                        'issue_url': issue_url,
-                    }
-                },
-                status=status.HTTP_200_OK
-            )
-        except Exception as exc:
-            logger.exception('Failed to create mock task')
-            return Response(
-                {
-                    'code': 400,
-                    'message': str(exc),
-                    'data': None
-                },
-                status=status.HTTP_400_BAD_REQUEST
-            )

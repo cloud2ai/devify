@@ -58,6 +58,11 @@ def imap_email_fetch():
     tracer = TaskTracer("IMAP_EMAIL_FETCH")
     context = tracer.context_summary()
 
+    processed_count = 0
+    error_count = 0
+    emails_processed = 0
+    email_ids = []
+
     try:
         task_id = getattr(imap_email_fetch.request, "id", "") or ""
         tracer.set_task_id(task_id)
@@ -87,11 +92,6 @@ def imap_email_fetch():
             )
             .distinct()
         )
-
-        processed_count = 0
-        error_count = 0
-        emails_processed = 0
-        email_ids = []
 
         for user in users_with_imap_config:
             user_display = f"{user.username} (ID: {user.id})"

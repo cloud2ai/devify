@@ -52,3 +52,24 @@ def test_get_project_components_handles_missing_optional_fields():
             "is_assignee_type_valid": True,
         }
     ]
+
+
+def test_get_issue_attachment_fingerprints_reads_issue_fields():
+    client, jira_instance = _build_client()
+    jira_instance.issue.return_value = SimpleNamespace(
+        fields=SimpleNamespace(
+            attachment=[
+                SimpleNamespace(id="10001", filename="demo.png", size=16),
+                SimpleNamespace(id="10002", filename="note.txt", size=8),
+            ]
+        )
+    )
+
+    fingerprints = client.get_issue_attachment_fingerprints("REQ-1")
+
+    assert fingerprints == [
+        "jira_id:10001",
+        "name:demo.png:16",
+        "jira_id:10002",
+        "name:note.txt:8",
+    ]

@@ -157,7 +157,9 @@
       <BaseCard :header-muted="true">
         <template #header>
           <div class="space-y-3">
-            <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+            <div
+              class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4"
+            >
               <div class="flex items-center gap-2 text-gray-800">
                 <svg
                   class="w-5 h-5 -mt-px flex-none"
@@ -343,13 +345,18 @@
                 class="flex min-w-0 flex-1 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"
               >
                 <div class="flex-1 min-w-0 space-y-2">
-                  <h4 class="text-sm font-medium text-gray-900 break-words sm:truncate">
-                    {{
-                      result.summary_title ||
-                      result.subject ||
-                      `Email #${result.id}`
-                    }}
-                  </h4>
+                  <div class="flex items-center gap-2">
+                    <MergeStateBadge :state="getThreadlineMergeState(result)" />
+                    <h4
+                      class="text-sm font-medium text-gray-900 break-words sm:truncate flex-1 min-w-0"
+                    >
+                      {{
+                        result.summary_title ||
+                        result.subject ||
+                        `Email #${result.id}`
+                      }}
+                    </h4>
+                  </div>
                   <div class="text-sm text-gray-500 line-clamp-2 break-words">
                     {{ getPreviewText(result) }}
                   </div>
@@ -370,65 +377,62 @@
                         count: result.attachments?.length || 0
                       })
                     }}</span>
-                    <template v-if="result.issue_external_id">
+                    <template v-if="getRelayDeliveries(result).length">
                       <span class="hidden sm:inline">•</span>
-                      <a
-                        v-if="result.issue_url"
-                        :href="result.issue_url"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        @click.stop
-                        class="inline-flex max-w-40 items-center gap-1 truncate text-gray-400 transition-colors hover:text-primary-600 hover:underline"
-                        :title="t('chats.issue.openInNewWindow')"
+                      <template
+                        v-for="delivery in getRelayDeliveries(result)"
+                        :key="relayDeliveryKey(result, delivery)"
                       >
-                        <svg
-                          class="h-3 w-3 flex-shrink-0"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                          aria-hidden="true"
+                        <a
+                          v-if="delivery.external_url"
+                          :href="delivery.external_url"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          @click.stop
+                          class="inline-flex items-center gap-1 text-blue-600 hover:text-blue-800 transition-colors"
+                          :title="delivery.external_url || delivery.external_id"
                         >
-                          <path
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                            stroke-width="2"
-                            d="M14 3h7v7m0-7L10 14"
-                          />
-                          <path
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                            stroke-width="2"
-                            d="M10 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-4"
-                          />
-                        </svg>
-                        <span class="truncate">
-                          {{ t('chats.issue.reference') }}:
-                          {{ result.issue_external_id }}
-                        </span>
-                      </a>
-                      <span
-                        v-else
-                        class="inline-flex max-w-40 items-center gap-1 truncate text-gray-400"
-                      >
-                        <svg
-                          class="h-3 w-3 flex-shrink-0"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                          aria-hidden="true"
+                          <svg
+                            class="h-3 w-3 flex-shrink-0"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                            aria-hidden="true"
+                          >
+                            <path
+                              stroke-linecap="round"
+                              stroke-linejoin="round"
+                              stroke-width="2"
+                              d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
+                            />
+                          </svg>
+                          <span class="truncate max-w-32">
+                            {{ relayDeliveryLabel(delivery) }}
+                          </span>
+                        </a>
+                        <span
+                          v-else
+                          class="inline-flex items-center gap-1 text-gray-500"
                         >
-                          <path
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                            stroke-width="2"
-                            d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"
-                          />
-                        </svg>
-                        <span class="truncate">
-                          {{ t('chats.issue.reference') }}:
-                          {{ result.issue_external_id }}
+                          <svg
+                            class="h-3 w-3 flex-shrink-0"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                            aria-hidden="true"
+                          >
+                            <path
+                              stroke-linecap="round"
+                              stroke-linejoin="round"
+                              stroke-width="2"
+                              d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"
+                            />
+                          </svg>
+                          <span class="truncate max-w-32">
+                            {{ relayDeliveryLabel(delivery) }}
+                          </span>
                         </span>
-                      </span>
+                      </template>
                     </template>
                   </div>
                   <!-- Tags Display -->
@@ -460,7 +464,6 @@
                   class="flex w-full min-w-0 items-start justify-between gap-2 flex-shrink-0 sm:w-auto sm:flex-col sm:items-end sm:space-y-2 sm:space-x-0"
                 >
                   <div class="flex min-w-0 flex-wrap items-center gap-2">
-                    <MergeStateBadge :state="getThreadlineMergeState(result)" />
                     <StatusBadge
                       :status="getThreadlineDisplayStatus(result)"
                       :progress-percent="getThreadlineProgressPercent(result)"
@@ -711,6 +714,7 @@ import VirtualEmailBanner from '@/components/ui/VirtualEmailBanner.vue'
 import StatusBadge from '@/components/ui/StatusBadge.vue'
 import RetryDialog from '@/components/RetryDialog.vue'
 import { useToast } from '@/composables/useToast'
+import { useRelayDeliveries } from '@/composables/useRelayDeliveries'
 import { getThreadlineDisplayStatus } from '@/utils/threadlineStatus'
 import { getThreadlineMergeState } from '@/utils/threadlineMergeState'
 
@@ -719,6 +723,8 @@ const router = useRouter()
 const preferencesStore = usePreferencesStore()
 const userStore = useUserStore()
 const toast = useToast()
+const { getRelayDeliveries, relayDeliveryLabel, relayDeliveryKey } =
+  useRelayDeliveries()
 
 const loading = ref(false)
 const loadingMore = ref(false)

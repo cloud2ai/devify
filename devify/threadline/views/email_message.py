@@ -126,6 +126,9 @@ class EmailMessageAPIView(BaseAPIView):
             EmailMessage.objects.select_related("user", "merged_into")
             .prefetch_related("merged_children")
             .prefetch_related("issues")
+            .prefetch_related("relay_events")
+            .prefetch_related("relay_events__deliveries")
+            .prefetch_related("relay_events__deliveries__subscription")
             .prefetch_related("share_links")
             .filter(merged_into__isnull=True)
             .all()
@@ -206,9 +209,15 @@ class EmailMessageAPIView(BaseAPIView):
                 queryset = queryset.filter(status=message_status)
 
             # Ordering
+            ALLOWED_ORDERING_FIELDS = {
+                "received_at", "-received_at",
+                "created_at", "-created_at",
+                "subject", "-subject",
+            }
             ordering = request.query_params.get("ordering", "-received_at")
-            if ordering:
-                queryset = queryset.order_by(ordering)
+            if ordering not in ALLOWED_ORDERING_FIELDS:
+                ordering = "-received_at"
+            queryset = queryset.order_by(ordering)
 
             # Pagination
             page_size = min(
@@ -470,6 +479,9 @@ class EmailMessageBatchRetryAPIView(BaseAPIView):
             EmailMessage.objects.select_related("user", "merged_into")
             .prefetch_related("merged_children")
             .prefetch_related("issues")
+            .prefetch_related("relay_events")
+            .prefetch_related("relay_events__deliveries")
+            .prefetch_related("relay_events__deliveries__subscription")
             .prefetch_related("share_links")
             .all()
         )
@@ -593,6 +605,9 @@ class EmailMessageDetailAPIView(BaseAPIView):
             EmailMessage.objects.select_related("user", "merged_into")
             .prefetch_related("merged_children")
             .prefetch_related("issues")
+            .prefetch_related("relay_events")
+            .prefetch_related("relay_events__deliveries")
+            .prefetch_related("relay_events__deliveries__subscription")
             .prefetch_related("share_links")
             .all()
         )
@@ -670,12 +685,17 @@ class EmailMessageDetailAPIView(BaseAPIView):
                 return Response(
                     {
                         "code": 200,
-                        "message": "Email message updated successfully",
+                        "message": "Threadline updated successfully",
                         "data": response_serializer.data,
                     },
                     status=status.HTTP_200_OK,
                 )
 
+        except EmailMessage.DoesNotExist:
+            return Response(
+                {"code": 404, "message": "Threadline not found", "data": None},
+                status=status.HTTP_404_NOT_FOUND,
+            )
         except Exception as e:
             logger.error(f"Error updating email message {uuid}: {str(e)}")
             return Response(
@@ -717,7 +737,7 @@ class EmailMessageDetailAPIView(BaseAPIView):
                 return Response(
                     {
                         "code": 200,
-                        "message": "Email message updated successfully",
+                        "message": "Threadline updated successfully",
                         "data": response_serializer.data,
                     },
                     status=status.HTTP_200_OK,
@@ -751,7 +771,7 @@ class EmailMessageDetailAPIView(BaseAPIView):
             return Response(
                 {
                     "code": 204,
-                    "message": "Email message deleted successfully",
+                    "message": "Threadline deleted successfully",
                     "data": None,
                 },
                 status=status.HTTP_204_NO_CONTENT,
@@ -762,7 +782,7 @@ class EmailMessageDetailAPIView(BaseAPIView):
             return Response(
                 {
                     "code": 404,
-                    "message": "Email message not found",
+                    "message": "Threadline not found",
                     "data": None,
                 },
                 status=status.HTTP_404_NOT_FOUND,
@@ -830,6 +850,9 @@ class EmailMessageDetailAPIView(BaseAPIView):
             if isinstance(force, str):
                 force = force.lower() in ("true", "1", "yes")
 
+            # If this message is a merged child, retry the canonical instead
+            target = message.merged_into if message.merged_into_id else message
+
             logger.info(
                 f"Retry requested for email {uuid}, "
                 f"language={language}, scene={scene}, force={force}, "
@@ -837,7 +860,7 @@ class EmailMessageDetailAPIView(BaseAPIView):
             )
 
             target_message = _enqueue_merge_workflow(
-                message,
+                target,
                 force=force,
                 language=language,
                 scene=scene,
@@ -887,6 +910,9 @@ class EmailMessageIssueClusterAPIView(BaseAPIView):
             EmailMessage.objects.select_related("user", "merged_into")
             .prefetch_related("merged_children")
             .prefetch_related("issues")
+            .prefetch_related("relay_events")
+            .prefetch_related("relay_events__deliveries")
+            .prefetch_related("relay_events__deliveries__subscription")
             .all()
         )
 

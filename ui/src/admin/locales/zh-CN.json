@@ -256,7 +256,13 @@
       "reset": "重置",
       "saveSuccess": "保存成功",
       "saveFailed": "保存失败",
-      "selectionRequired": "请先选择图片识别和文本处理模型"
+      "selectionRequired": "请先选择图片识别和文本处理模型",
+      "relayConfigTitle": "Relay 设置",
+      "relayConfigDesc": "绑定 Relay 专用适配器使用的大模型配置，例如 Jira。",
+      "relayConfigHelp": "留空则表示不使用独立的 Relay LLM 绑定。",
+      "saveRelayChanges": "保存 Relay 设置",
+      "relaySaveSuccess": "Relay 设置保存成功",
+      "relaySaveFailed": "Relay 设置保存失败"
     },
     "periodicTasks": {
       "menuTitle": "定时任务设置",

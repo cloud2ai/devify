@@ -19,7 +19,6 @@ WORKFLOW_STAGES = (
     "llm",
     "summary",
     "metadata",
-    "issue",
     "finalize",
 )
 
@@ -87,7 +86,7 @@ def estimate_initial_workflow_units(
             (
                 "llm",
                 (
-                    1
+                    10
                     if text_content
                     and (force or not _has_value(email.llm_content))
                     else 0
@@ -102,7 +101,6 @@ def estimate_initial_workflow_units(
                 "metadata",
                 1 if force or not _has_value(email.metadata) else 0,
             ),
-            ("issue", 1),
             ("finalize", 1),
         ]
     )
@@ -119,12 +117,16 @@ def estimate_prepare_workflow_units(
     attachments = list(state.get("attachments") or [])
     max_attachments = state.get("max_attachments")
     try:
-        max_attachments = int(max_attachments) if max_attachments is not None else None
+        max_attachments = (
+            int(max_attachments) if max_attachments is not None else None
+        )
     except (TypeError, ValueError):
         max_attachments = None
 
     image_attachments = [
-        att for att in attachments if isinstance(att, Mapping) and att.get("is_image")
+        att
+        for att in attachments
+        if isinstance(att, Mapping) and att.get("is_image")
     ]
     image_attachments.sort(
         key=lambda att: _bounded_int(att.get("file_size")),
@@ -137,7 +139,6 @@ def estimate_prepare_workflow_units(
     summary_title = state.get("summary_title")
     summary_data = state.get("summary_data")
     metadata = state.get("metadata")
-    issue_config = state.get("issue_config") or {}
 
     return OrderedDict(
         [
@@ -154,7 +155,7 @@ def estimate_prepare_workflow_units(
             (
                 "llm",
                 (
-                    1
+                    10
                     if text_content
                     and (force or not _has_value(state.get("llm_content")))
                     else 0
@@ -168,10 +169,6 @@ def estimate_prepare_workflow_units(
             (
                 "metadata",
                 1 if force or not _has_value(metadata) else 0,
-            ),
-            (
-                "issue",
-                1 if issue_config.get("enable", False) else 0,
             ),
             ("finalize", 1),
         ]

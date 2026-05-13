@@ -17,7 +17,6 @@ from .views import (
     SettingsAPIView,
     SettingsDetailAPIView,
     SettingsImapValidateAPIView,
-    SettingsIssueTestAPIView,
     EmailMessageAPIView,
     EmailMessageDetailAPIView,
     EmailMessageBatchMergeAPIView,
@@ -57,11 +56,6 @@ urlpatterns = [
         "settings/test-imap",
         SettingsImapValidateAPIView.as_view(),
         name="settings-test-imap",
-    ),
-    path(
-        "settings/test-issue",
-        SettingsIssueTestAPIView.as_view(),
-        name="settings-test-issue",
     ),
     path(
         "settings/<int:pk>",

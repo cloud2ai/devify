@@ -85,6 +85,18 @@ const routes = [
     meta: { requiresAuth: true }
   },
   {
+    path: '/apps',
+    name: 'AppCenter',
+    redirect: '/apps/relay',
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/apps/relay',
+    name: 'RelayApp',
+    component: () => import('@/pages/apps/Relay.vue'),
+    meta: { requiresAuth: true }
+  },
+  {
     path: '/todos',
     name: 'Todos',
     component: () => import('@/pages/TodosPage.vue'),

@@ -7,8 +7,10 @@ services:
       context: .
       dockerfile: Dockerfile
       args:
-        USE_MIRROR: ${USE_MIRROR:-true}
         DEV_MODE: "1"
+        APT_MIRROR_URL: https://mirrors.tuna.tsinghua.edu.cn/ubuntu
+        PIP_INDEX_URL: https://pypi.tuna.tsinghua.edu.cn/simple
+        PIP_TRUSTED_HOST: pypi.tuna.tsinghua.edu.cn
     env_file:
       - ./.env.dev
     volumes:

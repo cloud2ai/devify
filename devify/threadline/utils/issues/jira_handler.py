@@ -94,7 +94,7 @@ import logging
 import os
 import re
 import time
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from ..llm import call_llm
 from .jira_client import JiraClient
@@ -920,6 +920,89 @@ from configuration."""
             f"LLM fields processed"
         )
         return validated_data
+
+    def update_issue(
+        self,
+        issue_key: str,
+        issue_data: Dict[str, Any],
+        email_data: Dict[str, Any],
+        attachments: List[Dict[str, Any]],
+        force: bool = False,
+        summary: Optional[str] = None,
+    ) -> str:
+        """Update an existing JIRA issue with new email content."""
+        try:
+            summary_title = summary or issue_data.get("title") or ""
+            summary_content = email_data.get("summary_content", "")
+            llm_content = email_data.get("llm_content", "")
+            language = email_data.get("language", "en")
+            summary_data = email_data.get("summary_data")
+            todos = email_data.get("todos")
+
+            summary_config = self.fields_config.get("summary_config", {})
+            summary_prefix = summary_config.get("prefix", "[AI]")
+            add_timestamp = summary_config.get("add_timestamp", False)
+            normalized_summary = remove_emoji(summary_title)
+            if summary_prefix and normalized_summary.startswith(summary_prefix):
+                summary_value = normalized_summary
+            else:
+                summary_value = build_summary_field(
+                    summary=summary_title,
+                    prefix=summary_prefix,
+                    add_timestamp=add_timestamp,
+                )
+
+            description_config = self.fields_config.get("description_config", {})
+            convert_to_jira_wiki = description_config.get("convert_to_jira_wiki", True)
+
+            from .jira_utils import build_description_field
+            description = build_description_field(
+                summary_content=summary_content,
+                llm_content=llm_content,
+                attachments=attachments,
+                convert_to_jira_wiki=convert_to_jira_wiki,
+                summary_data=summary_data,
+                todos=todos,
+                language=language,
+            )
+
+            self.client.update_issue(
+                issue_key=issue_key,
+                summary=summary_value or None,
+                description=description,
+            )
+            logger.info("Updated JIRA issue: %s", issue_key)
+            return issue_key
+        except Exception as e:
+            logger.error("Failed to update JIRA issue %s: %s", issue_key, e, exc_info=True)
+            raise
+
+    def get_issue_attachment_fingerprints(self, issue_key: str) -> list[str]:
+        """Return stable fingerprints for attachments already on a JIRA issue."""
+        return self.client.get_issue_attachment_fingerprints(issue_key)
+
+    def link_related_issues(
+        self,
+        issue_key: str,
+        related_issue_keys: List[str],
+        link_type: str = "Relates",
+    ) -> Dict[str, int]:
+        """Link issue_key to each key in related_issue_keys."""
+        linked_count = 0
+        skipped_count = 0
+        for related_key in related_issue_keys:
+            if not related_key or related_key == issue_key:
+                skipped_count += 1
+                continue
+            try:
+                self.client.link_issue(issue_key, related_key, link_type=link_type)
+                linked_count += 1
+            except Exception as e:
+                logger.warning(
+                    "Failed to link %s -> %s: %s", issue_key, related_key, e
+                )
+                skipped_count += 1
+        return {"linked_count": linked_count, "skipped_count": skipped_count}
 
     def upload_attachments(
         self, issue_key: str, attachments: List[Dict[str, Any]]

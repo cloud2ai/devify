@@ -23,50 +23,48 @@
               {{ t('threadline.config.sectionTitle') }}
             </h2>
 
-            <section
-              class="grid grid-cols-1 md:grid-cols-3 gap-4 items-start pb-6"
-            >
-              <div class="md:col-span-2">
-                <h3 class="text-sm font-semibold text-gray-900 mb-1">
-                  {{ t('threadline.config.imageModelTitle') }}
-                </h3>
-                <p class="text-sm text-gray-600">
-                  {{ t('threadline.config.imageModelDesc') }}
-                </p>
-              </div>
-              <div class="md:col-span-1 flex justify-end">
-                <div class="w-full md:w-80">
-                  <select
-                    v-model="form.image_llm_config_uuid"
-                    class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
-                  >
-                    <option value="">
-                      {{ t('threadline.config.selectPlaceholder') }}
-                    </option>
-                    <option
-                      v-for="model in modelOptions"
-                      :key="`image-${model.uuid}`"
-                      :value="model.uuid"
+            <div class="space-y-4 pb-6">
+              <section class="rounded-xl border border-gray-200 bg-gray-50 p-5">
+                <div class="space-y-3">
+                  <div>
+                    <h3 class="text-sm font-semibold text-gray-900">
+                      {{ t('threadline.config.imageModelTitle') }}
+                    </h3>
+                    <p class="mt-1 text-sm text-gray-600">
+                      {{ t('threadline.config.imageModelDesc') }}
+                    </p>
+                  </div>
+                  <div class="max-w-xl">
+                    <select
+                      v-model="form.image_llm_config_uuid"
+                      class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
                     >
-                      {{ modelLabel(model) }}
-                    </option>
-                  </select>
+                      <option value="">
+                        {{ t('threadline.config.selectPlaceholder') }}
+                      </option>
+                      <option
+                        v-for="model in modelOptions"
+                        :key="`image-${model.uuid}`"
+                        :value="model.uuid"
+                      >
+                        {{ modelLabel(model) }}
+                      </option>
+                    </select>
+                  </div>
                 </div>
-              </div>
-            </section>
+              </section>
 
-            <section class="pt-6 pb-6 border-t border-gray-200">
-              <div class="grid grid-cols-1 md:grid-cols-3 gap-4 items-start">
-                <div class="md:col-span-2">
-                  <h3 class="text-sm font-semibold text-gray-900 mb-1">
-                    {{ t('threadline.config.textModelTitle') }}
-                  </h3>
-                  <p class="text-sm text-gray-600">
-                    {{ t('threadline.config.textModelDesc') }}
-                  </p>
-                </div>
-                <div class="md:col-span-1 flex justify-end">
-                  <div class="w-full md:w-80">
+              <section class="rounded-xl border border-gray-200 bg-gray-50 p-5">
+                <div class="space-y-3">
+                  <div>
+                    <h3 class="text-sm font-semibold text-gray-900">
+                      {{ t('threadline.config.textModelTitle') }}
+                    </h3>
+                    <p class="mt-1 text-sm text-gray-600">
+                      {{ t('threadline.config.textModelDesc') }}
+                    </p>
+                  </div>
+                  <div class="max-w-xl">
                     <select
                       v-model="form.text_llm_config_uuid"
                       class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
@@ -84,21 +82,19 @@
                     </select>
                   </div>
                 </div>
-              </div>
-            </section>
+              </section>
 
-            <section class="pt-6 pb-6 border-t border-gray-200">
-              <div class="grid grid-cols-1 md:grid-cols-3 gap-4 items-start">
-                <div class="md:col-span-2">
-                  <h3 class="text-sm font-semibold text-gray-900 mb-1">
-                    {{ t('threadline.config.notificationChannelTitle') }}
-                  </h3>
-                  <p class="text-sm text-gray-600">
-                    {{ t('threadline.config.notificationChannelDesc') }}
-                  </p>
-                </div>
-                <div class="md:col-span-1 flex justify-end">
-                  <div class="w-full md:w-80">
+              <section class="rounded-xl border border-gray-200 bg-gray-50 p-5">
+                <div class="space-y-3">
+                  <div>
+                    <h3 class="text-sm font-semibold text-gray-900">
+                      {{ t('threadline.config.notificationChannelTitle') }}
+                    </h3>
+                    <p class="mt-1 text-sm text-gray-600">
+                      {{ t('threadline.config.notificationChannelDesc') }}
+                    </p>
+                  </div>
+                  <div class="max-w-xl">
                     <select
                       v-model="form.notification_channel_uuid"
                       class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
@@ -125,8 +121,8 @@
                     </p>
                   </div>
                 </div>
-              </div>
-            </section>
+              </section>
+            </div>
 
             <div
               class="flex items-center justify-end gap-3 border-t border-gray-200 pt-6"
@@ -155,6 +151,33 @@
             <p v-if="saveSuccess" class="mt-2 text-sm text-green-600">
               {{ t('threadline.config.saveSuccess') }}
             </p>
+
+            <div class="mt-6 rounded-xl border border-gray-200 bg-gray-50 p-5">
+              <div class="flex items-start justify-between gap-4">
+                <div>
+                  <h3 class="text-sm font-semibold text-gray-900">
+                    {{ t('threadline.config.relayConfigTitle') }}
+                  </h3>
+                  <p class="mt-1 text-sm text-gray-600">
+                    {{ t('threadline.config.relayConfigDesc') }}
+                  </p>
+                </div>
+                <BaseButton
+                  variant="primary"
+                  size="sm"
+                  :loading="relaySaving"
+                  @click="saveRelayConfig"
+                >
+                  {{ t('threadline.config.saveRelayChanges') }}
+                </BaseButton>
+              </div>
+              <p v-if="relaySaveError" class="mt-3 text-sm text-red-600">
+                {{ relaySaveError }}
+              </p>
+              <p v-if="relaySaveSuccess" class="mt-3 text-sm text-green-600">
+                {{ t('threadline.config.relaySaveSuccess') }}
+              </p>
+            </div>
           </template>
         </div>
       </div>
@@ -170,6 +193,7 @@ import { extractErrorMessage } from '@/utils/api'
 import {
   llmAdminApi,
   notificationsAdminApi,
+  relayAdminApi,
   threadlineAdminApi
 } from '@/admin/api'
 import AdminLayout from '@/admin/layout/AdminLayout.vue'
@@ -182,11 +206,21 @@ const { showSuccess, showError } = useToast()
 const loadingConfig = ref(false)
 const loadingModels = ref(false)
 const loadingChannels = ref(false)
+const loadingRelayConfig = ref(false)
 const saving = ref(false)
+const relaySaving = ref(false)
 const saveError = ref('')
 const saveSuccess = ref(false)
+const relaySaveError = ref('')
+const relaySaveSuccess = ref(false)
 const modelOptions = ref([])
 const channelOptions = ref([])
+const relayForm = reactive({
+  llm_config_uuid: ''
+})
+const relayInitialValues = reactive({
+  llm_config_uuid: ''
+})
 
 const form = reactive({
   image_llm_config_uuid: '',
@@ -236,6 +270,12 @@ function applyConfig(raw) {
   initialValues.image_llm_config_uuid = form.image_llm_config_uuid
   initialValues.text_llm_config_uuid = form.text_llm_config_uuid
   initialValues.notification_channel_uuid = form.notification_channel_uuid
+}
+
+function applyRelayConfig(raw) {
+  if (!raw || typeof raw !== 'object') return
+  relayForm.llm_config_uuid = raw.llm_config_uuid || ''
+  relayInitialValues.llm_config_uuid = relayForm.llm_config_uuid
 }
 
 async function loadModels() {
@@ -303,8 +343,28 @@ async function loadConfig() {
   }
 }
 
+async function loadRelayConfig() {
+  loadingRelayConfig.value = true
+  relaySaveError.value = ''
+  relaySaveSuccess.value = false
+  try {
+    const data = await relayAdminApi.getRelayConfig()
+    applyRelayConfig(data)
+  } catch (error) {
+    relaySaveError.value = extractErrorMessage(error, t('common.error'))
+    showError(relaySaveError.value)
+  } finally {
+    loadingRelayConfig.value = false
+  }
+}
+
 async function loadAll() {
-  await Promise.all([loadModels(), loadChannels(), loadConfig()])
+  await Promise.all([
+    loadModels(),
+    loadChannels(),
+    loadConfig(),
+    loadRelayConfig()
+  ])
 }
 
 async function saveConfig() {
@@ -339,6 +399,32 @@ async function saveConfig() {
     showError(saveError.value)
   } finally {
     saving.value = false
+  }
+}
+
+async function saveRelayConfig() {
+  relaySaveError.value = ''
+  relaySaveSuccess.value = false
+  relaySaving.value = true
+  try {
+    const payload = {
+      llm_config_uuid: relayForm.llm_config_uuid || null
+    }
+    const data = await relayAdminApi.updateRelayConfig(payload)
+    applyRelayConfig(data)
+    relaySaveSuccess.value = true
+    showSuccess(t('threadline.config.relaySaveSuccess'))
+    setTimeout(() => {
+      relaySaveSuccess.value = false
+    }, 2500)
+  } catch (error) {
+    relaySaveError.value = extractErrorMessage(
+      error,
+      t('threadline.config.relaySaveFailed')
+    )
+    showError(relaySaveError.value)
+  } finally {
+    relaySaving.value = false
   }
 }
 

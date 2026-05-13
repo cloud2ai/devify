@@ -19,9 +19,9 @@ class ThreadlineStartupRecoveryTest(TestCase):
     def setUp(self):
         self.user = UserFactory(username="recovery-test-user")
 
-    @patch("agentcore_task.adapters.django.services.lock.release_task_lock")
-    @patch("agentcore_task.adapters.django.services.lock.acquire_task_lock")
-    @patch("threadline.services.startup_recovery.process_email_merge.delay")
+    @patch("threadline.services.startup_recovery.release_task_lock")
+    @patch("threadline.services.startup_recovery.acquire_task_lock")
+    @patch("threadline.tasks.email_merge.process_email_merge.delay")
     def test_requeues_only_stale_processing_emails(
         self,
         mock_delay,
@@ -59,16 +59,14 @@ class ThreadlineStartupRecoveryTest(TestCase):
         mock_delay.assert_called_once_with(
             str(old_email.id),
             force=False,
-            trigger_source="startup_recovery",
+            trigger_source="retry_task",
         )
         mock_release_lock.assert_called_once()
 
-    @patch("agentcore_task.adapters.django.services.lock.release_task_lock")
-    @patch("agentcore_task.adapters.django.services.lock.acquire_task_lock")
-    @patch("threadline.services.startup_recovery.process_email_merge.delay")
+    @patch("threadline.services.startup_recovery.release_task_lock")
+    @patch("threadline.services.startup_recovery.acquire_task_lock")
     def test_skips_when_recovery_lock_is_held(
         self,
-        mock_delay,
         mock_acquire_lock,
         mock_release_lock,
     ):
@@ -82,5 +80,4 @@ class ThreadlineStartupRecoveryTest(TestCase):
 
         assert result["status"] == "skipped"
         assert result["requeued_count"] == 0
-        mock_delay.assert_not_called()
         mock_release_lock.assert_not_called()

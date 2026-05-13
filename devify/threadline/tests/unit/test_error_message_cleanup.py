@@ -5,6 +5,7 @@ This module tests that error messages are automatically cleared when
 emails transition to SUCCESS status, ensuring a clean state.
 """
 
+from django.utils import timezone
 from django.test import TestCase
 from django.contrib.auth import get_user_model
 
@@ -44,7 +45,7 @@ class ErrorMessageCleanupTest(TestCase):
             sender='sender@example.com',
             recipients='recipient@example.com',
             received_at='2024-01-01T00:00:00Z',
-            raw_content='Test content',
+            text_content='Test content',
             status=EmailStatus.FETCHED.value,
             error_message=''
         )
@@ -175,3 +176,22 @@ class ErrorMessageCleanupTest(TestCase):
 
         # Error message should NOT be cleared (only set_status clears it)
         self.assertEqual(self.email.error_message, 'Test error')
+
+    def test_set_status_updates_updated_at(self):
+        """
+        Test that status transitions also refresh updated_at.
+
+        The retry UI relies on updated_at to distinguish stale snapshots
+        from the current retry run.
+        """
+        self.email.set_status(EmailStatus.PROCESSING.value)
+        original_updated_at = self.email.updated_at
+
+        self.email.set_status(EmailStatus.SUCCESS.value)
+        self.email.refresh_from_db()
+
+        self.assertGreaterEqual(self.email.updated_at, original_updated_at)
+        self.assertLessEqual(
+            original_updated_at,
+            timezone.now(),
+        )

@@ -1,3 +1,4 @@
+import logging
 import uuid as uuid_lib
 
 from django.contrib.auth.models import User
@@ -15,6 +16,8 @@ from threadline.state_machine import (
     get_next_states,
     EMAIL_STATE_MACHINE,
 )
+
+logger = logging.getLogger(__name__)
 
 class Settings(models.Model):
     """
@@ -447,7 +450,9 @@ class EmailMessage(models.Model):
             status: New status value
             error_message: Optional error message to save
         """
-        update_fields = ["status"]
+        old_status = self.status
+
+        update_fields = ["status", "updated_at"]
         self.status = status
 
         # Clear error_message when transitioning to SUCCESS
@@ -459,6 +464,41 @@ class EmailMessage(models.Model):
             update_fields.append("error_message")
 
         self.save(update_fields=update_fields)
+
+        if old_status != status and status == EmailStatus.FAILED.value:
+            self._dispatch_failure_notification(old_status)
+
+    def _dispatch_failure_notification(self, old_status: str) -> None:
+        try:
+            from threadline.services.workflow_config import (
+                resolve_threadline_notification_channel,
+            )
+            from threadline.tasks.notifications import (
+                build_email_failure_text,
+                send_threadline_notification,
+            )
+
+            channel = resolve_threadline_notification_channel()
+            language = (
+                (channel.config or {}).get("language") if channel else None
+            )
+            text = build_email_failure_text(
+                self,
+                old_status,
+                self.status,
+                language=language,
+            )
+            send_threadline_notification.delay(
+                text,
+                "email_status",
+                str(self.id),
+                user_id=self.user_id,
+            )
+        except Exception as exc:
+            logger.error(
+                f"Failed to queue failure notification for email "
+                f"{self.id}: {exc}"
+            )
 
     def set_processing_progress(self, percent: int) -> None:
         """

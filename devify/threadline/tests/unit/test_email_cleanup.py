@@ -478,10 +478,10 @@ class ShareLinkCleanupSchedulerTest(TestCase):
         mock_manager_cls.assert_called_once()
         mock_manager.cleanup_expired_share_links.assert_called_once()
         mock_logger.info.assert_any_call(
-            "Starting share link cleanup scheduler"
+            "SHARE_LINK_CLEANUP Starting share link cleanup scheduler"
         )
         mock_logger.info.assert_any_call(
-            "Share link cleanup completed: {'links_deactivated': 2}"
+            "SHARE_LINK_CLEANUP Share link cleanup completed: {'links_deactivated': 2}"
         )
         self.assertEqual(result, {"links_deactivated": 2})
 
@@ -515,8 +515,8 @@ class ShareLinkCleanupSchedulerTest(TestCase):
             schedule_share_link_cleanup.run()
 
         mock_logger.info.assert_called_with(
-            "Starting share link cleanup scheduler"
+            "SHARE_LINK_CLEANUP Starting share link cleanup scheduler"
         )
         mock_logger.error.assert_called_with(
-            "Share link cleanup scheduling failed: boom"
+            "SHARE_LINK_CLEANUP Share link cleanup scheduling failed: boom"
         )

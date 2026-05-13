@@ -15,7 +15,7 @@ project_root = Path(__file__).resolve().parent.parent.parent.parent
 sys.path.insert(0, str(project_root))
 
 # Set Django settings module
-os.environ.setdefault("DJANGO_SETTINGS_MODULE", "devify.core.settings")
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "core.settings")
 
 # Configure Django
 django.setup()

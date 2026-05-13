@@ -75,6 +75,7 @@ def process_email_merge(
     task_id = getattr(process_email_merge.request, "id", "") or ""
     tracer.set_task_id(task_id)
     merge_failure_logged = False
+    email = None
 
     try:
         email = EmailMessage.objects.select_related("user", "merged_into").get(
@@ -102,23 +103,6 @@ def process_email_merge(
         logger.info(
             f"{merge_context} [Merge] Starting for email {email_id}, "
             f"user {user_info}, trigger_source={trigger_source or 'unknown'}"
-        )
-        logger.debug(
-            (
-                "[Merge] email snapshot "
-                "email_id=%s uuid=%s subject=%r received_at=%s status=%s "
-                "merged_into_id=%s raw_message_id=%s in_reply_to=%s "
-                "references=%s"
-            ),
-            email.id,
-            email.uuid,
-            email.subject,
-            email.received_at,
-            email.status,
-            email.merged_into_id,
-            email.raw_message_id,
-            email.in_reply_to,
-            email.references,
         )
 
         tracer.create_task(
@@ -155,30 +139,6 @@ def process_email_merge(
             )
         else:
             merge_service = EmailMergeService()
-            candidates = list(merge_service._candidate_queryset(email))
-            logger.info(
-                "[Merge] candidate scan email_id=%s candidate_count=%s",
-                email.id,
-                len(candidates),
-            )
-            for candidate in candidates:
-                matched, reason = merge_service._match_candidate(email, candidate)
-                logger.debug(
-                    (
-                        "[Merge] candidate detail "
-                        "email_id=%s candidate_id=%s candidate_uuid=%s "
-                        "subject=%r received_at=%s text_len=%s matched=%s "
-                        "reason=%s"
-                    ),
-                    email.id,
-                    candidate.id,
-                    candidate.uuid,
-                    candidate.subject,
-                    candidate.received_at,
-                    len(candidate.text_content or ""),
-                    matched,
-                    reason,
-                )
             related_email, decision = merge_service.reconcile(email)
             logger.info(
                 (
@@ -246,8 +206,7 @@ def process_email_merge(
         logger.error(f"[Merge] Failed to execute for email {email_id}: {exc}")
         if not merge_failure_logged:
             try:
-                email_obj = locals().get("email")
-                _mark_email_failed(email_obj, str(exc))
+                _mark_email_failed(email, str(exc))
             except Exception as status_exc:
                 logger.error(
                     f"[Merge] Failed to mark email {email_id} as FAILED: "

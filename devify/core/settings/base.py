@@ -131,6 +131,7 @@ INSTALLED_APPS += [
     "billing",
     "accounts",
     "threadline",
+    "relay",
     "agentcore_metering.adapters.django",
     "agentcore_task.adapters.django",
     "agentcore_notifier.adapters.django",

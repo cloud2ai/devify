@@ -7,8 +7,10 @@ services:
       context: .
       dockerfile: Dockerfile
       args:
-        USE_MIRROR: ${USE_MIRROR:-false}
         DEV_MODE: "0"
+        APT_MIRROR_URL: http://archive.ubuntu.com/ubuntu
+        PIP_INDEX_URL: https://pypi.org/simple
+        PIP_TRUSTED_HOST: pypi.org
     env_file:
       - ./.env
     volumes:

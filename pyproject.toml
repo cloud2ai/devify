@@ -62,7 +62,6 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
-    "nox>=2024.4.15",
     "ipdb==0.13.13",
     "ipython==8.29.0",
     "pytest>=8.0.0",
@@ -97,6 +96,7 @@ DJANGO_SETTINGS_MODULE = "core.settings"
 testpaths = [
     "devify/accounts/tests",
     "devify/threadline/tests",
+    "devify/relay/tests",
     "devify/billing/tests",
 ]
 python_files = ["test_*.py"]
@@ -114,6 +114,7 @@ markers = [
     "integration: marks tests as integration tests",
     "unit: marks tests as unit tests",
     "e2e: marks tests as end-to-end tests",
+    "external: marks tests that require real third-party services",
     "functional: marks tests as functional tests",
     "html_parsing: marks tests related to HTML parsing functionality",
     "django_db: marks tests that require database access",
@@ -127,7 +128,7 @@ filterwarnings = [
 
 # Coverage configuration
 [tool.coverage.run]
-source = ["threadline"]
+source = ["threadline", "relay"]
 omit = [
     "*/tests/*",
     "*/migrations/*",

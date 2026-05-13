@@ -635,6 +635,46 @@ class JiraClient:
                 logging.error(f"Error deleting issue {issue_key}: {error_msg}")
                 raise
 
+    def link_issue(
+        self,
+        from_key: str,
+        to_key: str,
+        link_type: str = "Relates",
+    ) -> None:
+        """Create a link between two JIRA issues."""
+        try:
+            self.client.create_issue_link(link_type, from_key, to_key)
+            logging.info("Linked %s -> %s (%s)", from_key, to_key, link_type)
+        except Exception as e:
+            logging.error("Error linking %s to %s: %s", from_key, to_key, str(e))
+            raise
+
+    def get_issue_attachment_fingerprints(self, issue_key: str) -> List[str]:
+        """Return stable fingerprints for attachments already on an issue."""
+        try:
+            issue = self.client.issue(issue_key)
+            attachments = getattr(getattr(issue, "fields", None), "attachment", [])
+        except Exception as e:
+            logging.warning(
+                "Error reading attachments for %s: %s",
+                issue_key,
+                str(e),
+            )
+            return []
+
+        fingerprints: List[str] = []
+        for attachment in attachments or []:
+            attachment_id = getattr(attachment, "id", None)
+            filename = getattr(attachment, "filename", "") or ""
+            file_size = getattr(attachment, "size", None) or 0
+
+            if attachment_id not in (None, ""):
+                fingerprints.append(f"jira_id:{attachment_id}")
+            if filename:
+                fingerprints.append(f"name:{filename}:{file_size}")
+
+        return list(dict.fromkeys(fingerprints))
+
     def add_attachment(self, issue: Union[str, Any], file_path: str) -> None:
         """Add an attachment to a JIRA issue from file path."""
         try:

@@ -12,6 +12,9 @@ class TestInitThreadlineSettings:
         base = {
             "enable": True,
             "issue_engine": "jira",
+            "auto_merge_strategy": "new",
+            "manual_merge_strategy": "linked",
+            "retry_issue_strategy": "update",
             "fields": {
                 "summary_config": {"default": "title"},
                 "priority_config": {"default": "high"},
@@ -24,6 +27,8 @@ class TestInitThreadlineSettings:
             },
         }
         override = {
+            "auto_merge_strategy": "update",
+            "retry_issue_strategy": "new",
             "fields": {
                 "priority_config": {"default": "medium"},
                 "description_config": {"default": "summary_content"},
@@ -39,6 +44,9 @@ class TestInitThreadlineSettings:
 
         assert merged["enable"] is True
         assert merged["issue_engine"] == "jira"
+        assert merged["auto_merge_strategy"] == "update"
+        assert merged["manual_merge_strategy"] == "linked"
+        assert merged["retry_issue_strategy"] == "new"
         assert merged["fields"]["summary_config"]["default"] == "title"
         assert merged["fields"]["priority_config"]["default"] == "medium"
         assert merged["fields"]["description_config"]["default"] == "summary_content"

@@ -87,52 +87,46 @@ This repository contains the **open source self-hosted edition** of Devify (comm
 
 ## Development
 
-### Testing with Nox
+### Testing with Pytest
 
-This project uses [Nox](https://nox.thea.codes/) for development task automation. Nox provides a unified interface for running tests, code formatting, and other development tasks.
-
-#### Available Nox Sessions
+Run backend tests inside the `devify-api-dev` container. Typical examples:
 
 ```bash
-# Run all tests
-nox -s tests
+# Run all tests from the repo root
+./scripts/run-tests-in-devify-api.sh
 
 # Run EML email parsing tests
-nox -s eml_tests
+./scripts/run-tests-in-devify-api.sh devify/threadline/tests/functional/test_eml_parsing.py -v -s
 
 # Run unit tests only
-nox -s unit_tests
+./scripts/run-tests-in-devify-api.sh devify/threadline/tests/unit/ -v
 
-# Run API tests only
-nox -s api_tests
+# Run integration tests only
+./scripts/run-tests-in-devify-api.sh devify/threadline/tests/integration/ -v
 
-# Run functional tests only
-nox -s functional_tests
+# Run relay integration tests
+./scripts/run-tests-in-devify-api.sh devify/relay/tests/integration/ -v
 
-# Generate test coverage report
-nox -s coverage
-
-# Auto format code
-nox -s format
-
-# Code quality check
-nox -s lint
-
-# Django system check
-nox -s django_check
-
-# Start development server
-nox -s runserver
+# Generate coverage report
+./scripts/run-tests-in-devify-api.sh --cov=devify.threadline --cov-report=html --cov-report=term-missing
 ```
 
-#### Installation
+For formatting and checks, use the underlying tools directly:
 
 ```bash
-# Install nox
-pip install nox
+# Format code
+black devify/
+isort devify/
 
-# Or using uv (faster)
-uv pip install nox
+# Lint / check formatting
+black devify/ --check --diff
+isort devify/ --check-only --diff
+
+# Django system check
+python devify/manage.py check
+
+# Start development server
+python devify/manage.py runserver 0.0.0.0:8000
 ```
 
 ## How to run Devify?
@@ -475,15 +469,17 @@ To simplify configuration, all required settings should be added here. Below are
 1. **Enter the API container:**
 
    ```bash
-   docker exec -it devify-api python manage.py init_threadline_settings --user admin
+   # (Deprecated) Initialize threadline settings
+   # Note: This command is deprecated. Use Relay API or Django Admin to configure delivery channels.
+   # docker exec -it devify-api python manage.py init_threadline_settings --user admin
    ```
 
 **Note:**
-- The initialization command is idempotent and safe to run multiple times
-- Issue configuration is loaded from `conf/threadline/issues/issue_config.yaml`
-  first, with `conf/threadline/issues/jira_config.yaml` kept as a fallback
-- Other settings are stored in JSON format in the database
-- Settings can be customized via Django Admin after initialization
+- **Configuration method has changed (2026-05-10):** Delivery channels are now configured via Relay API or Django Admin, not YAML files
+- The `init_threadline_settings` command is deprecated and will be removed in a future version
+- Legacy YAML configurations in `conf/threadline/issues/` are no longer used
+- Existing configurations are automatically migrated to Relay on first Celery worker startup
+- See "JIRA Configuration" and "Feishu Bitable Configuration" sections below for current configuration methods
 
 2. **Edit the settings in Django Admin:**
 
@@ -731,10 +727,17 @@ The issue configuration supports multiple engines (JIRA, Feishu Bitable, etc.) w
 
 #### JIRA Configuration
 
-JIRA issue creation is configured via YAML file at `conf/threadline/issues/jira_config.yaml`.
-`conf/threadline/issues/issue_config.yaml` contains the shared base settings,
-and the initialization command merges it with the engine-specific file.
-All configuration is automatically loaded during settings initialization.
+> **⚠️ CONFIGURATION METHOD CHANGE (2026-05-10)**
+> 
+> **Old Method (Deprecated):** YAML files in `conf/threadline/issues/` + `init_threadline_settings` command
+> 
+> **New Method (Current):** Use **Relay API** or **Django Admin** to configure delivery channels
+> - API Endpoint: `/api/relay/subscriptions/`
+> - Admin Interface: `/admin/relay/relaysubscription/`
+> - Legacy YAML configurations are automatically migrated on first Celery worker startup
+> 
+> The documentation below describes the configuration structure for reference. 
+> In practice, you configure these settings via the Relay API or Admin interface, not YAML files.
 
 **Configuration Structure:**
 
@@ -794,74 +797,60 @@ fields:
 
 #### Feishu Bitable Configuration
 
-Feishu Bitable issue creation is configured via `conf/threadline/issues/feishu_bitable_config.yaml`.
-The base `issue_config.yaml` file still carries the shared switches, and the
-initialization command merges in the Feishu Bitable-specific settings when
-`issue_engine` is set to `feishu_bitable`.
+> **⚠️ CONFIGURATION METHOD CHANGE (2026-05-10)**
+> 
+> Feishu Bitable delivery channels are now configured via **Relay API** or **Django Admin**, not YAML files.
+> See the note in JIRA Configuration section above for details.
 
 ```yaml
 enable: true
 issue_engine: feishu_bitable
-language: Chinese
+language: English
 
 feishu_bitable:
-  base_url: "https://open.feishu.cn/open-apis"
   # Feishu app credentials used to access the Bitable API.
   # Create a Feishu app/bot first, then copy app_id and app_secret here.
   app_id: "your-app-id"
   app_secret: "your-app-secret"
-  # Optional: fill this in if you already have a tenant_access_token.
-  # If left blank, the backend will fetch one from app_id + app_secret.
-  tenant_access_token: ""
-  # The Bitable base app_token.
-  # Get it from the Bitable URL, typically the bascnxxxxxxxxxxxxxxxx part.
-  app_token: "bascnxxxxxxxxxxxxxxxx"
+  # App token source depends on app_token_type.
+  # - bitable: use the App Token from the native Bitable URL.
+  # - wiki: use the Wiki node token; the backend resolves obj_token at runtime.
+  app_token: "paste-native-bitable-app-token-or-wiki-node-token"
+  # Token type for app_token.
+  # Use "bitable" for native Bitable URLs and "wiki" for Wiki node tokens.
+  app_token_type: "wiki"
   # The target table name inside the Bitable base.
   # It can be Chinese or English; the backend resolves it to table_id.
-  default_table_name: "需求转化"
-  table_name: "需求转化"
+  table_name: "Issue Collection"
   # The field name used for attachments, images, PDFs, and similar files.
   # Required: this field must already exist in the Bitable table.
-  attachment_field_name: "附件"
-  image_field_name: "附件"
-  # Attachment upload target type.
-  # The default is bitable, which uploads to an embedded Bitable mount node.
-  attachment_upload_parent_type: "bitable"
-  # Attachment upload parent_node.
-  # Required: upload or download an attachment in Bitable, then find the
-  # token after mount_node_token= in the internal browser URL.
-  attachment_upload_parent_node: "mount-node-token-from-feishu"
-  # Legacy fallback for a normal Feishu drive folder. Usually not needed.
-  attachment_upload_parent_folder_token: "optional-legacy-folder-token"
-  # Record detail URL template. Usually leave this blank.
+  attachment_field_name: "Attachments"
   field_mappings:
-    任务简述: "title"
-    需求收集管理: "summary_content"
-    备注: "llm_content"
-    优先级: "feishu_priority"
-    状态: "feishu_status"
-    SourceID: "email_id_str"
+    Issue Summary: "title"
+    Requirement Collection: "summary_content"
+    Notes: "llm_content"
+    Priority: "feishu_priority"
+    Status: "feishu_status"
+    Source ID: "email_id_str"
 ```
 
 **Notes:**
 - `app_id` and `app_secret` come from a newly created Feishu app/bot.
-- `tenant_access_token` can be provided directly, or you can supply
-  `app_id` + `app_secret` and let the backend fetch a token on demand.
-- `app_token` comes from the Bitable base URL.
+- Before testing or saving, authorize that app/bot in the target Bitable base
+  from the top-right permission/config menu. Without that step, table listing
+  and record creation will fail with `Forbidden`.
+- `app_token_type` decides how to interpret `app_token`:
+  - `bitable`: paste the App Token from the native Bitable URL.
+  - `wiki`: paste the Wiki node token; the backend resolves `obj_token`
+    automatically before writing records or attachments.
+- `app_token` is therefore not a single fixed kind of token; its source depends
+  on `app_token_type`, so the placeholder is intentionally generic.
 - `table_name` is the target table name inside the Bitable base and can be
   Chinese or English.
 - `field_mappings` maps Feishu table field names to the workflow fields used
   by the handler.
 - `attachment_field_name` must point to an existing field that accepts
   attachments, images, PDFs, and similar files.
-- `attachment_upload_parent_type` usually stays `bitable`.
-- `attachment_upload_parent_node` is required. For embedded Bitable mounts,
-  copy `mount_node_token` from the browser link after uploading or downloading
-  an attachment, then use the token after `mount_node_token=`.
-- `attachment_upload_parent_folder_token` is only needed as a legacy fallback
-  when you intentionally upload to a standard Feishu drive folder.
-- You also need to authorize the robot in the Bitable base from the top-right
-  configuration menu, otherwise the robot cannot write into the base.
 - New configs should use `feishu_bitable`.
 
 **JIRA Field Types:**
@@ -882,12 +871,53 @@ Fields fall into three categories:
 
 **How to Configure:**
 
+> **Note:** The steps below are for reference only. Current configuration is done via Relay API or Django Admin.
+
+**Legacy Method (Deprecated):**
 1. Edit `conf/threadline/issues/issue_config.yaml`
 2. Edit the engine-specific file:
    - `conf/threadline/issues/jira_config.yaml`
    - `conf/threadline/issues/feishu_bitable_config.yaml`
 3. Update credentials, table IDs, and field mappings
-4. Run: `python manage.py init_threadline_settings --user username`
+4. Run: `python manage.py init_threadline_settings --user username` (deprecated)
+
+**Current Method:**
+1. Navigate to Django Admin: `/admin/relay/relaysubscription/`
+2. Click "Add Relay Subscription"
+3. Configure your delivery channel:
+   - **Name**: Descriptive name (e.g., "Production JIRA")
+   - **Target Type**: Select `jira` or `feishu_bitable`
+   - **Enabled**: Check to activate
+   - **Config**: JSON configuration (same structure as YAML)
+   - **Strategies**: Configure merge strategies
+   - **Field Mappings**: Map workflow fields to target system fields
+
+Or use the Relay API:
+```bash
+curl -X POST http://localhost:8000/api/relay/subscriptions/ \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Production JIRA",
+    "target_type": "jira",
+    "enabled": true,
+    "config": {
+      "issue_engine": "jira",
+      "enable": true,
+      "jira": {
+        "url": "https://jira.example.com/",
+        "username": "your-username",
+        "api_token": "your-api-token"
+      },
+      "fields": { ... }
+    },
+    "strategies": {
+      "auto_merge_strategy": "new",
+      "manual_merge_strategy": "linked",
+      "retry_issue_strategy": "update"
+    }
+  }'
+```
 
 **How LLM Prompt System Works:**
 

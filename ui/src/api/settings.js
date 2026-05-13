@@ -53,13 +53,6 @@ export const settingsApi = {
     return response.data
   },
 
-  async testIssueConfig(config) {
-    const response = await apiClient.post('/v1/settings/test-issue', {
-      value: config
-    })
-    return response.data
-  },
-
   async saveSettingByKey({ key, value, description, isActive = true }) {
     const settings = await this.getSettingsList()
     const existing = settings.find((setting) => setting.key === key)

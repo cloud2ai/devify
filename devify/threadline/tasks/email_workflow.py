@@ -87,10 +87,7 @@ def process_email_workflow(
         email = EmailMessage.objects.select_related("user", "merged_into").get(
             id=email_id
         )
-        if not email:
-            raise ValueError(f"Email with id {email_id} not found")
 
-        user_info = f"{email.user.username}({email.user_id})"
         tracer = TaskTracer("EMAIL_WORKFLOW")
         task_id = getattr(process_email_workflow.request, "id", "") or ""
         tracer.set_task_id(task_id)
@@ -106,7 +103,7 @@ def process_email_workflow(
         )
         logger.info(
             f"{workflow_context} [Workflow] Starting for email {email_id}, "
-            f"user {user_info}, status: {email.status}, force: {force}, "
+            f"user {email.user_id}, status: {email.status}, force: {force}, "
             f"language: {language}, scene: {scene}"
         )
 
@@ -126,6 +123,7 @@ def process_email_workflow(
             force=force,
             language=language,
             scene=scene,
+            trigger_source=trigger_source,
             tracer=tracer,
         )
         elapsed = time.monotonic() - started_at
@@ -139,7 +137,7 @@ def process_email_workflow(
             )
             logger.info(
                 f"{success_context} [Workflow] Completed successfully for "
-                f"email {email_id}, user {user_info}, "
+                f"email {email_id}, user {email.user_id}, "
                 f"elapsed_sec={elapsed:.2f}"
             )
             tracer.complete_task(
@@ -162,7 +160,7 @@ def process_email_workflow(
             )
             logger.error(
                 f"{error_context} [Workflow] Failed for email {email_id}, "
-                f"user {user_info}, elapsed_sec={elapsed:.2f}: "
+                f"user {email.user_id}, elapsed_sec={elapsed:.2f}: "
                 f"{result.get('error')}"
             )
             tracer.fail_task(
@@ -206,8 +204,9 @@ def retry_failed_email_workflow(email_id: str) -> str:
         str: The email_id
     """
     logger.info(f"[Workflow] Retrying failed workflow for email {email_id}")
-    return process_email_workflow(
+    process_email_workflow.delay(
         email_id,
         force=True,
         trigger_source="retry_task",
     )
+    return email_id

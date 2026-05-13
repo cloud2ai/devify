@@ -256,7 +256,13 @@
       "reset": "Reset",
       "saveSuccess": "Saved successfully",
       "saveFailed": "Save failed",
-      "selectionRequired": "Please choose both image and text models"
+      "selectionRequired": "Please choose both image and text models",
+      "relayConfigTitle": "Relay settings",
+      "relayConfigDesc": "Bind the LLM config used by Relay-specific adapters such as Jira.",
+      "relayConfigHelp": "Leave empty to disable a dedicated Relay LLM binding.",
+      "saveRelayChanges": "Save Relay settings",
+      "relaySaveSuccess": "Relay settings saved successfully",
+      "relaySaveFailed": "Relay settings save failed"
     },
     "periodicTasks": {
       "menuTitle": "Scheduled Tasks",

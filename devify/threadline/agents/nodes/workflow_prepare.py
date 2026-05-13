@@ -25,6 +25,10 @@ from threadline.services.workflow_config import (
     resolve_threadline_llm_config,
     resolve_threadline_text_llm_config,
 )
+from threadline.utils.issues.merge_policy import (
+    get_issue_merge_policy,
+    is_retry_trigger_source,
+)
 from threadline.utils.prompt_config_manager import PromptConfigManager
 
 logger = logging.getLogger(__name__)
@@ -254,17 +258,55 @@ class WorkflowPrepareNode(BaseLangGraphNode):
 
     def _load_existing_issue_metadata(
         self,
-    ) -> tuple[int | None, str | None, dict | None]:
+        issue_config: dict | None = None,
+        trigger_source: str | None = None,
+    ) -> tuple[int | None, str | None, dict | None, dict | None]:
         """
         Load existing issue information for the email.
 
+        TODO: DEPRECATED - Remove after relay is stable
+        This method is kept for backward compatibility only.
+        Issue handling is now done by the relay project.
+        This loads existing Issue records for historical data consistency.
+
+        The lookup is intentionally direct:
+        - Prefer an issue already attached to the current email.
+        - If the current email is a merged child and the strategy is update,
+          fall back to the canonical email's issue.
+        - Otherwise let the workflow create a new issue.
+
         Returns:
-            tuple: (issue_id, issue_url, issue_metadata)
+            tuple: (issue_id, issue_url, issue_metadata, issue_result_data)
         """
-        existing_issue = Issue.objects.filter(email_message=self.email).first()
+        policy = get_issue_merge_policy(issue_config)
+        is_retry = is_retry_trigger_source(trigger_source)
+
+        strategy = (
+            policy["retry_issue_strategy"]
+            if is_retry
+            else policy["auto_merge_strategy"]
+        )
+        if strategy == "new":
+            return None, None, None, None
+
+        existing_issue = (
+            Issue.objects.filter(email_message=self.email)
+            .order_by("-created_at", "-id")
+            .first()
+        )
+        if existing_issue is None and self.email.merged_into_id:
+            # When the current email is a merged child, use the canonical
+            # email's issue directly instead of carrying a merge context.
+            canonical = self._resolve_canonical_email()
+            if canonical and canonical.id != self.email.id:
+                existing_issue = (
+                    Issue.objects.filter(email_message=canonical)
+                    .order_by("-created_at", "-id")
+                    .first()
+                )
 
         if not existing_issue:
-            return None, None, None
+            return None, None, None, None
 
         issue_metadata = {
             "engine": existing_issue.engine,
@@ -285,7 +327,62 @@ class WorkflowPrepareNode(BaseLangGraphNode):
             else:
                 issue_metadata["project"] = None
 
-        return (existing_issue.id, existing_issue.issue_url, issue_metadata)
+        issue_result_data = {
+            "external_id": existing_issue.external_id,
+            "issue_url": existing_issue.issue_url,
+            "title": existing_issue.title,
+            "description": existing_issue.description,
+            "priority": existing_issue.priority,
+            "engine": existing_issue.engine,
+            "metadata": existing_issue.metadata or {},
+            "reuse_existing_issue": True,
+        }
+
+        return (
+            existing_issue.id,
+            existing_issue.issue_url,
+            issue_metadata,
+            issue_result_data,
+        )
+
+    def _load_related_issue_keys(self) -> list[str]:
+        """
+        Load issue keys that should be associated with the current email.
+        """
+        related_issue_keys: list[str] = []
+
+        def append_issue_key(email: EmailMessage | None) -> None:
+            if not email:
+                return
+            issue = email.issues.order_by("-created_at", "-id").first()
+            if issue and issue.external_id:
+                related_issue_keys.append(str(issue.external_id))
+
+        append_issue_key(self.email)
+
+        if self.email.merged_into_id:
+            append_issue_key(self.email.merged_into)
+
+        for child in self.email.merged_children.all():
+            append_issue_key(child)
+
+        deduplicated: list[str] = []
+        for issue_key in related_issue_keys:
+            if issue_key and issue_key not in deduplicated:
+                deduplicated.append(issue_key)
+
+        return deduplicated
+
+    def _resolve_canonical_email(self) -> EmailMessage | None:
+        """
+        Resolve the canonical EmailMessage for the current record.
+        """
+        canonical = self.email
+        visited: set[int] = set()
+        while canonical.merged_into_id and canonical.id not in visited:
+            visited.add(canonical.id)
+            canonical = canonical.merged_into
+        return canonical
 
     def _load_todos_data(self) -> list:
         """
@@ -349,7 +446,9 @@ class WorkflowPrepareNode(BaseLangGraphNode):
             "text_llm_config_uuid": (
                 str(text_llm_config.uuid) if text_llm_config else None
             ),
-            "llm_config_uuid": (str(llm_config.uuid) if llm_config else None),
+            "llm_config_uuid": (
+                str(llm_config.uuid) if llm_config else None
+            ),
         }
 
     def _build_email_state(
@@ -362,6 +461,8 @@ class WorkflowPrepareNode(BaseLangGraphNode):
         issue_id: int | None,
         issue_url: str | None,
         issue_metadata: dict | None,
+        issue_result_data: dict | None,
+        related_issue_keys: list[str] | None,
         summary_data: dict | None,
         todos_data: list,
     ) -> EmailState:
@@ -377,6 +478,8 @@ class WorkflowPrepareNode(BaseLangGraphNode):
             issue_id: Existing issue ID
             issue_url: Existing issue URL
             issue_metadata: Existing issue metadata
+            issue_result_data: Existing issue result payload
+            related_issue_keys: Related issue keys for association
             summary_data: Summary data from EmailMessage
             todos_data: List of TODO data
 
@@ -413,6 +516,8 @@ class WorkflowPrepareNode(BaseLangGraphNode):
             "issue_id": issue_id,
             "issue_url": issue_url,
             "issue_metadata": issue_metadata,
+            "issue_result_data": issue_result_data,
+            "related_issue_keys": related_issue_keys or [],
             "prompt_config": prompt_config,
             "issue_config": issue_config,
             **self._load_threadline_runtime_bindings(),
@@ -527,9 +632,13 @@ class WorkflowPrepareNode(BaseLangGraphNode):
             ratio=0.8,
             attachment_count=len(attachments_data),
         )
-        issue_id, issue_url, issue_metadata = (
-            self._load_existing_issue_metadata()
+        issue_id, issue_url, issue_metadata, issue_result_data = (
+            self._load_existing_issue_metadata(
+                issue_config,
+                trigger_source=state.get("trigger_source"),
+            )
         )
+        related_issue_keys = self._load_related_issue_keys()
         summary_data = self.email.summary_data or None
         todos_data = self._load_todos_data()
         self._record_progress_step(
@@ -550,6 +659,8 @@ class WorkflowPrepareNode(BaseLangGraphNode):
             issue_id,
             issue_url,
             issue_metadata,
+            issue_result_data,
+            related_issue_keys,
             summary_data,
             todos_data,
         )

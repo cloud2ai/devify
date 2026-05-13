@@ -58,13 +58,6 @@ from .email_attachment import (
     EmailAttachmentUpdateSerializer,
 )
 
-# Issue serializers
-from .issue import (
-    IssueSerializer,
-    IssueCreateSerializer,
-    IssueUpdateSerializer,
-)
-
 # EmailAlias serializers
 from .email_alias import (
     EmailAliasSerializer,
@@ -105,10 +98,6 @@ __all__ = [
     "EmailAttachmentMinimalSerializer",
     "EmailAttachmentCreateSerializer",
     "EmailAttachmentUpdateSerializer",
-    # Issue
-    "IssueSerializer",
-    "IssueCreateSerializer",
-    "IssueUpdateSerializer",
     # EmailAlias
     "EmailAliasSerializer",
     "EmailAliasCreateSerializer",

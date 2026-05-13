@@ -1,5 +1,7 @@
 <template>
-  <header class="relative z-30 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/80 shadow-sm border-b border-gray-200">
+  <header
+    class="relative z-30 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/80 shadow-sm border-b border-gray-200"
+  >
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
       <div class="flex justify-between items-center h-16">
         <!-- Logo and title -->
@@ -35,13 +37,11 @@
         </div>
 
         <!-- Navigation -->
-        <nav class="hidden md:flex space-x-8">
+        <nav class="hidden md:flex space-x-4">
           <router-link
-            v-for="item in menuItems"
-            :key="item.to"
-            :to="item.to"
+            to="/chats"
             class="nav-link"
-            :class="{ 'nav-link-active': item.active }"
+            :class="{ 'nav-link-active': chatsActive }"
           >
             <svg
               class="w-4 h-4"
@@ -50,15 +50,196 @@
               viewBox="0 0 24 24"
             >
               <path
-                v-for="(path, index) in item.iconPaths"
-                :key="index"
                 stroke-linecap="round"
                 stroke-linejoin="round"
                 stroke-width="2"
-                :d="path"
+                d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"
               />
             </svg>
-            {{ item.label }}
+            {{ t('chats.title') }}
+          </router-link>
+
+          <div
+            class="relative"
+            ref="appsMenuRef"
+            @mouseenter="openAppsMenu"
+            @mouseleave="closeAppsMenu"
+          >
+            <button
+              type="button"
+              class="nav-link"
+              :class="{ 'nav-link-active': appsActive }"
+              @click.stop="toggleAppsMenu"
+            >
+              <svg
+                class="w-4 h-4"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M4 6h6V4H4a2 2 0 00-2 2v6h2V6zm10-2v2h6v6h2V6a2 2 0 00-2-2h-6zm6 14h-6v2h6a2 2 0 002-2v-6h-2v6zm-10 2v-2H4v-6H2v6a2 2 0 002 2h6z"
+                />
+              </svg>
+              <span>{{ t('apps.menuTitle') }}</span>
+              <svg
+                class="w-3.5 h-3.5 transition-transform"
+                :class="{ 'rotate-180': showAppsMenu }"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M19 9l-7 7-7-7"
+                />
+              </svg>
+            </button>
+
+            <Transition
+              enter-active-class="transition ease-out duration-150"
+              enter-from-class="transform opacity-0 translate-y-1 scale-95"
+              enter-to-class="transform opacity-100 translate-y-0 scale-100"
+              leave-active-class="transition ease-in duration-100"
+              leave-from-class="transform opacity-100 translate-y-0 scale-100"
+              leave-to-class="transform opacity-0 translate-y-1 scale-95"
+            >
+              <div
+                v-if="showAppsMenu"
+                class="absolute left-0 mt-3 w-[36rem] max-w-[calc(100vw-2rem)] rounded-2xl border border-gray-200 bg-white p-3 shadow-2xl z-50"
+              >
+                <div
+                  class="rounded-2xl bg-gradient-to-br from-primary-50 to-white p-3"
+                >
+                  <div class="flex items-start gap-2.5">
+                    <div
+                      class="flex h-9 w-9 flex-none items-center justify-center rounded-xl bg-primary-600 text-white shadow-sm"
+                    >
+                      <svg
+                        class="h-5 w-5"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          stroke-width="2"
+                          d="M4 6h6V4H4a2 2 0 00-2 2v6h2V6zm10-2v2h6v6h2V6a2 2 0 00-2-2h-6zm6 14h-6v2h6a2 2 0 002-2v-6h-2v6zm-10 2v-2H4v-6H2v6a2 2 0 002 2h6z"
+                        />
+                      </svg>
+                    </div>
+                    <div class="min-w-0">
+                      <div class="text-sm font-semibold text-gray-900">
+                        {{ t('apps.panelTitle') }}
+                      </div>
+                      <p class="mt-0.5 text-xs leading-5 text-gray-600">
+                        {{ t('apps.panelDescription') }}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="my-3 border-t border-gray-200" />
+
+                <div class="grid gap-2.5 sm:grid-cols-2">
+                  <router-link
+                    v-for="app in appCards"
+                    :key="app.key"
+                    :to="app.to"
+                    class="group flex min-h-24 flex-col rounded-2xl border border-gray-200 bg-white p-3 text-left transition hover:border-primary-300 hover:bg-primary-50 hover:shadow-sm"
+                    :class="{
+                      'border-primary-300 bg-primary-50 shadow-sm': app.active
+                    }"
+                    @click="closeMenus"
+                  >
+                    <div class="flex items-start gap-2.5">
+                      <div
+                        class="flex h-9 w-9 flex-none items-center justify-center rounded-xl bg-gray-100 text-gray-700 transition group-hover:bg-white group-hover:text-primary-600"
+                        :class="{
+                          'bg-white text-primary-600': app.active
+                        }"
+                      >
+                        <svg
+                          class="h-4.5 w-4.5"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="2"
+                            :d="app.iconPath"
+                          />
+                        </svg>
+                      </div>
+                      <div class="min-w-0">
+                        <div class="text-sm font-semibold text-gray-900">
+                          {{ app.title }}
+                        </div>
+                        <div class="mt-0.5 text-xs leading-5 text-gray-600">
+                          {{ app.description }}
+                        </div>
+                      </div>
+                    </div>
+                  </router-link>
+                </div>
+              </div>
+            </Transition>
+          </div>
+
+          <router-link
+            to="/settings"
+            class="nav-link"
+            :class="{ 'nav-link-active': settingsActive }"
+          >
+            <svg
+              class="w-4 h-4"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
+              />
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+              />
+            </svg>
+            {{ t('common.settings') }}
+          </router-link>
+
+          <router-link
+            to="/billing"
+            class="nav-link"
+            :class="{ 'nav-link-active': billingActive }"
+          >
+            <svg
+              class="w-4 h-4"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"
+              />
+            </svg>
+            {{ t('billing.menuTitle') }}
           </router-link>
         </nav>
 
@@ -318,7 +499,7 @@
               to="/chats"
               class="flex w-full min-w-0 items-start gap-3 overflow-hidden rounded-md px-3 py-2.5 text-base font-medium transition-colors"
               :class="
-                $route.name === 'Chats' || $route.path.startsWith('/chats')
+                chatsActive
                   ? 'bg-primary-50 text-primary-600'
                   : 'text-gray-700 hover:bg-gray-50'
               "
@@ -341,38 +522,82 @@
                 t('chats.title')
               }}</span>
             </router-link>
-            <router-link
-              to="/todos"
-              class="flex w-full min-w-0 items-start gap-3 overflow-hidden rounded-md px-3 py-2.5 text-base font-medium transition-colors"
-              :class="
-                $route.name === 'Todos'
-                  ? 'bg-primary-50 text-primary-600'
-                  : 'text-gray-700 hover:bg-gray-50'
-              "
-              @click="showMobileMenu = false"
-            >
-              <svg
-                class="w-5 h-5 flex-shrink-0 mt-0.5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
+            <div class="rounded-md">
+              <button
+                type="button"
+                class="flex w-full min-w-0 items-start gap-3 overflow-hidden rounded-md px-3 py-2.5 text-base font-medium transition-colors text-gray-700 hover:bg-gray-50"
+                :class="appsActive ? 'bg-primary-50 text-primary-600' : ''"
+                @click="showMobileAppsMenu = !showMobileAppsMenu"
               >
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"
-                />
-              </svg>
-              <span class="min-w-0 flex-1 break-words leading-snug">{{
-                t('todos.title')
-              }}</span>
-            </router-link>
+                <svg
+                  class="w-5 h-5 flex-shrink-0 mt-0.5"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M4 6h6V4H4a2 2 0 00-2 2v6h2V6zm10-2v2h6v6h2V6a2 2 0 00-2-2h-6zm6 14h-6v2h6a2 2 0 002-2v-6h-2v6zm-10 2v-2H4v-6H2v6a2 2 0 002 2h6z"
+                  />
+                </svg>
+                <span class="min-w-0 flex-1 break-words leading-snug">{{
+                  t('apps.menuTitle')
+                }}</span>
+                <svg
+                  class="w-4 h-4 mt-1 transition-transform"
+                  :class="{ 'rotate-180': showMobileAppsMenu }"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M19 9l-7 7-7-7"
+                  />
+                </svg>
+              </button>
+              <div
+                v-if="showMobileAppsMenu"
+                class="ml-4 mt-1 space-y-1 border-l border-gray-200 pl-3"
+              >
+                <router-link
+                  v-for="app in appCards"
+                  :key="`mobile-${app.key}`"
+                  :to="app.to"
+                  class="flex w-full min-w-0 items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors"
+                  :class="
+                    app.active
+                      ? 'bg-primary-50 text-primary-600'
+                      : 'text-gray-700 hover:bg-gray-50'
+                  "
+                  @click="showMobileMenu = false"
+                >
+                  <svg
+                    class="w-4 h-4 flex-shrink-0 text-primary-600"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      :d="app.iconPath"
+                    />
+                  </svg>
+                  <span>{{ app.title }}</span>
+                </router-link>
+              </div>
+            </div>
             <router-link
               to="/settings"
               class="flex w-full min-w-0 items-start gap-3 overflow-hidden rounded-md px-3 py-2.5 text-base font-medium transition-colors"
               :class="
-                $route.name === 'Settings'
+                settingsActive
                   ? 'bg-primary-50 text-primary-600'
                   : 'text-gray-700 hover:bg-gray-50'
               "
@@ -405,7 +630,7 @@
               to="/billing"
               class="flex w-full min-w-0 items-start gap-3 overflow-hidden rounded-md px-3 py-2.5 text-base font-medium transition-colors"
               :class="
-                $route.name === 'Billing'
+                billingActive
                   ? 'bg-primary-50 text-primary-600'
                   : 'text-gray-700 hover:bg-gray-50'
               "
@@ -445,14 +670,14 @@
                 stroke="currentColor"
                 viewBox="0 0 24 24"
               >
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M12 3l7 3v5c0 4.97-3.124 9.539-7 10-3.876-.461-7-5.03-7-10V6l7-3z"
-              />
-            </svg>
-            <span class="min-w-0 flex-1 break-words leading-snug">{{
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M12 3l7 3v5c0 4.97-3.124 9.539-7 10-3.876-.461-7-5.03-7-10V6l7-3z"
+                />
+              </svg>
+              <span class="min-w-0 flex-1 break-words leading-snug">{{
                 t('management.adminConsole')
               }}</span>
             </router-link>
@@ -483,7 +708,10 @@ const userStore = useUserStore()
 
 const showUserMenu = ref(false)
 const showMobileMenu = ref(false)
+const showAppsMenu = ref(false)
+const showMobileAppsMenu = ref(false)
 const userMenuRef = ref(null)
+const appsMenuRef = ref(null)
 const copied = ref(false)
 
 const displayName = computed(() => {
@@ -543,39 +771,35 @@ const avatarBgColor = computed(() => {
   return colors[colorIndex]
 })
 
-const menuItems = computed(() => [
+const chatsActive = computed(
+  () => route.name === 'Chats' || route.path.startsWith('/chats')
+)
+const todosActive = computed(() => route.name === 'Todos')
+const appsActive = computed(
+  () =>
+    route.name === 'RelayApp' ||
+    route.name === 'AppCenter' ||
+    route.path.startsWith('/apps')
+)
+const settingsActive = computed(() => route.name === 'Settings')
+const billingActive = computed(() => route.name === 'Billing')
+const appCards = computed(() => [
   {
-    to: '/chats',
-    label: t('chats.title'),
-    iconPaths: [
-      'M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z'
-    ],
-    active: route.name === 'Chats' || route.path.startsWith('/chats')
+    key: 'relay',
+    to: '/apps/relay',
+    title: t('apps.relayName'),
+    description: t('apps.relayDesc'),
+    iconPath: 'M13 10V3L4 14h7v7l9-11h-7z',
+    active: route.name === 'RelayApp'
   },
   {
+    key: 'todos',
     to: '/todos',
-    label: t('todos.title'),
-    iconPaths: [
-      'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4'
-    ],
-    active: route.name === 'Todos'
-  },
-  {
-    to: '/settings',
-    label: t('common.settings'),
-    iconPaths: [
-      'M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z',
-      'M15 12a3 3 0 11-6 0 3 3 0 016 0z'
-    ],
-    active: route.name === 'Settings'
-  },
-  {
-    to: '/billing',
-    label: t('billing.menuTitle'),
-    iconPaths: [
-      'M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z'
-    ],
-    active: route.name === 'Billing'
+    title: t('todos.title'),
+    description: t('apps.todoDesc'),
+    iconPath:
+      'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2',
+    active: todosActive.value
   }
 ])
 
@@ -594,6 +818,24 @@ const toggleUserMenu = () => {
 
 const toggleMobileMenu = () => {
   showMobileMenu.value = !showMobileMenu.value
+}
+
+const openAppsMenu = () => {
+  showAppsMenu.value = true
+}
+
+const closeAppsMenu = () => {
+  showAppsMenu.value = false
+}
+
+const toggleAppsMenu = () => {
+  showAppsMenu.value = !showAppsMenu.value
+}
+
+const closeMenus = () => {
+  showAppsMenu.value = false
+  showMobileAppsMenu.value = false
+  showMobileMenu.value = false
 }
 
 const copyVirtualEmail = async () => {
@@ -627,6 +869,9 @@ const handleClickOutside = (event) => {
   if (userMenuRef.value && !userMenuRef.value.contains(event.target)) {
     showUserMenu.value = false
     copied.value = false
+  }
+  if (appsMenuRef.value && !appsMenuRef.value.contains(event.target)) {
+    showAppsMenu.value = false
   }
 }
 

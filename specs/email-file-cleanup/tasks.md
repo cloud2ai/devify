@@ -229,15 +229,11 @@ cd devify
 python -m pytest devify/threadline/tests/unit/test_email_cleanup.py -v
 ```
 
-**方法3：使用 nox（统一测试工具）**
+**方法3：直接使用 pytest**
 ```bash
 cd devify
 
-# 使用便捷脚本（自动处理环境变量冲突）
-./run-nox.sh -s unit_tests
-
-# 或手动运行
-unset FORCE_COLOR && unset NO_COLOR && nox -s unit_tests
+pytest devify/threadline/tests/unit/ -v
 ```
 
 ### 部署清单
@@ -305,7 +301,7 @@ unset FORCE_COLOR && unset NO_COLOR && nox -s unit_tests
   - EmailCleanupManager 测试（7个）
   - EmailTaskCleanupManager 测试（5个）
   - 覆盖成功、失败、边界等场景
-  - 支持 Django TestCase、pytest 和 nox 运行
+  - 支持 Django TestCase 和 pytest 运行
   - pytest 数据库隔离已修复
 
 ### 文件结构

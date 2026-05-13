@@ -414,6 +414,11 @@
                 <h2
                   class="text-lg font-bold leading-7 text-gray-900 sm:text-xl flex-1 pr-6 line-clamp-5"
                 >
+                  <MergeStateBadge
+                    v-if="threadlineMergeState !== 'original'"
+                    :state="threadlineMergeState"
+                    class="mr-2 align-middle"
+                  />
                   <span
                     v-if="shareStatus?.is_active"
                     class="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium mr-2 align-middle"
@@ -463,8 +468,32 @@
                   </svg>
                 </h2>
               </button>
-              <div v-if="threadlineMergeState !== 'original'" class="mt-3">
-                <MergeStateBadge :state="threadlineMergeState" />
+              <div
+                v-if="getRelayDeliveries(threadline).length > 0"
+                class="mt-3 flex flex-wrap items-center gap-2"
+              >
+                <template
+                  v-for="delivery in getRelayDeliveries(threadline)"
+                  :key="relayDeliveryKey(threadline, delivery)"
+                >
+                  <component
+                    :is="delivery.external_url ? 'a' : 'span'"
+                    :href="delivery.external_url || undefined"
+                    :target="delivery.external_url ? '_blank' : undefined"
+                    :rel="
+                      delivery.external_url ? 'noopener noreferrer' : undefined
+                    "
+                    :title="delivery.external_url || delivery.external_id"
+                    class="inline-flex shrink-0 items-center rounded-full bg-blue-50 px-2.5 py-0.5 text-xs font-medium text-blue-700 ring-1 ring-blue-200 transition-colors"
+                    :class="
+                      delivery.external_url
+                        ? 'cursor-pointer hover:bg-blue-100'
+                        : ''
+                    "
+                  >
+                    {{ relayDeliveryLabel(delivery) }}
+                  </component>
+                </template>
               </div>
               <!-- Share Info Area -->
               <div v-if="shareStatus?.is_active" class="mt-4">
@@ -1287,85 +1316,6 @@
                   </div>
                 </div>
 
-                <!-- Issue Link -->
-                <div
-                  v-if="threadline.issue_external_id"
-                  class="grid grid-cols-[theme(spacing.28),1fr] gap-y-1 gap-x-1.5 text-xs sm:text-sm"
-                >
-                  <div class="flex items-center gap-1 text-gray-500">
-                    <svg
-                      class="w-3.5 h-3.5 text-gray-400 flex-shrink-0"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        stroke-width="2"
-                        d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"
-                      />
-                    </svg>
-                    <span>{{ t('chats.issue.label') }}</span>
-                  </div>
-                  <div class="flex items-center gap-2 min-w-0">
-                    <a
-                      v-if="threadline.issue_url"
-                      :href="threadline.issue_url"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-violet-100 text-violet-800 transition-colors hover:bg-violet-200"
-                      :title="t('chats.issue.openInNewWindow')"
-                    >
-                      <span class="truncate font-medium">
-                        {{ threadline.issue_external_id }}
-                      </span>
-                      <svg
-                        class="h-3 w-3 flex-shrink-0"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                        aria-hidden="true"
-                      >
-                        <path
-                          stroke-linecap="round"
-                          stroke-linejoin="round"
-                          stroke-width="2"
-                          d="M14 3h7v7m0-7L10 14"
-                        />
-                        <path
-                          stroke-linecap="round"
-                          stroke-linejoin="round"
-                          stroke-width="2"
-                          d="M10 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-4"
-                        />
-                      </svg>
-                    </a>
-                    <span
-                      v-else
-                      class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-violet-100 text-violet-800"
-                    >
-                      <span class="truncate font-medium">
-                        {{ threadline.issue_external_id }}
-                      </span>
-                      <svg
-                        class="h-3 w-3 flex-shrink-0"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                        aria-hidden="true"
-                      >
-                        <path
-                          stroke-linecap="round"
-                          stroke-linejoin="round"
-                          stroke-width="2"
-                          d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"
-                        />
-                      </svg>
-                    </span>
-                  </div>
-                </div>
-
                 <div
                   v-if="threadline.merged_into_uuid"
                   class="border-t border-gray-200 pt-4"
@@ -1419,7 +1369,7 @@
                         }}
                       </div>
                     </div>
-                    <MergeStateBadge state="merged_source" />
+                    <MergeStateBadge state="canonical" />
                   </router-link>
                 </div>
                 <div
@@ -1479,9 +1429,7 @@
                           {{ formatDate(child.received_at) }}
                         </div>
                       </div>
-                      <MergeStateBadge
-                        :state="getThreadlineMergeState(child)"
-                      />
+                      <MergeStateBadge state="original" />
                     </router-link>
                   </div>
                 </div>
@@ -1996,7 +1944,7 @@
           </svg>
           <p>{{ t('chats.summaryProcessing') }}</p>
           <p class="text-sm mt-2">
-            {{ t('common.status') }}:
+            {{ t('common.statusLabel') }}:
             {{ getThreadlineDisplayStatus(threadline) }}
           </p>
         </div>
@@ -2405,11 +2353,14 @@ import { useThreadlineShare } from '@/composables/useThreadlineShare'
 import { useThreadlineTodos } from '@/composables/useThreadlineTodos'
 import { useThreadlineMetadata } from '@/composables/useThreadlineMetadata'
 import { useThreadlineContent } from '@/composables/useThreadlineContent'
+import { useRelayDeliveries } from '@/composables/useRelayDeliveries'
 import { getThreadlineDisplayStatus } from '@/utils/threadlineStatus'
 import { getThreadlineMergeState } from '@/utils/threadlineMergeState'
 
 const route = useRoute()
 const { t } = useI18n()
+const { getRelayDeliveries, relayDeliveryLabel, relayDeliveryKey } =
+  useRelayDeliveries()
 
 // Initialize composables
 // Create shared threadline ref first
@@ -2486,6 +2437,7 @@ const shouldKeepProgressVisible = computed(
 function getProgressTargetPercent(snapshot) {
   const percent = Number(snapshot?.percent ?? snapshot?.progress_percent)
   const active = isProcessing.value || retrying.value
+  const activeCeiling = 95
 
   if (!Number.isFinite(percent)) {
     return active ? 0 : null
@@ -2510,10 +2462,10 @@ function getProgressTargetPercent(snapshot) {
   }
 
   if (normalized >= 100) {
-    return 99
+    return activeCeiling
   }
 
-  return normalized
+  return Math.min(activeCeiling, normalized)
 }
 
 const threadlineProgressTarget = computed(() => {
@@ -2603,7 +2555,7 @@ const scheduleProgressCreep = () => {
     }
 
     const currentValue = Math.max(0, Math.round(displayedProgressPercent.value))
-    if (currentValue >= 99) {
+    if (currentValue >= 95) {
       return
     }
 
@@ -2617,7 +2569,7 @@ const scheduleProgressCreep = () => {
 const animateProgressTo = (target, options = {}) => {
   const normalizedTarget = Math.max(
     0,
-    Math.min(options.ceiling ?? 99, Number(target ?? 0))
+    Math.min(options.ceiling ?? 95, Number(target ?? 0))
   )
 
   cancelProgressAnimation()
@@ -2737,7 +2689,7 @@ watch(
       return
     }
 
-    const normalizedTarget = Math.max(0, Math.min(99, target))
+    const normalizedTarget = Math.max(0, Math.min(95, target))
     const currentDisplayed = Math.max(
       0,
       Math.round(displayedProgressPercent.value)

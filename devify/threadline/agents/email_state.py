@@ -83,6 +83,8 @@ class EmailState(TypedDict, total=False):
     issue_prepare_data: Dict[str, Any] | None
     # Issue creation result from any engine
     issue_result_data: Dict[str, Any] | None
+    # Related issue keys used for association/linking
+    related_issue_keys: List[str] | None
 
     # User configuration (loaded from Settings)
     # User's prompt configuration
@@ -107,6 +109,7 @@ class EmailState(TypedDict, total=False):
     # Retry configuration (temporary override)
     retry_language: str | None
     retry_scene: str | None
+    trigger_source: str | None
 
     # Credits-related fields
     credits_consumed: bool | None
@@ -170,6 +173,7 @@ def create_email_state(
         "progress_plan": None,
         "retry_language": None,
         "retry_scene": None,
+        "trigger_source": None,
         "image_llm_config_uuid": None,
         "text_llm_config_uuid": None,
         "llm_config_uuid": None,

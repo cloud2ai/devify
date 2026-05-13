@@ -52,12 +52,28 @@ export function useThreadlinePolling(threadline, route) {
       const response = await chatApi.getThreadline(route.params.id)
       const data = response.data.data || response.data
       threadline.value = data
+      const snapshotUpdatedAt = data?.updated_at
+        ? Date.parse(data.updated_at)
+        : null
+      const isStaleRetrySnapshot =
+        retrying.value &&
+        Number.isFinite(retryStartedAt.value) &&
+        Number.isFinite(snapshotUpdatedAt) &&
+        snapshotUpdatedAt < retryStartedAt.value
 
       // Check if processing is complete
       // Keep retrying state true if status is processing
       if (isThreadlineProcessing(data)) {
         retrying.value = true
         // Continue polling, don't stop
+        return
+      }
+
+      if (
+        retrying.value &&
+        isStaleRetrySnapshot &&
+        (data.status === 'success' || data.status === 'failed')
+      ) {
         return
       }
 

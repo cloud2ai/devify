@@ -104,5 +104,27 @@ def test_threadline_progress_snapshot_is_monotonic_within_task(monkeypatch):
         )
 
     assert fake_message.set_processing_progress.call_count == 2
-    assert fake_message.set_processing_progress.call_args_list[0].args == (90,)
-    assert fake_message.set_processing_progress.call_args_list[1].args == (90,)
+    assert fake_message.set_processing_progress.call_args_list[0].args == (92,)
+    assert fake_message.set_processing_progress.call_args_list[1].args == (92,)
+
+
+def test_email_merge_does_not_sync_user_facing_progress(monkeypatch):
+    tracer = TaskTracer("EMAIL_MERGE")
+    tracer._context["email_id"] = "123"
+
+    fake_message = Mock()
+    filter_result = Mock()
+    filter_result.only.return_value.first.return_value = fake_message
+
+    with patch(
+        "threadline.models.EmailMessage.objects.filter",
+        return_value=filter_result,
+    ):
+        tracer._sync_threadline_progress_snapshot(
+            {
+                "progress_percent": 75,
+                "progress_step": "MERGE_RECONCILE",
+            }
+        )
+
+    fake_message.set_processing_progress.assert_not_called()

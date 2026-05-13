@@ -78,12 +78,12 @@ def recover_stuck_processing_emails(
                 process_email_merge.delay(
                     str(email.id),
                     force=False,
-                    trigger_source="startup_recovery",
+                    trigger_source="retry_task",
                 )
                 requeued_count += 1
                 logger.info(
                     "Recovered stale processing email %s (%s) "
-                    "trigger_source=startup_recovery",
+                    "trigger_source=retry_task",
                     email.id,
                     email.uuid,
                 )

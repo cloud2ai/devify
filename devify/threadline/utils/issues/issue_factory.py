@@ -7,15 +7,6 @@ provider handler.
 
 from typing import Any, Dict
 
-from .feishu_bitable_handler import FeishuBitableIssueHandler
-from .jira_handler import JiraIssueHandler
-
-
-SUPPORTED_ISSUE_ENGINES = {
-    "jira": JiraIssueHandler,
-    "feishu_bitable": FeishuBitableIssueHandler,
-}
-
 
 def normalize_issue_engine(issue_engine: str | None) -> str:
     """
@@ -43,7 +34,19 @@ def get_issue_handler(config: Dict[str, Any]):
     """
     issue_engine = normalize_issue_engine(config.get("issue_engine", "jira"))
 
-    handler_class = SUPPORTED_ISSUE_ENGINES.get(issue_engine)
+    if issue_engine == "jira":
+        from relay.services.drivers.jira_handler import JiraIssueHandler
+
+        handler_class = JiraIssueHandler
+    elif issue_engine == "feishu_bitable":
+        from relay.services.drivers.feishu_bitable_handler import (
+            FeishuBitableIssueHandler,
+        )
+
+        handler_class = FeishuBitableIssueHandler
+    else:
+        handler_class = None
+
     if not handler_class:
         raise ValueError(f"Unsupported issue engine: {issue_engine}")
 

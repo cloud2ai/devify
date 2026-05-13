@@ -46,6 +46,7 @@ urlpatterns = [
     # Threadline API routes
     # Email processing and threadline management endpoints
     path("api/v1/", include("threadline.urls")),
+    path("api/v1/", include("relay.urls")),
     # Agentcore task execution API
     path("api/v1/tasks/", include("agentcore_task.adapters.django.urls")),
     # Management APIs for auth users/groups
@@ -60,6 +61,7 @@ urlpatterns = [
         "api/v1/admin/threadline/",
         include("threadline.admin_urls"),
     ),
+    path("api/v1/admin/apps/", include("relay.admin_urls")),
     # Billing API routes
     # Subscription and credits management endpoints
     path("api/billing/", include("billing.urls")),

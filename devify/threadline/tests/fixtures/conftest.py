@@ -15,7 +15,7 @@ project_root = Path(__file__).resolve().parent.parent.parent.parent
 sys.path.insert(0, str(project_root))
 
 # Set Django settings module
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'devify.core.settings')
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'core.settings')
 
 # Configure Django
 django.setup()
@@ -103,15 +103,15 @@ def authenticated_api_client(api_client, test_user):
     api_client.force_authenticate(user=test_user)
     return api_client
 
-
 @pytest.fixture
-def authenticated_api_client_2(api_client, test_user_2):
+def authenticated_api_client_2(test_user_2):
     """
     Second API client with authentication token for permission testing
     """
-    # Use force_authenticate for testing
-    api_client.force_authenticate(user=test_user_2)
-    return api_client
+    from rest_framework.test import APIClient
+    client = APIClient()
+    client.force_authenticate(user=test_user_2)
+    return client
 
 
 @pytest.fixture

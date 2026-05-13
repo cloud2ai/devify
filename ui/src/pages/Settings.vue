@@ -728,734 +728,33 @@
                 />
               </svg>
               <h3 class="text-base font-semibold leading-5">
-                {{ t('settings.issueConfigTitle') }}
+                {{ t('settings.legacySyncRedirectTitle') }}
               </h3>
             </div>
           </template>
 
-          <div class="space-y-5">
-            <div class="bg-blue-50 border border-blue-200 rounded-lg p-3">
-              <p class="text-xs leading-relaxed text-blue-700">
-                {{ t('settings.issueConfigHint') }}
+          <div class="space-y-4">
+            <div class="rounded-lg border border-amber-200 bg-amber-50 p-4">
+              <p class="text-sm font-medium text-amber-900">
+                {{ t('settings.legacySyncRedirectTitle') }}
               </p>
-            </div>
-
-            <div class="rounded-lg border border-gray-200 bg-white p-3 sm:p-4 space-y-4">
-              <label class="flex items-center gap-2 text-sm font-medium text-gray-700">
-                <input
-                  v-model="issueConfigForm.enable"
-                  type="checkbox"
-                  class="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
-                />
-                {{ t('settings.issueEnabled') }}
-              </label>
-              <p class="text-xs text-gray-500">
-                {{ t('settings.issueEnabledHelp') }}
-              </p>
-
-              <div class="grid grid-cols-1 gap-3 lg:grid-cols-2">
-                <div class="space-y-2">
-                  <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">
-                      {{ t('settings.issueEngine') }}
-                    </label>
-                    <p class="text-xs text-gray-500">
-                      {{ t('settings.issueEngineHelp') }}
-                    </p>
-                  </div>
-                  <select
-                    v-model="issueConfigForm.issueEngine"
-                    :disabled="!issueConfigForm.enable"
-                    class="block w-full pl-3 pr-10 py-2 text-sm border-gray-300 bg-white rounded-md shadow-sm appearance-none transition-colors focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400 disabled:border-gray-200"
-                  >
-                    <option value="jira">
-                      {{ t('settings.issueEngineJira') }}
-                    </option>
-                    <option value="feishu_bitable">
-                      {{ t('settings.issueEngineFeishu') }}
-                    </option>
-                  </select>
-                </div>
-
-                <div class="space-y-2">
-                  <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">
-                      {{ t('settings.issueLanguage') }}
-                    </label>
-                    <p class="text-xs text-gray-500">
-                      {{ t('settings.issueLanguageHelp') }}
-                    </p>
-                  </div>
-                  <select
-                    v-model="issueConfigForm.language"
-                    :disabled="!issueConfigForm.enable"
-                    class="block w-full pl-3 pr-10 py-2 text-sm border-gray-300 bg-white rounded-md shadow-sm appearance-none transition-colors focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400 disabled:border-gray-200"
-                  >
-                    <option value="Chinese">
-                      {{ t('settings.issueLanguageChinese') }}
-                    </option>
-                    <option value="English">
-                      {{ t('settings.issueLanguageEnglish') }}
-                    </option>
-                  </select>
-                </div>
-              </div>
-            </div>
-
-            <div v-if="issueError" class="rounded-md bg-red-50 p-3">
-              <p class="text-sm text-red-700">{{ issueError }}</p>
-            </div>
-
-            <div v-if="issueSuccess" class="rounded-md bg-green-50 p-3">
-              <p class="text-sm font-medium text-green-800">
-                {{ issueSuccess }}
+              <p class="mt-1 text-sm leading-6 text-amber-800">
+                {{ t('settings.legacySyncRedirectDesc') }}
               </p>
             </div>
 
             <div
-              v-if="showJiraConfig"
-              class="space-y-4 rounded-lg border border-gray-200 bg-gray-50/80 p-3 sm:p-4"
+              class="flex flex-col gap-3 rounded-lg border border-gray-200 bg-white p-4 sm:flex-row sm:items-center sm:justify-between"
             >
-              <div class="flex items-center justify-between gap-3">
-                <div>
-                  <h4 class="text-sm font-semibold leading-5 text-gray-900">
-                    {{ t('settings.jiraConfigTitle') }}
-                  </h4>
-                  <p class="mt-1 text-xs leading-5 text-gray-500">
-                    {{ t('settings.jiraConfigDesc1') }}
-                  </p>
-                </div>
-              </div>
-
-              <div
-                class="rounded-md border border-amber-200 bg-amber-50 p-2.5 text-xs leading-5 text-amber-800"
+              <p class="text-sm leading-6 text-gray-600">
+                {{ t('settings.legacySyncRedirectHelp') }}
+              </p>
+              <RouterLink
+                to="/apps/relay"
+                class="inline-flex items-center justify-center rounded-md bg-primary-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary-700"
               >
-                <p>{{ t('settings.jiraLegacyWarning') }}</p>
-              </div>
-
-              <div
-                class="rounded-md border border-white bg-white p-3 space-y-3 sm:p-4"
-              >
-                <div class="space-y-1">
-                  <h5 class="text-sm font-semibold leading-5 text-gray-900">
-                    {{ t('settings.jiraConnectionTitle') }}
-                  </h5>
-                  <p class="text-xs leading-5 text-gray-500">
-                    {{ t('settings.jiraConnectionDesc') }}
-                  </p>
-                </div>
-
-                <div class="grid grid-cols-1 gap-3 lg:grid-cols-2">
-                  <div class="space-y-1 lg:col-span-2">
-                    <BaseInput
-                      v-model="jiraForm.url"
-                      :label="t('settings.jiraUrl')"
-                      :placeholder="t('settings.jiraUrlPlaceholder')"
-                    />
-                    <p class="text-xs text-gray-500">
-                      {{ t('settings.jiraUrlHelp') }}
-                    </p>
-                  </div>
-                  <div class="space-y-1">
-                    <BaseInput
-                      v-model="jiraForm.username"
-                      :label="t('settings.jiraUsername')"
-                      :placeholder="t('settings.jiraUsernamePlaceholder')"
-                    />
-                    <p class="text-xs text-gray-500">
-                      {{ t('settings.jiraUsernameHelp') }}
-                    </p>
-                  </div>
-                  <div class="space-y-1">
-                    <BaseInput
-                      v-model="jiraForm.apiToken"
-                      :label="t('settings.jiraApiToken')"
-                      type="password"
-                      :placeholder="t('settings.jiraApiTokenPlaceholder')"
-                    />
-                    <p class="text-xs text-gray-500">
-                      {{ t('settings.jiraConnectionHelp') }}
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              <div
-                class="rounded-md border border-white bg-white p-3 space-y-3 sm:p-4"
-              >
-                <div class="space-y-1">
-                  <h5 class="text-sm font-semibold leading-5 text-gray-900">
-                    {{ t('settings.jiraRequiredFieldsTitle') }}
-                  </h5>
-                  <p class="text-xs leading-5 text-gray-500">
-                    {{ t('settings.jiraRequiredFieldsDesc') }}
-                  </p>
-                </div>
-
-                <div class="grid grid-cols-1 gap-3 lg:grid-cols-2">
-                  <div class="space-y-1">
-                    <BaseInput
-                      v-model="jiraForm.projectKey"
-                      :label="t('settings.jiraProjectKey')"
-                      :placeholder="t('settings.jiraProjectKeyPlaceholder')"
-                    />
-                    <p class="text-xs text-gray-500">
-                      {{ t('settings.jiraProjectKeyHelp') }}
-                    </p>
-                  </div>
-                  <div class="space-y-1">
-                    <BaseInput
-                      v-model="jiraForm.issueType"
-                      :label="t('settings.jiraIssueType')"
-                      :placeholder="t('settings.jiraIssueTypePlaceholder')"
-                    />
-                    <p class="text-xs text-gray-500">
-                      {{ t('settings.jiraIssueTypeHelp') }}
-                    </p>
-                  </div>
-                  <div class="space-y-1">
-                    <BaseInput
-                      v-model="jiraForm.priority"
-                      :label="t('settings.jiraPriority')"
-                      :placeholder="t('settings.jiraPriorityPlaceholder')"
-                    />
-                    <p class="text-xs text-gray-500">
-                      {{ t('settings.jiraPriorityHelp') }}
-                    </p>
-                  </div>
-                  <div class="space-y-1">
-                    <BaseInput
-                      v-model="jiraForm.descriptionField"
-                      :label="t('settings.jiraDescriptionField')"
-                      :placeholder="
-                        t('settings.jiraDescriptionFieldPlaceholder')
-                      "
-                    />
-                    <p class="text-xs text-gray-500">
-                      {{ t('settings.jiraDescriptionFieldHelp') }}
-                    </p>
-                  </div>
-                  <div class="space-y-1 lg:col-span-2">
-                    <BaseInput
-                      v-model="jiraForm.summaryPrefix"
-                      :label="t('settings.jiraSummaryPrefix')"
-                      :placeholder="t('settings.jiraSummaryPrefixPlaceholder')"
-                    />
-                    <p class="text-xs text-gray-500">
-                      {{ t('settings.jiraSummaryPrefixHelp') }}
-                    </p>
-                  </div>
-                  <label class="flex items-start gap-2 text-sm text-gray-700">
-                    <input
-                      v-model="jiraForm.convertToJiraWiki"
-                      type="checkbox"
-                      class="mt-0.5 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
-                    />
-                    <span>
-                      {{ t('settings.jiraConvertToJiraWiki') }}
-                      <span class="block text-xs text-gray-500">
-                        {{ t('settings.jiraConvertToJiraWikiHelp') }}
-                      </span>
-                    </span>
-                  </label>
-                </div>
-
-                <label class="flex items-center gap-2 text-sm text-gray-700">
-                  <input
-                    v-model="jiraForm.addTimestamp"
-                    type="checkbox"
-                    class="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
-                  />
-                  {{ t('settings.jiraSummaryAddTimestamp') }}
-                </label>
-              </div>
-
-              <div
-                class="rounded-md border border-white bg-white p-3 space-y-3 sm:p-4"
-              >
-                <div class="space-y-1">
-                  <h5 class="text-sm font-semibold leading-5 text-gray-900">
-                    {{ t('settings.jiraAssigneeSectionTitle') }}
-                  </h5>
-                  <p class="text-xs leading-5 text-gray-500">
-                    {{ t('settings.jiraAssigneeSectionDesc') }}
-                  </p>
-                </div>
-
-                <div class="grid grid-cols-1 gap-3 lg:grid-cols-2">
-                  <div class="space-y-1">
-                    <BaseInput
-                      v-model="jiraForm.assigneeDefault"
-                      :label="t('settings.jiraAssigneeDefault')"
-                      :placeholder="
-                        t('settings.jiraAssigneeDefaultPlaceholder')
-                      "
-                    />
-                    <p class="text-xs text-gray-500">
-                      {{ t('settings.jiraAssigneeDefaultHelp') }}
-                    </p>
-                  </div>
-                  <div class="space-y-1 lg:col-span-2">
-                    <label class="block text-sm font-medium text-gray-700 mb-1">
-                      {{ t('settings.jiraAssigneeAllowValues') }}
-                    </label>
-                    <textarea
-                      v-model="jiraForm.assigneeAllowValuesText"
-                      class="input min-h-[88px]"
-                      :placeholder="
-                        t('settings.jiraAssigneeAllowValuesPlaceholder')
-                      "
-                    />
-                    <p class="mt-1 text-xs text-gray-500">
-                      {{ t('settings.jiraAssigneeAllowValuesHelp') }}
-                    </p>
-                  </div>
-                  <label class="flex items-center gap-2 text-sm text-gray-700">
-                    <input
-                      v-model="jiraForm.assigneeUseLlm"
-                      type="checkbox"
-                      class="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
-                    />
-                    {{ t('settings.jiraAssigneeUseLlm') }}
-                  </label>
-                  <div
-                    v-if="jiraForm.assigneeUseLlm"
-                    class="space-y-1 lg:col-span-2"
-                  >
-                    <label class="block text-sm font-medium text-gray-700 mb-1">
-                      {{ t('settings.jiraAssigneePrompt') }}
-                    </label>
-                    <textarea
-                      v-model="jiraForm.assigneePrompt"
-                      class="input min-h-[96px]"
-                      :placeholder="t('settings.jiraAssigneePromptPlaceholder')"
-                    />
-                    <p class="mt-1 text-xs text-gray-500">
-                      {{ t('settings.jiraAssigneePromptHelp') }}
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              <div
-                class="rounded-md border border-white bg-white p-3 space-y-3 sm:p-4"
-              >
-                <div class="space-y-1">
-                  <h5 class="text-sm font-semibold leading-5 text-gray-900">
-                    {{ t('settings.jiraComponentsSectionTitle') }}
-                  </h5>
-                  <p class="text-xs leading-5 text-gray-500">
-                    {{ t('settings.jiraComponentsSectionDesc') }}
-                  </p>
-                </div>
-
-                <div class="grid grid-cols-1 gap-3 lg:grid-cols-2">
-                  <div class="space-y-1 lg:col-span-2">
-                    <label class="block text-sm font-medium text-gray-700 mb-1">
-                      {{ t('settings.jiraComponentsDefault') }}
-                    </label>
-                    <textarea
-                      v-model="jiraForm.componentsDefaultText"
-                      class="input min-h-[88px]"
-                      :placeholder="
-                        t('settings.jiraComponentsDefaultPlaceholder')
-                      "
-                    />
-                    <p class="mt-1 text-xs text-gray-500">
-                      {{ t('settings.jiraComponentsDefaultHelp') }}
-                    </p>
-                  </div>
-                  <label class="flex items-center gap-2 text-sm text-gray-700">
-                    <input
-                      v-model="jiraForm.componentsUseLlm"
-                      type="checkbox"
-                      class="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
-                    />
-                    {{ t('settings.jiraComponentsUseLlm') }}
-                  </label>
-                  <label class="flex items-center gap-2 text-sm text-gray-700">
-                    <input
-                      v-model="jiraForm.componentsFetchFromApi"
-                      type="checkbox"
-                      class="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
-                    />
-                    {{ t('settings.jiraComponentsFetchFromApi') }}
-                  </label>
-                </div>
-
-                <div v-if="jiraForm.componentsUseLlm" class="space-y-1">
-                  <label class="block text-sm font-medium text-gray-700 mb-1">
-                    {{ t('settings.jiraComponentsPrompt') }}
-                  </label>
-                  <textarea
-                    v-model="jiraForm.componentsPrompt"
-                    class="input min-h-[96px]"
-                    :placeholder="t('settings.jiraComponentsPromptPlaceholder')"
-                  />
-                  <p class="mt-1 text-xs text-gray-500">
-                    {{ t('settings.jiraComponentsPromptHelp') }}
-                  </p>
-                </div>
-              </div>
-
-              <div
-                class="rounded-lg border border-white bg-white p-4 space-y-4"
-              >
-                <div class="space-y-1">
-                  <h5 class="text-sm font-semibold text-gray-900">
-                    {{ t('settings.jiraEpicLinkSectionTitle') }}
-                  </h5>
-                  <p class="text-xs text-gray-500">
-                    {{ t('settings.jiraEpicLinkSectionDesc') }}
-                  </p>
-                </div>
-
-                <div class="grid grid-cols-1 gap-3 lg:grid-cols-2">
-                  <div class="space-y-1">
-                    <BaseInput
-                      v-model="jiraForm.epicLinkDefault"
-                      :label="t('settings.jiraEpicLinkDefault')"
-                      :placeholder="
-                        t('settings.jiraEpicLinkDefaultPlaceholder')
-                      "
-                    />
-                    <p class="text-xs text-gray-500">
-                      {{ t('settings.jiraEpicLinkDefaultHelp') }}
-                    </p>
-                  </div>
-                  <div class="space-y-1">
-                    <BaseInput
-                      v-model="jiraForm.epicLinkJqlFilter"
-                      :label="t('settings.jiraEpicLinkJqlFilter')"
-                      :placeholder="
-                        t('settings.jiraEpicLinkJqlFilterPlaceholder')
-                      "
-                    />
-                    <p class="text-xs text-gray-500">
-                      {{ t('settings.jiraEpicLinkJqlFilterHelp') }}
-                    </p>
-                  </div>
-                  <label class="flex items-center gap-2 text-sm text-gray-700">
-                    <input
-                      v-model="jiraForm.epicLinkUseLlm"
-                      type="checkbox"
-                      class="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
-                    />
-                    {{ t('settings.jiraEpicLinkUseLlm') }}
-                  </label>
-                  <label class="flex items-center gap-2 text-sm text-gray-700">
-                    <input
-                      v-model="jiraForm.epicLinkFetchFromApi"
-                      type="checkbox"
-                      class="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
-                    />
-                    {{ t('settings.jiraEpicLinkFetchFromApi') }}
-                  </label>
-                </div>
-
-                <div v-if="jiraForm.epicLinkUseLlm" class="space-y-1">
-                  <label class="block text-sm font-medium text-gray-700 mb-1">
-                    {{ t('settings.jiraEpicLinkPrompt') }}
-                  </label>
-                  <textarea
-                    v-model="jiraForm.epicLinkPrompt"
-                    class="input min-h-[96px]"
-                    :placeholder="t('settings.jiraEpicLinkPromptPlaceholder')"
-                  />
-                  <p class="mt-1 text-xs text-gray-500">
-                    {{ t('settings.jiraEpicLinkPromptHelp') }}
-                  </p>
-                </div>
-              </div>
-
-              <div class="rounded-md border border-white bg-white p-3 sm:p-4">
-                <p class="text-xs leading-5 text-gray-500">
-                  {{ t('settings.jiraConfigDesc2') }}
-                </p>
-              </div>
-            </div>
-
-            <div
-              v-else-if="showFeishuConfig"
-              class="space-y-4 rounded-lg border border-gray-200 bg-gray-50/80 p-3 sm:p-4"
-            >
-              <div class="flex items-center justify-between gap-3">
-                <div>
-                  <h4 class="text-sm font-semibold leading-5 text-gray-900">
-                    {{ t('settings.feishuConfigTitle') }}
-                  </h4>
-                  <p class="mt-1 text-xs leading-5 text-gray-500">
-                    {{ t('settings.feishuConfigDesc1') }}
-                  </p>
-                  <p class="mt-1 text-xs leading-5 text-gray-500">
-                    {{ t('settings.feishuConfigDesc2') }}
-                  </p>
-                </div>
-              </div>
-
-              <div
-                class="rounded-md border border-white bg-white p-3 space-y-3 sm:p-4"
-              >
-                <div class="space-y-1">
-                  <h5 class="text-sm font-semibold leading-5 text-gray-900">
-                    {{ t('settings.feishuConnectionTitle') }}
-                  </h5>
-                  <p class="text-xs leading-5 text-gray-500">
-                    {{ t('settings.feishuConnectionDesc') }}
-                  </p>
-                </div>
-
-                <div class="grid grid-cols-1 gap-3 lg:grid-cols-2">
-                  <div class="space-y-1">
-                    <BaseInput
-                      v-model="feishuForm.appId"
-                      :label="t('settings.feishuAppId')"
-                      :placeholder="t('settings.feishuAppIdPlaceholder')"
-                    />
-                  </div>
-                  <div class="space-y-1">
-                    <BaseInput
-                      v-model="feishuForm.appSecret"
-                      :label="t('settings.feishuAppSecret')"
-                      type="password"
-                      :placeholder="t('settings.feishuAppSecretPlaceholder')"
-                    />
-                  </div>
-                  <div class="space-y-1">
-                    <BaseInput
-                      v-model="feishuForm.tenantAccessToken"
-                      :label="t('settings.feishuTenantAccessToken')"
-                      :placeholder="
-                        t('settings.feishuTenantAccessTokenPlaceholder')
-                      "
-                    />
-                  </div>
-                  <div class="space-y-1 lg:col-span-2">
-                    <BaseInput
-                      v-model="feishuForm.appToken"
-                      :label="t('settings.feishuAppToken')"
-                      :placeholder="t('settings.feishuAppTokenPlaceholder')"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div
-                class="rounded-md border border-white bg-white p-3 space-y-3 sm:p-4"
-              >
-                <div class="space-y-1">
-                  <h5 class="text-sm font-semibold leading-5 text-gray-900">
-                    {{ t('settings.feishuTableSectionTitle') }}
-                  </h5>
-                  <p class="text-xs leading-5 text-gray-500">
-                    {{ t('settings.feishuTableSectionDesc') }}
-                  </p>
-                  <p class="text-xs leading-5 text-gray-500">
-                    {{ t('settings.feishuTableSectionDesc2') }}
-                  </p>
-                </div>
-
-                <div class="grid grid-cols-1 gap-3 lg:grid-cols-2">
-                  <div class="space-y-1">
-                    <BaseInput
-                      v-model="feishuForm.defaultTableName"
-                      :label="t('settings.feishuDefaultTableName')"
-                      :placeholder="
-                        t('settings.feishuDefaultTableNamePlaceholder')
-                      "
-                    />
-                  </div>
-                  <div class="space-y-1">
-                    <BaseInput
-                      v-model="feishuForm.tableName"
-                      :label="t('settings.feishuTableName')"
-                      :placeholder="t('settings.feishuTableNamePlaceholder')"
-                    />
-                  </div>
-                  <div class="space-y-1">
-                    <BaseInput
-                      v-model="feishuForm.attachmentFieldName"
-                      :label="t('settings.feishuAttachmentFieldName')"
-                      :placeholder="
-                        t('settings.feishuAttachmentFieldNamePlaceholder')
-                      "
-                    />
-                  </div>
-                  <div class="space-y-1">
-                    <BaseInput
-                      v-model="feishuForm.imageFieldName"
-                      :label="t('settings.feishuImageFieldName')"
-                      :placeholder="
-                        t('settings.feishuImageFieldNamePlaceholder')
-                      "
-                    />
-                  </div>
-                  <div class="space-y-1">
-                    <label class="block text-sm font-medium text-gray-700 mb-1">
-                      {{ t('settings.feishuAttachmentUploadParentType') }}
-                    </label>
-                    <select
-                      v-model="feishuForm.attachmentUploadParentType"
-                      class="block w-full pl-3 pr-10 py-2 text-sm border-gray-300 bg-white focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 rounded-md shadow-sm appearance-none cursor-pointer hover:border-gray-400 transition-colors"
-                    >
-                      <option value="bitable">
-                        {{
-                          t('settings.feishuAttachmentUploadParentTypeBitable')
-                        }}
-                      </option>
-                      <option value="folder">
-                        {{
-                          t('settings.feishuAttachmentUploadParentTypeFolder')
-                        }}
-                      </option>
-                    </select>
-                  </div>
-                  <div class="space-y-1">
-                    <BaseInput
-                      v-model="feishuForm.attachmentUploadParentNode"
-                      :label="t('settings.feishuAttachmentUploadParentNode')"
-                      :placeholder="
-                        t(
-                          'settings.feishuAttachmentUploadParentNodePlaceholder'
-                        )
-                      "
-                    />
-                  </div>
-                  <div class="space-y-1">
-                    <BaseInput
-                      v-model="feishuForm.attachmentUploadParentFolderToken"
-                      :label="
-                        t('settings.feishuAttachmentUploadParentFolderToken')
-                      "
-                      :placeholder="
-                        t(
-                          'settings.feishuAttachmentUploadParentFolderTokenPlaceholder'
-                        )
-                      "
-                    />
-                  </div>
-                  <div class="space-y-1 lg:col-span-2">
-                    <BaseInput
-                      v-model="feishuForm.recordUrlTemplate"
-                      :label="t('settings.feishuRecordUrlTemplate')"
-                      :placeholder="
-                        t('settings.feishuRecordUrlTemplatePlaceholder')
-                      "
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div
-                class="rounded-md border border-white bg-white p-3 space-y-3 sm:p-4"
-              >
-                <div
-                  class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"
-                >
-                  <div class="space-y-1">
-                    <h5 class="text-sm font-semibold leading-5 text-gray-900">
-                      {{ t('settings.feishuFieldMappings') }}
-                    </h5>
-                    <p class="text-xs leading-5 text-gray-500">
-                      {{ t('settings.feishuFieldMappingsHelp') }}
-                    </p>
-                    <p class="text-xs leading-5 text-gray-500">
-                      {{ t('settings.feishuFieldMappingsDetail') }}
-                    </p>
-                    <p class="text-xs leading-5 text-gray-500">
-                      {{ t('settings.feishuAttachmentMappingHelp') }}
-                    </p>
-                  </div>
-                  <BaseButton
-                    variant="secondary"
-                    size="sm"
-                    type="button"
-                    class="shrink-0 whitespace-nowrap self-start"
-                    @click="addFeishuMapping"
-                  >
-                    {{ t('settings.addFeishuFieldMapping') }}
-                  </BaseButton>
-                </div>
-
-                <div class="space-y-2.5">
-                  <div
-                    v-for="(mapping, index) in feishuFieldMappings"
-                    :key="`${mapping.source}-${index}`"
-                    class="grid grid-cols-1 gap-3 rounded-md border border-gray-200 bg-gray-50 p-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] lg:items-end"
-                  >
-                    <div class="min-w-0 space-y-1">
-                      <BaseInput
-                        v-model="mapping.source"
-                        :label="t('settings.feishuFieldMappingSource')"
-                        :placeholder="
-                          t('settings.feishuFieldMappingSourcePlaceholder')
-                        "
-                      />
-                    </div>
-                    <div class="min-w-0 space-y-1">
-                      <BaseInput
-                        v-model="mapping.target"
-                        :label="t('settings.feishuFieldMappingTarget')"
-                        :placeholder="
-                          t('settings.feishuFieldMappingTargetPlaceholder')
-                        "
-                      />
-                    </div>
-                    <div class="flex justify-end lg:self-end">
-                      <BaseButton
-                        variant="secondary"
-                        type="button"
-                        :disabled="feishuFieldMappings.length <= 1"
-                        class="inline-flex h-8 w-8 items-center justify-center rounded-md border border-red-300 bg-red-50 text-red-700 shadow-sm transition-colors hover:border-red-400 hover:bg-red-100 hover:text-red-800 disabled:cursor-not-allowed disabled:border-gray-200 disabled:bg-gray-50 disabled:text-gray-300 disabled:shadow-none disabled:hover:bg-gray-50"
-                        :title="t('common.delete')"
-                        :aria-label="t('common.delete')"
-                        @click="removeFeishuMapping(index)"
-                      >
-                        <span
-                          class="text-base font-medium leading-none"
-                          aria-hidden="true"
-                        >
-                          −
-                        </span>
-                        <span class="sr-only">{{ t('common.delete') }}</span>
-                      </BaseButton>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div
-              v-else
-              class="rounded-md border border-dashed border-gray-300 bg-gray-50 p-3 text-sm text-gray-500"
-            >
-              {{ t('settings.issueDisabledHint') }}
-            </div>
-
-            <div class="flex flex-col gap-2 sm:flex-row sm:justify-end">
-              <BaseButton
-                v-if="showIssueTestButton"
-                type="button"
-                variant="secondary"
-                size="sm"
-                class="w-full sm:w-auto"
-                :loading="testingIssueConfig"
-                :disabled="testingIssueConfig || savingIssueConfig"
-                @click="sendTestIssue"
-              >
-                {{ testTaskButtonLabel }}
-              </BaseButton>
-              <BaseButton
-                type="button"
-                variant="primary"
-                size="sm"
-                class="w-full sm:w-auto"
-                :loading="savingIssueConfig"
-                :disabled="savingIssueConfig || testingIssueConfig"
-                @click="saveIssueConfig"
-              >
-                {{ saveIssueButtonLabel }}
-              </BaseButton>
+                {{ t('settings.goToRelayApp') }}
+              </RouterLink>
             </div>
           </div>
         </BaseCard>
@@ -1577,7 +876,6 @@ const loadingSettings = ref(false)
 const savingPreferences = ref(false)
 const savingEmailConfig = ref(false)
 const savingIssueConfig = ref(false)
-const testingIssueConfig = ref(false)
 const validatingEmailConfig = ref(false)
 const errorMessage = ref('')
 const preferenceError = ref('')
@@ -1616,7 +914,10 @@ const emailForm = reactive({
 const issueConfigForm = reactive({
   enable: false,
   issueEngine: 'jira',
-  language: 'Chinese'
+  language: 'Chinese',
+  autoMergeStrategy: 'new',
+  manualMergeStrategy: 'linked',
+  retryIssueStrategy: 'update'
 })
 
 const jiraForm = reactive({
@@ -1646,18 +947,12 @@ const jiraForm = reactive({
 })
 
 const feishuForm = reactive({
+  appTokenType: 'bitable',
   appId: '',
   appSecret: '',
-  tenantAccessToken: '',
   appToken: '',
-  defaultTableName: '',
   tableName: '',
-  attachmentFieldName: '',
-  imageFieldName: '',
-  attachmentUploadParentType: 'bitable',
-  attachmentUploadParentNode: '',
-  attachmentUploadParentFolderToken: '',
-  recordUrlTemplate: ''
+  attachmentFieldName: '附件'
 })
 
 const feishuFieldMappings = ref([
@@ -1718,12 +1013,6 @@ const saveIssueButtonLabel = computed(() => {
     : t('settings.saveIssueConfig')
 })
 
-const testTaskButtonLabel = computed(() => {
-  return testingIssueConfig.value
-    ? t('settings.sendingTestIssue')
-    : t('settings.sendTestIssue')
-})
-
 const displayName = computed(() => {
   const userInfo = userStore.userInfo
   if (!userInfo) return 'User'
@@ -1778,13 +1067,6 @@ const showFeishuConfig = computed(
   () =>
     issueConfigForm.enable && issueConfigForm.issueEngine === 'feishu_bitable'
 )
-
-const showIssueTestButton = computed(() => {
-  return (
-    issueConfigForm.enable &&
-    ['jira', 'feishu_bitable'].includes(issueConfigForm.issueEngine)
-  )
-})
 
 function goToEmailSettings() {
   activeSettingsTab.value = 'email'
@@ -1858,6 +1140,9 @@ function normalizeIssueConfig(value) {
   issueConfigForm.enable = Boolean(raw.enable)
   issueConfigForm.issueEngine = raw.issue_engine || 'jira'
   issueConfigForm.language = raw.language || 'Chinese'
+  issueConfigForm.autoMergeStrategy = raw.auto_merge_strategy || 'new'
+  issueConfigForm.manualMergeStrategy = raw.manual_merge_strategy || 'linked'
+  issueConfigForm.retryIssueStrategy = raw.retry_issue_strategy || 'update'
 
   jiraForm.url = jiraConfig.url || ''
   jiraForm.username = jiraConfig.username || ''
@@ -1909,19 +1194,11 @@ function normalizeIssueConfig(value) {
 
   feishuForm.appId = feishuConfig.app_id || ''
   feishuForm.appSecret = feishuConfig.app_secret || ''
-  feishuForm.tenantAccessToken = feishuConfig.tenant_access_token || ''
+  feishuForm.appTokenType = feishuConfig.app_token_type || 'bitable'
   feishuForm.appToken = feishuConfig.app_token || ''
-  feishuForm.defaultTableName = feishuConfig.default_table_name || ''
-  feishuForm.tableName = feishuConfig.table_name || ''
-  feishuForm.attachmentFieldName = feishuConfig.attachment_field_name || ''
-  feishuForm.imageFieldName = feishuConfig.image_field_name || ''
-  feishuForm.attachmentUploadParentType =
-    feishuConfig.attachment_upload_parent_type || 'bitable'
-  feishuForm.attachmentUploadParentNode =
-    feishuConfig.attachment_upload_parent_node || ''
-  feishuForm.attachmentUploadParentFolderToken =
-    feishuConfig.attachment_upload_parent_folder_token || ''
-  feishuForm.recordUrlTemplate = feishuConfig.record_url_template || ''
+  feishuForm.tableName =
+    feishuConfig.table_name || feishuConfig.default_table_name || ''
+  feishuForm.attachmentFieldName = feishuConfig.attachment_field_name || '附件'
 
   const fieldMappings = feishuConfig.field_mappings || {}
   const mappingEntries = Object.entries(fieldMappings)
@@ -1946,6 +1223,9 @@ function buildIssueConfigPayload() {
   payload.enable = Boolean(issueConfigForm.enable)
   payload.issue_engine = issueConfigForm.issueEngine
   payload.language = issueConfigForm.language
+  payload.auto_merge_strategy = issueConfigForm.autoMergeStrategy
+  payload.manual_merge_strategy = issueConfigForm.manualMergeStrategy
+  payload.retry_issue_strategy = issueConfigForm.retryIssueStrategy
   payload.jira = {
     ...(payload.jira && typeof payload.jira === 'object' ? payload.jira : {}),
     url: jiraForm.url.trim(),
@@ -2016,26 +1296,29 @@ function buildIssueConfigPayload() {
       : payload.feishu && typeof payload.feishu === 'object'
         ? payload.feishu
         : {}),
-    base_url: 'https://open.feishu.cn/open-apis',
     app_id: feishuForm.appId.trim(),
     app_secret: feishuForm.appSecret,
-    tenant_access_token: feishuForm.tenantAccessToken.trim(),
+    app_token_type: feishuForm.appTokenType,
     app_token: feishuForm.appToken.trim(),
-    default_table_name: feishuForm.defaultTableName.trim(),
     table_name: feishuForm.tableName.trim(),
-    attachment_field_name: feishuForm.attachmentFieldName.trim(),
-    image_field_name: feishuForm.imageFieldName.trim(),
-    attachment_upload_parent_type: feishuForm.attachmentUploadParentType,
-    attachment_upload_parent_node: feishuForm.attachmentUploadParentNode.trim(),
-    attachment_upload_parent_folder_token:
-      feishuForm.attachmentUploadParentFolderToken.trim(),
-    record_url_template: feishuForm.recordUrlTemplate.trim(),
+    attachment_field_name: feishuForm.attachmentFieldName.trim() || '附件',
     field_mappings: Object.fromEntries(
       feishuFieldMappings.value
         .map((mapping) => [mapping.source.trim(), mapping.target.trim()])
         .filter(([source, target]) => source && target)
     )
   }
+  delete payload.feishu_bitable.table_id
+  delete payload.feishu_bitable.default_table_name
+  delete payload.feishu_bitable.obj_token
+  delete payload.feishu_bitable.attachment_upload_parent_node
+  delete payload.feishu_bitable.attachment_upload_parent_folder_token
+  delete payload.feishu_bitable.attachment_upload_parent_type
+  delete payload.feishu_bitable.image_field_name
+  delete payload.feishu_bitable.record_url_template
+  delete payload.feishu_bitable.base_url
+  delete payload.feishu_bitable.tenant_access_token
+  delete payload.feishu_bitable.attachment_upload_folder_name
 
   return payload
 }
@@ -2070,8 +1353,11 @@ function validateFeishuConfig() {
   }
   if (!feishuForm.appToken.trim())
     missingFields.push(t('settings.feishuAppToken'))
-  if (!feishuForm.tableName.trim() && !feishuForm.defaultTableName.trim()) {
+  if (!feishuForm.tableName.trim()) {
     missingFields.push(t('settings.feishuTableName'))
+  }
+  if (!feishuForm.attachmentFieldName.trim()) {
+    missingFields.push(t('settings.feishuAttachmentFieldName'))
   }
 
   if (
@@ -2096,6 +1382,17 @@ function validateFeishuConfig() {
 function validateIssueConfig() {
   if (!['jira', 'feishu_bitable'].includes(issueConfigForm.issueEngine)) {
     return t('settings.issueEngineInvalid')
+  }
+
+  if (
+    !['new', 'update'].includes(issueConfigForm.autoMergeStrategy) ||
+    !['linked', 'unlinked'].includes(issueConfigForm.manualMergeStrategy)
+  ) {
+    return t('settings.issueMergeStrategyInvalid')
+  }
+
+  if (!['new', 'update'].includes(issueConfigForm.retryIssueStrategy)) {
+    return t('settings.issueRetryStrategyInvalid')
   }
 
   if (!issueConfigForm.enable) {
@@ -2179,7 +1476,9 @@ async function loadSettings() {
     normalizeIssueConfig({
       enable: false,
       issue_engine: 'jira',
-      language: 'Chinese'
+      language: 'Chinese',
+      auto_merge_strategy: 'new',
+      manual_merge_strategy: 'linked'
     })
   } finally {
     loadingSettings.value = false
@@ -2394,42 +1693,6 @@ async function saveIssueConfig() {
     )
   } finally {
     savingIssueConfig.value = false
-  }
-}
-
-async function sendTestIssue() {
-  clearSectionFeedback('issue')
-
-  const validationError = validateIssueConfig()
-  if (validationError) {
-    setSectionError('issue', validationError)
-    return
-  }
-
-  testingIssueConfig.value = true
-
-  try {
-    const response = await settingsApi.testIssueConfig(
-      buildIssueConfigPayload()
-    )
-    const data = response?.data?.data || response?.data || {}
-    const issueKey = data.issue_key || data.record_id || data.key || ''
-    const issueUrl = data.issue_url || data.url || ''
-    const successMessage = issueKey
-      ? t('settings.testIssueSuccessWithKey', { key: issueKey })
-      : t('settings.testIssueSuccess')
-    setSectionSuccess(
-      'issue',
-      issueUrl ? `${successMessage} ${issueUrl}` : successMessage
-    )
-  } catch (error) {
-    console.error('Failed to send test issue:', error)
-    setSectionError(
-      'issue',
-      extractErrorMessage(error, t('settings.testIssueFailed'))
-    )
-  } finally {
-    testingIssueConfig.value = false
   }
 }
 

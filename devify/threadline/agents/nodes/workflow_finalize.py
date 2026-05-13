@@ -22,6 +22,7 @@ from threadline.agents.email_state import (
 from threadline.agents.nodes.base_node import BaseLangGraphNode
 from threadline.models import EmailAttachment, EmailMessage, Issue, EmailTodo
 from threadline.state_machine import EmailStatus
+from relay.services import RelayEventPublisher
 
 logger = logging.getLogger(__name__)
 
@@ -65,8 +66,7 @@ class WorkflowFinalizeNode(BaseLangGraphNode):
     - Handle force mode considerations
     - Ensure data consistency and integrity
 
-    Note: This node ONLY syncs data, it does NOT create issues.
-    Issue creation is handled by IssueNode.
+    Note: This node only syncs data and publishes a relay event on success.
     """
 
     def __init__(self):
@@ -138,7 +138,7 @@ class WorkflowFinalizeNode(BaseLangGraphNode):
                 "FINALIZE_FAILED_START",
                 "Finalizing failed workflow results",
                 state=state,
-                ratio=0.5,
+                ratio=0.35,
                 error_summary=error_summary,
                 level="ERROR",
             )
@@ -146,9 +146,25 @@ class WorkflowFinalizeNode(BaseLangGraphNode):
             # Sync partial data even when workflow fails
             # Preserves successfully generated content while marking as failed
             logger.info("Syncing partial data despite workflow errors")
+            self._record_progress_step(
+                self.workflow_stage,
+                "FINALIZE_FAILED_SYNC_START",
+                "Syncing failed workflow data",
+                state=state,
+                ratio=0.55,
+                error_summary=error_summary,
+                level="ERROR",
+            )
             self._sync_data_to_database(state, email=self.email)
-            self._finalize_issue(state, email=self.email)
-
+            self._record_progress_step(
+                self.workflow_stage,
+                "FINALIZE_FAILED_SYNC_COMPLETE",
+                "Failed workflow data synced",
+                state=state,
+                ratio=0.8,
+                error_summary=error_summary,
+                level="ERROR",
+            )
             # Always set status to FAILED, regardless of force mode
             # Force mode only controls whether to re-process OCR/LLM,
             # not status updates
@@ -184,11 +200,25 @@ class WorkflowFinalizeNode(BaseLangGraphNode):
                 "FINALIZE_SUCCESS_START",
                 "Finalizing successful workflow results",
                 state=state,
-                ratio=0.5,
+                ratio=0.35,
             )
 
+            self._record_progress_step(
+                self.workflow_stage,
+                "FINALIZE_SUCCESS_SYNC_START",
+                "Syncing workflow data",
+                state=state,
+                ratio=0.55,
+            )
             self._sync_data_to_database(state, email=self.email)
-            self._finalize_issue(state, email=self.email)
+            self._record_progress_step(
+                self.workflow_stage,
+                "FINALIZE_SUCCESS_SYNC_COMPLETE",
+                "Workflow data synced",
+                state=state,
+                ratio=0.8,
+            )
+            self._publish_relay_event(state, email=self.email)
 
             # Always set status to SUCCESS, regardless of force mode
             # Force mode only controls whether to re-process OCR/LLM, not
@@ -211,7 +241,8 @@ class WorkflowFinalizeNode(BaseLangGraphNode):
         elapsed = time.monotonic() - started_at
         logger.info(
             f"[{self.node_name}] Workflow finalized for "
-            f"email {email_id}, user {user_id}, elapsed_sec={elapsed:.2f}, "
+            f"email {email_id}, user {user_id}, "
+            f"elapsed_sec={elapsed:.2f}, "
             f"final_status={self.email.status if self.email else 'unknown'}, "
             f"error_summary={error_summary or ''}"
         )
@@ -245,37 +276,39 @@ class WorkflowFinalizeNode(BaseLangGraphNode):
             # Sync TODOs
             self._sync_todos(email, state)
 
+            # Sync issue record
+            issue_result_data = state.get("issue_result_data")
+            if issue_result_data:
+                issue_id = state.get("issue_id")
+                self._create_issue_record(email, issue_result_data, issue_id=issue_id)
+
             # Record usage metrics
             self._record_usage_metrics(email, state)
 
-    def _finalize_issue(
+    def _publish_relay_event(
         self,
         state: EmailState,
         email: EmailMessage | None = None,
     ) -> EmailMessage | None:
         """
-        Create an issue on the current email record if the workflow produced
-        one.
+        Publish a Relay event for downstream delivery integrations.
         """
         email = email or self.email
         if not email:
             return None
 
-        issue_result = state.get("issue_result_data")
-        if not issue_result:
-            return email
-
         try:
-            issue = self._create_issue_record(email, issue_result)
+            event = RelayEventPublisher.publish_workflow_completed(
+                email=email,
+                state=state,
+            )
             logger.info(
-                f"Created Issue: "
-                f"ID={issue.id}, "
-                f"engine={issue.engine}, "
-                f"external_id={issue.external_id}, "
-                f"url={issue.issue_url}"
+                "Published relay event %s for email %s",
+                event.id,
+                email.id,
             )
         except Exception as exc:
-            logger.error(f"Failed to create issue for email {email.id}: {exc}")
+            logger.error(f"Failed to publish relay event for email {email.id}: {exc}")
 
         return email
 
@@ -463,10 +496,18 @@ class WorkflowFinalizeNode(BaseLangGraphNode):
             )
 
     def _create_issue_record(
-        self, email: EmailMessage, issue_result_data: Dict[str, Any]
+        self,
+        email: EmailMessage,
+        issue_result_data: Dict[str, Any],
+        issue_id: int | None = None,
     ) -> Issue:
         """
         Create Issue database record from issue engine result data.
+
+        TODO: DEPRECATED - Remove after relay is stable
+        This method is kept for backward compatibility only.
+        Issue creation is now handled by the relay project.
+        This creates a local Issue record for historical data consistency.
 
         This method is engine-agnostic and handles issue data from
         any supported engine (JIRA, GitHub, Linear, etc.).
@@ -499,19 +540,63 @@ class WorkflowFinalizeNode(BaseLangGraphNode):
             f"title={title[:50]}"
         )
 
-        if external_id:
+        existing_issue = None
+        if issue_id:
+            existing_issue = Issue.objects.filter(id=issue_id).first()
+        if existing_issue is None and external_id:
             existing_issue = Issue.objects.filter(
                 email_message=email, external_id=external_id
             ).first()
 
-            if existing_issue:
-                logger.info(
-                    f"Issue already exists: "
-                    f"ID={existing_issue.id}, "
-                    f"external_id={external_id}"
+        if existing_issue:
+            merged_metadata = {
+                "email_id": str(email.id),
+                "created_from": "langgraph_workflow",
+                **(existing_issue.metadata or {}),
+                **(issue_result_data.get("metadata", {}) or {}),
+            }
+            update_fields: list[str] = []
+            if existing_issue.metadata != merged_metadata:
+                existing_issue.metadata = merged_metadata
+                update_fields.append("metadata")
+            if existing_issue.title != title:
+                existing_issue.title = title
+                update_fields.append("title")
+            if existing_issue.description != issue_result_data.get(
+                "description", "No content"
+            ):
+                existing_issue.description = issue_result_data.get(
+                    "description", "No content"
                 )
-                return existing_issue
+                update_fields.append("description")
+            if existing_issue.priority != issue_result_data.get(
+                "priority", "Medium"
+            ):
+                existing_issue.priority = issue_result_data.get(
+                    "priority", "Medium"
+                )
+                update_fields.append("priority")
+            if existing_issue.issue_url != issue_result_data.get(
+                "issue_url"
+            ):
+                existing_issue.issue_url = issue_result_data.get(
+                    "issue_url"
+                )
+                update_fields.append("issue_url")
+            if update_fields:
+                existing_issue.save(update_fields=update_fields)
+            logger.info(
+                f"Issue already exists: "
+                f"ID={existing_issue.id}, "
+                f"external_id={external_id}"
+            )
+            return existing_issue
 
+        merged_metadata = {
+            "email_id": str(email.id),
+            "created_from": "langgraph_workflow",
+            **issue_result_data.get("metadata", {}),
+        }
         issue = Issue.objects.create(
             user=email.user,
             email_message=email,
@@ -521,11 +606,7 @@ class WorkflowFinalizeNode(BaseLangGraphNode):
             engine=engine,
             external_id=external_id,
             issue_url=issue_result_data.get("issue_url"),
-            metadata={
-                "email_id": str(email.id),
-                "created_from": "langgraph_workflow",
-                **issue_result_data.get("metadata", {}),
-            },
+            metadata=merged_metadata,
         )
         return issue
 

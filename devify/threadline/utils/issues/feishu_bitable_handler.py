@@ -26,6 +26,7 @@ from lark_oapi.api.drive.v1.model import (
     UploadAllFileRequest,
     UploadAllFileRequestBody,
 )
+from lark_oapi.api.wiki.v2.model import GetNodeSpaceRequest
 from lark_oapi.core.model import RequestOption
 
 logger = logging.getLogger(__name__)
@@ -65,6 +66,12 @@ class FeishuBitableIssueHandler:
         self.record_url_template = self.feishu_config.get(
             "record_url_template"
         )
+        self.app_token_type = str(
+            self.feishu_config.get("app_token_type") or "bitable"
+        ).strip().lower()
+        self.summary_prefix = str(
+            self.feishu_config.get("summary_prefix") or ""
+        )
         self.attachment_field_name = self.feishu_config.get(
             "attachment_field_name", "附件"
         )
@@ -72,7 +79,7 @@ class FeishuBitableIssueHandler:
             "image_field_name", self.attachment_field_name
         )
         self.attachment_upload_parent_type = self.feishu_config.get(
-            "attachment_upload_parent_type", "bitable"
+            "attachment_upload_parent_type", "bitable_file"
         )
         self.image_upload_parent_type = self.feishu_config.get(
             "image_upload_parent_type", self.attachment_upload_parent_type
@@ -93,6 +100,7 @@ class FeishuBitableIssueHandler:
         self._cached_token = None
         self._cached_token_expire_at = 0.0
         self._cached_tables: Dict[str, str] | None = None
+        self._cached_wiki_obj_token: str | None = None
         self._sdk_client = None
 
         if not self.app_token:
@@ -175,6 +183,53 @@ class FeishuBitableIssueHandler:
         )
         return record_id
 
+    def update_issue(
+        self,
+        record_id: str,
+        issue_data: Dict[str, Any],
+        email_data: Dict[str, Any],
+        attachments: List[Dict[str, Any]],
+        force: bool = False,
+    ) -> str:
+        """
+        Update an existing Feishu Bitable record.
+
+        Args:
+            record_id: The record ID to update
+            issue_data: Issue data dictionary
+            email_data: Email data dictionary
+            attachments: Attachment metadata list
+            force: Unused, kept for interface compatibility
+
+        Returns:
+            str: Updated record id
+        """
+        # TODO: The update path currently rebuilds attachment payloads and
+        # re-uploads files. This is low-frequency and intentionally left as-is
+        # for now; revisit with attachment deduplication later if update
+        # retries become a common workflow.
+        payload_fields = self._build_record_fields(
+            issue_data=issue_data,
+            email_data=email_data,
+            attachments=attachments,
+            include_attachments=True,
+        )
+
+        if not payload_fields:
+            logger.info(
+                "No Feishu Bitable fields to update for record %s",
+                record_id,
+            )
+            return record_id
+
+        self._update_record_fields(record_id, payload_fields)
+
+        logger.info(
+            "Updated Feishu Bitable record %s",
+            record_id,
+        )
+        return record_id
+
     def upload_attachments(
         self, issue_key: str, attachments: List[Dict[str, Any]]
     ) -> Dict[str, int]:
@@ -214,6 +269,24 @@ class FeishuBitableIssueHandler:
             "skipped_count": len(attachments),
         }
 
+    def link_related_issues(
+        self,
+        record_id: str,
+        related_issue_keys: List[str],
+    ) -> Dict[str, int]:
+        """Compatibility hook for callers that expect issue-linking support."""
+        related_issue_keys = related_issue_keys or []
+        logger.info(
+            "Feishu Bitable does not create explicit cross-record links; "
+            "record %s received %d related issue keys",
+            record_id,
+            len(related_issue_keys),
+        )
+        return {
+            "linked_count": 0,
+            "skipped_count": len(related_issue_keys),
+        }
+
     def _build_record_fields(
         self,
         issue_data: Dict[str, Any],
@@ -228,7 +301,7 @@ class FeishuBitableIssueHandler:
         table field name -> source key from the synthesized source data.
         """
         source_data = {
-            "title": issue_data.get("title"),
+            "title": self._apply_title_prefix(issue_data.get("title")),
             "description": issue_data.get("description"),
             "priority": issue_data.get("priority"),
             "feishu_priority": self._normalize_priority_for_feishu(
@@ -268,6 +341,29 @@ class FeishuBitableIssueHandler:
             payload_fields.update(attachment_payload)
 
         return payload_fields
+
+    def _resolve_bitable_app_token(self) -> str:
+        """
+        Return the configured app token used by the current Bitable target.
+        """
+        return self.app_token or ""
+
+    def _apply_title_prefix(self, title: Any) -> Any:
+        """
+        Apply the configured title prefix once, preserving existing prefixes.
+        """
+        base_title = self._normalize_field_value(title)
+        if not base_title:
+            return base_title
+
+        prefix = self.summary_prefix
+        if not prefix:
+            return base_title
+
+        if base_title.startswith(prefix):
+            return base_title
+
+        return f"{prefix}{base_title}"
 
     def _normalize_field_value(self, value: Any) -> Any:
         """
@@ -351,6 +447,7 @@ class FeishuBitableIssueHandler:
         Upload local files to Feishu and return attachment field values.
         """
         uploaded: List[Dict[str, str]] = []
+        failures: List[tuple[str, str]] = []
 
         for attachment in attachments:
             file_path = attachment.get("file_path")
@@ -384,11 +481,25 @@ class FeishuBitableIssueHandler:
                 )
                 uploaded.append({"file_token": file_token})
             except Exception as exc:
+                failures.append(
+                    (
+                        attachment.get("filename") or file_path,
+                        str(exc),
+                    )
+                )
                 logger.warning(
                     "Failed to upload attachment %s: %s",
                     attachment.get("filename") or file_path,
                     exc,
                 )
+
+        if failures:
+            failed_names = ", ".join(name for name, _ in failures)
+            last_error = failures[-1][1]
+            raise ValueError(
+                f"Feishu attachment upload failed for: {failed_names}. "
+                f"Last error: {last_error}"
+            )
 
         return uploaded
 
@@ -501,6 +612,9 @@ class FeishuBitableIssueHandler:
         if explicit_parent_node:
             return explicit_parent_node
 
+        if self.app_token_type == "wiki":
+            return self._resolve_wiki_obj_token()
+
         parent_type = (self.attachment_upload_parent_type or "").strip()
         if parent_type in {"bitable", "bitable_file"}:
             if self.app_token:
@@ -528,6 +642,81 @@ class FeishuBitableIssueHandler:
             "feishu_bitable.attachment_upload_parent_node or "
             "feishu_bitable.attachment_upload_parent_folder_token"
         )
+
+    def _resolve_wiki_obj_token(self) -> str:
+        """
+        Resolve a Wiki node token to the underlying obj_token used by uploads.
+        """
+        if self._cached_wiki_obj_token:
+            return self._cached_wiki_obj_token
+
+        if not self.app_token:
+            raise ValueError("Feishu wiki app_token is not configured")
+
+        resolved_obj_token: str | None = None
+
+        if self._sdk_available():
+            client = self._get_sdk_client()
+            if client is not None:
+                request = (
+                    GetNodeSpaceRequest.builder()
+                    .token(self.app_token)
+                    .obj_type("bitable")
+                    .build()
+                )
+                response = client.wiki.v2.space.get_node(
+                    request,
+                    self._get_sdk_request_option(),
+                )
+                if response and response.success() and response.data:
+                    node = getattr(response.data, "node", None)
+                    resolved_obj_token = getattr(node, "obj_token", None)
+
+        if not resolved_obj_token:
+            url = f"{self.base_url}/wiki/v2/spaces/get_node"
+            headers = {
+                "Authorization": f"Bearer {self._get_access_token()}",
+                "Content-Type": "application/json",
+            }
+            response = requests.get(
+                url,
+                headers=headers,
+                params={
+                    "token": self.app_token,
+                    "obj_type": "bitable",
+                },
+                timeout=15,
+            )
+            response_text = response.text
+            try:
+                data = response.json()
+            except ValueError:
+                data = {}
+
+            if response.status_code >= 400 or data.get("code") not in (0, None):
+                raise ValueError(
+                    self._format_response_error(
+                        self._build_error_details(
+                            response=response,
+                            response_text=response_text,
+                            response_json=data,
+                        )
+                    )
+                )
+
+            resolved_obj_token = (
+                data.get("data", {})
+                .get("node", {})
+                .get("obj_token")
+            )
+
+        if not resolved_obj_token:
+            raise ValueError(
+                "Feishu wiki node token could not be resolved to obj_token"
+            )
+
+        self._cached_wiki_obj_token = resolved_obj_token
+        return resolved_obj_token
 
     def _upload_single_file(
         self,

@@ -86,15 +86,10 @@ class TestAPIWorkflows:
         """
         Test complete threadlines CRUD workflow
         """
-        # Create an EmailTask first
-        from .factories import EmailTaskFactory
-        task = EmailTaskFactory(user=test_user)
-
         # 1. Create a threadline (email message)
         url = reverse('threadlines-list')
         create_data = {
             'user_id': test_user.id,
-            'task_id': task.id,
             'message_id': 'workflow-test-message-123',
             'subject': 'Workflow Test Email',
             'sender': 'sender@example.com',
@@ -107,10 +102,11 @@ class TestAPIWorkflows:
         response = authenticated_api_client.post(url, create_data, format='json')
 
         assert response.status_code == status.HTTP_201_CREATED
+        threadline_uuid = response.data['data']['uuid']
         threadline_id = response.data['data']['id']
 
         # 2. Retrieve the threadline
-        url = reverse('threadlines-detail', kwargs={'pk': threadline_id})
+        url = reverse('threadlines-detail', kwargs={'uuid': threadline_uuid})
         response = authenticated_api_client.get(url)
 
         assert response.status_code == status.HTTP_200_OK
@@ -154,7 +150,7 @@ class TestAPIWorkflows:
         )
 
         # 6. Retrieve threadline with attachments
-        url = reverse('threadlines-detail', kwargs={'pk': threadline_id})
+        url = reverse('threadlines-detail', kwargs={'uuid': threadline_uuid})
         response = authenticated_api_client.get(url)
 
         assert response.status_code == status.HTTP_200_OK
@@ -165,18 +161,18 @@ class TestAPIWorkflows:
         assert 'workflow_attachment2.jpg' in attachment_filenames
 
         # 7. Update threadline status through workflow
-        status_update_data = {'status': 'ocr_processing'}
+        status_update_data = {'status': 'processing'}
         response = authenticated_api_client.patch(url, status_update_data, format='json')
 
         assert response.status_code == status.HTTP_200_OK
-        assert response.data['data']['status'] == 'ocr_processing'
+        assert response.data['data']['status'] == 'processing'
 
         # 8. Complete the workflow
-        final_status_data = {'status': 'completed'}
+        final_status_data = {'status': 'success'}
         response = authenticated_api_client.patch(url, final_status_data, format='json')
 
         assert response.status_code == status.HTTP_200_OK
-        assert response.data['data']['status'] == 'completed'
+        assert response.data['data']['status'] == 'success'
 
         # 9. Delete the threadline (should cascade delete attachments)
         response = authenticated_api_client.delete(url)
@@ -211,16 +207,11 @@ class TestAPIWorkflows:
         assert response.status_code == status.HTTP_201_CREATED
         setting_id = response.data['data']['id']
 
-        # Create an EmailTask first
-        from .factories import EmailTaskFactory
-        task = EmailTaskFactory(user=test_user)
-
         # 2. Create threadlines with different priorities
         threadlines_url = reverse('threadlines-list')
 
         high_priority_data = {
             'user_id': test_user.id,
-            'task_id': task.id,
             'message_id': 'high-priority-message',
             'subject': 'High Priority Email',
             'sender': 'urgent@example.com',
@@ -290,14 +281,9 @@ class TestAPIWorkflows:
         assert response.status_code == status.HTTP_201_CREATED
         user1_setting_id = response.data['data']['id']
 
-        # Create EmailTask for user 1
-        from .factories import EmailTaskFactory
-        user1_task = EmailTaskFactory(user=test_user)
-
         threadlines_url = reverse('threadlines-list')
         user1_threadline = {
             'user_id': test_user.id,
-            'task_id': user1_task.id,
             'message_id': 'user1-message',
             'subject': 'User 1 Message',
             'sender': 'user1@example.com',
@@ -308,6 +294,7 @@ class TestAPIWorkflows:
         response = authenticated_api_client.post(threadlines_url, user1_threadline, format='json')
         assert response.status_code == status.HTTP_201_CREATED
         user1_threadline_id = response.data['data']['id']
+        user1_threadline_uuid = response.data['data']['uuid']
 
         # User 2 creates settings and threadlines
         user2_settings = {
@@ -319,12 +306,8 @@ class TestAPIWorkflows:
         assert response.status_code == status.HTTP_201_CREATED
         user2_setting_id = response.data['data']['id']
 
-        # Create EmailTask for user 2
-        user2_task = EmailTaskFactory(user=test_user_2)
-
         user2_threadline = {
             'user_id': test_user_2.id,
-            'task_id': user2_task.id,
             'message_id': 'user2-message',
             'subject': 'User 2 Message',
             'sender': 'user2@example.com',
@@ -335,6 +318,7 @@ class TestAPIWorkflows:
         response = authenticated_api_client_2.post(threadlines_url, user2_threadline, format='json')
         assert response.status_code == status.HTTP_201_CREATED
         user2_threadline_id = response.data['data']['id']
+        user2_threadline_uuid = response.data['data']['uuid']
 
         # Verify User 1 can only see their own data
         response = authenticated_api_client.get(settings_url)
@@ -363,7 +347,7 @@ class TestAPIWorkflows:
         response = authenticated_api_client.get(user1_settings_detail)
         assert response.status_code == status.HTTP_404_NOT_FOUND
 
-        user1_threadline_detail = reverse('threadlines-detail', kwargs={'pk': user2_threadline_id})
+        user1_threadline_detail = reverse('threadlines-detail', kwargs={'uuid': user2_threadline_uuid})
         response = authenticated_api_client.get(user1_threadline_detail)
         assert response.status_code == status.HTTP_404_NOT_FOUND
 
@@ -371,6 +355,6 @@ class TestAPIWorkflows:
         response = authenticated_api_client_2.get(user2_settings_detail)
         assert response.status_code == status.HTTP_404_NOT_FOUND
 
-        user2_threadline_detail = reverse('threadlines-detail', kwargs={'pk': user1_threadline_id})
+        user2_threadline_detail = reverse('threadlines-detail', kwargs={'uuid': user1_threadline_uuid})
         response = authenticated_api_client_2.get(user2_threadline_detail)
         assert response.status_code == status.HTTP_404_NOT_FOUND

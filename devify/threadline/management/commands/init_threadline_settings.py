@@ -1,6 +1,10 @@
 """
 Django management command to initialize threadline settings configuration.
 
+DEPRECATED: This command is deprecated and will be removed in a future version.
+Please use the Relay API to configure delivery channels instead.
+
+Legacy functionality:
 This command initializes threadline settings for a specified user, including:
 - email_config: Email collection configuration
 - issue_config: Issue creation configuration (loaded from YAML)
@@ -9,6 +13,7 @@ This command initializes threadline settings for a specified user, including:
 
 import logging
 import os
+import warnings
 
 import yaml
 from django.conf import settings
@@ -26,11 +31,13 @@ class Command(BaseCommand):
     """
     Management command to initialize threadline settings for users.
 
+    DEPRECATED: This command is deprecated. Use Relay API for delivery channel configuration.
+
     This command creates all required settings configurations for a user,
     loading issue configuration from YAML file in conf/threadline/issues/.
     """
 
-    help = "Initialize threadline settings configuration for a user"
+    help = "[DEPRECATED] Initialize threadline settings configuration for a user. Use Relay API instead."
 
     def __init__(self, *args, **kwargs):
         """
@@ -193,6 +200,21 @@ class Command(BaseCommand):
             *args: Variable length argument list
             **options: Arbitrary keyword arguments from command line
         """
+        # Show deprecation warning
+        warnings.warn(
+            "init_threadline_settings is deprecated and will be removed in a future version. "
+            "Please use the Relay API to configure delivery channels instead.",
+            DeprecationWarning,
+            stacklevel=2
+        )
+        self.stdout.write(
+            self.style.WARNING(
+                "\n⚠️  DEPRECATION WARNING: This command is deprecated.\n"
+                "   Please use the Relay API to configure delivery channels.\n"
+                "   See documentation for migration guide.\n"
+            )
+        )
+
         if options["list"]:
             self.list_settings()
             return
@@ -285,6 +307,9 @@ class Command(BaseCommand):
             return {
                 "enable": False,
                 "issue_engine": "jira",
+                "auto_merge_strategy": "new",
+                "manual_merge_strategy": "linked",
+                "retry_issue_strategy": "update",
                 "jira": {},
                 "feishu_bitable": {},
             }
@@ -434,7 +459,8 @@ class Command(BaseCommand):
                 "issue_config",
                 "Optional - Issue creation configuration for JIRA or "
                 "Feishu Bitable. Only needed if you want to create "
-                "records automatically from emails.",
+                "records automatically from emails. Includes merge "
+                "strategy settings for post-merge handling.",
             ),
             (
                 "prompt_config",

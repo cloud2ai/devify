@@ -19,6 +19,7 @@ from .email_attachment import (
 )
 from .email_todo import EmailTodoListSerializer
 from .share_link import ThreadlineShareLinkSerializer
+from relay.models import RelayDelivery, RelayEvent
 
 
 def _get_latest_share_link(instance):
@@ -66,6 +67,83 @@ def _get_cached_latest_issue(instance):
     issue = _get_latest_issue(instance)
     setattr(instance, cache_attr, issue)
     return issue
+
+
+def _get_latest_relay_event(instance):
+    """
+    Retrieve the latest relay event for the current email message.
+    """
+    cache = getattr(instance, "_prefetched_objects_cache", None)
+    if cache and "relay_events" in cache:
+        prefetched = cache["relay_events"]
+        if prefetched:
+            return sorted(
+                prefetched,
+                key=lambda item: (
+                    item.created_at or item.processed_at,
+                    item.id,
+                ),
+                reverse=True,
+            )[0]
+        return None
+
+    return (
+        instance.relay_events.order_by("-created_at", "-id")
+        .prefetch_related("deliveries", "deliveries__subscription")
+        .first()
+    )
+
+
+def _get_cached_latest_relay_event(instance):
+    """
+    Cache the latest relay event on the instance to avoid repeated traversal.
+    """
+    cache_attr = "_cached_latest_relay_event"
+    if hasattr(instance, cache_attr):
+        return getattr(instance, cache_attr)
+
+    event = _get_latest_relay_event(instance)
+    setattr(instance, cache_attr, event)
+    return event
+
+
+def _get_relay_deliveries(instance):
+    """
+    Return relay deliveries from the latest relay event.
+    """
+    event = _get_cached_latest_relay_event(instance)
+    if not event:
+        return []
+
+    cache = getattr(event, "_prefetched_objects_cache", None)
+    if cache and "deliveries" in cache:
+        deliveries = cache["deliveries"]
+    else:
+        deliveries = event.deliveries.select_related("subscription").all()
+
+    ordered = sorted(
+        deliveries,
+        key=lambda item: (item.created_at, item.id),
+        reverse=True,
+    )
+    return ordered
+
+
+def _serialize_relay_delivery(delivery):
+    subscription = getattr(delivery, "subscription", None)
+    return {
+        "id": delivery.id,
+        "target_type": delivery.target_type,
+        "status": delivery.status,
+        "external_id": delivery.external_id,
+        "external_url": delivery.external_url,
+        "subscription_name": subscription.name if subscription else None,
+        "subscription_enabled": (
+            subscription.enabled if subscription is not None else None
+        ),
+        "created_at": delivery.created_at,
+        "updated_at": delivery.updated_at,
+    }
 
 
 def _collect_issue_cluster(instance):
@@ -125,6 +203,8 @@ class EmailMessageMergeChildSerializer(serializers.ModelSerializer):
     Lightweight serializer for merged child records.
     """
 
+    merged_into_uuid = serializers.SerializerMethodField()
+
     class Meta:
         model = EmailMessage
         fields = [
@@ -136,9 +216,16 @@ class EmailMessageMergeChildSerializer(serializers.ModelSerializer):
             "received_at",
             "merge_reason",
             "merged_into",
+            "merged_into_uuid",
             "status",
         ]
         read_only_fields = fields
+
+    def get_merged_into_uuid(self, obj):
+        """Get the UUID of the message this was merged into."""
+        if obj.merged_into_id and obj.merged_into:
+            return str(obj.merged_into.uuid)
+        return None
 
 
 class EmailMessageSerializer(serializers.ModelSerializer):
@@ -164,6 +251,8 @@ class EmailMessageSerializer(serializers.ModelSerializer):
     share_status = serializers.SerializerMethodField()
     issue_external_id = serializers.SerializerMethodField()
     issue_url = serializers.SerializerMethodField()
+    relay_delivery_count = serializers.SerializerMethodField()
+    relay_deliveries = serializers.SerializerMethodField()
 
     class Meta:
         model = EmailMessage
@@ -206,6 +295,8 @@ class EmailMessageSerializer(serializers.ModelSerializer):
             "share_status",
             "issue_external_id",
             "issue_url",
+            "relay_delivery_count",
+            "relay_deliveries",
             "created_at",
             "updated_at",
         ]
@@ -458,6 +549,18 @@ class EmailMessageSerializer(serializers.ModelSerializer):
             return None
         return issue.issue_url
 
+    def get_relay_delivery_count(self, obj):
+        """
+        Return the number of relay deliveries in the latest relay event.
+        """
+        return len(_get_relay_deliveries(obj))
+
+    def get_relay_deliveries(self, obj):
+        """
+        Return the latest relay deliveries for the threadline.
+        """
+        return [_serialize_relay_delivery(item) for item in _get_relay_deliveries(obj)]
+
     def get_is_canonical(self, obj):
         """
         Return whether the row is the canonical record for display.
@@ -525,6 +628,8 @@ class EmailMessageListSerializer(serializers.ModelSerializer):
     share_status = serializers.SerializerMethodField()
     issue_external_id = serializers.SerializerMethodField()
     issue_url = serializers.SerializerMethodField()
+    relay_delivery_count = serializers.SerializerMethodField()
+    relay_deliveries = serializers.SerializerMethodField()
 
     class Meta:
         model = EmailMessage
@@ -560,6 +665,8 @@ class EmailMessageListSerializer(serializers.ModelSerializer):
             "share_status",
             "issue_external_id",
             "issue_url",
+            "relay_delivery_count",
+            "relay_deliveries",
             "created_at",
         ]
         read_only_fields = [
@@ -623,6 +730,18 @@ class EmailMessageListSerializer(serializers.ModelSerializer):
         if not issue:
             return None
         return issue.issue_url
+
+    def get_relay_delivery_count(self, obj):
+        """
+        Return the number of relay deliveries in the latest relay event.
+        """
+        return len(_get_relay_deliveries(obj))
+
+    def get_relay_deliveries(self, obj):
+        """
+        Return the latest relay deliveries for the threadline.
+        """
+        return [_serialize_relay_delivery(item) for item in _get_relay_deliveries(obj)]
 
     def get_is_canonical(self, obj):
         """
@@ -700,6 +819,9 @@ class EmailMessageCreateSerializer(serializers.ModelSerializer):
             "received_at",
             "html_content",
             "text_content",
+            "raw_message_id",
+            "in_reply_to",
+            "references",
         ]
 
     def validate_user_id(self, value):
