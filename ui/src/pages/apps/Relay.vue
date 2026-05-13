@@ -1104,11 +1104,21 @@
                       </div>
 
                       <div class="grid grid-cols-1 gap-4 lg:grid-cols-2">
-                        <BaseInput
-                          v-model="editorForm.jiraConfig.summary_prefix"
-                          :label="t('relay.jiraSummaryPrefix')"
-                          :placeholder="t('relay.jiraSummaryPrefixPlaceholder')"
-                        />
+                  <BaseInput
+                    v-model="editorForm.jiraConfig.summary_prefix"
+                    :label="
+                      relayText('relay.jiraSummaryPrefix', {
+                        en: 'Title prefix',
+                        zh: '标题前缀'
+                      })
+                    "
+                    :placeholder="
+                      relayText('relay.jiraSummaryPrefixPlaceholder', {
+                        en: '[AI]',
+                        zh: '[AI]'
+                      })
+                    "
+                  />
 
                         <div class="space-y-3">
                           <label
@@ -1769,12 +1779,27 @@
                     :help="t('settings.feishuTableNameHelp')"
                   />
 
-                  <BaseInput
-                    v-model="editorForm.feishuConfig.summary_prefix"
-                    :label="t('relay.feishuSummaryPrefix')"
-                    :placeholder="t('relay.feishuSummaryPrefixPlaceholder')"
-                    :help="t('relay.feishuSummaryPrefixHelp')"
-                  />
+                      <BaseInput
+                        v-model="editorForm.feishuConfig.summary_prefix"
+                        :label="
+                          relayText('relay.feishuSummaryPrefix', {
+                            en: 'Title prefix',
+                            zh: '标题前缀'
+                          })
+                        "
+                        :placeholder="
+                        relayText('relay.feishuSummaryPrefixPlaceholder', {
+                            en: '[AI] ',
+                            zh: '[AI] '
+                          })
+                        "
+                        :help="
+                          relayText('relay.feishuSummaryPrefixHelp', {
+                            en: 'Automatically prepended to the Feishu title. Leave it empty to disable.',
+                            zh: '会自动加在飞书标题前面，留空则不加。'
+                          })
+                        "
+                      />
 
                   <div
                     class="rounded-lg border border-gray-200 bg-gray-50 p-4 space-y-4"
@@ -1932,11 +1957,21 @@
                   </div>
 
                   <div class="grid grid-cols-1 gap-4 lg:grid-cols-2">
-                    <BaseInput
-                      v-model="editorForm.jiraConfig.summary_prefix"
-                      :label="t('relay.jiraSummaryPrefix')"
-                      :placeholder="t('relay.jiraSummaryPrefixPlaceholder')"
-                    />
+                      <BaseInput
+                        v-model="editorForm.jiraConfig.summary_prefix"
+                        :label="
+                          relayText('relay.jiraSummaryPrefix', {
+                            en: 'Summary prefix',
+                            zh: '标题前缀'
+                          })
+                        "
+                        :placeholder="
+                          relayText('relay.jiraSummaryPrefixPlaceholder', {
+                            en: '[AI]',
+                            zh: '[AI]'
+                          })
+                        "
+                      />
 
                     <div class="space-y-3">
                       <label class="block text-sm font-medium text-gray-700">
@@ -2280,7 +2315,13 @@ import { useRelayDeliveryList } from '@/composables/useRelayDeliveryList'
 import { useRelayRetry } from '@/composables/useRelayRetry'
 import { useRelayEditor } from '@/composables/useRelayEditor'
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
+
+function relayText(key, { en, zh }) {
+  const translated = t(key)
+  if (translated && translated !== key) return translated
+  return String(locale.value || '').startsWith('zh') ? zh : en
+}
 
 const activeTab = ref('deliveries')
 const subscriptions = ref([])

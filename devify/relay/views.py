@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import os
+from copy import deepcopy
 from types import SimpleNamespace
 
 from django.shortcuts import get_object_or_404
@@ -36,6 +37,17 @@ logger = logging.getLogger(__name__)
 
 def _response(data, message="ok", code=200, status_code=status.HTTP_200_OK):
     return Response({"code": code, "message": message, "data": data}, status=status_code)
+
+
+def _deep_merge_dicts(base, override):
+    merged = dict(base or {})
+    for key, value in (override or {}).items():
+        existing = merged.get(key)
+        if isinstance(existing, dict) and isinstance(value, dict):
+            merged[key] = _deep_merge_dicts(existing, value)
+        else:
+            merged[key] = value
+    return merged
 
 
 def _build_test_email_message(snapshot: dict) -> SimpleNamespace:
@@ -135,15 +147,120 @@ class RelayTestAPIView(APIView):
 
     def post(self, request):
         subscription_id = request.data.get("subscription_id")
-        if not subscription_id:
+        draft_subscription = request.data.get("subscription")
+        subscription = None
+        if subscription_id:
+            subscription = get_object_or_404(
+                RelaySubscription, pk=subscription_id, user=request.user
+            )
+        elif not isinstance(draft_subscription, dict):
             return Response(
-                {"code": 400, "message": "subscription_id is required", "data": None},
+                {
+                    "code": 400,
+                    "message": "subscription_id or subscription is required",
+                    "data": None,
+                },
                 status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        draft_target_type = (
+            draft_subscription or {}
+        ).get("target_type")
+        target_type = (
+            draft_target_type
+            or (subscription.target_type if subscription else None)
+            or request.data.get("target_type")
+            or RelaySubscription.TargetType.FEISHU_BITABLE
         )
-        subscription = get_object_or_404(
-            RelaySubscription, pk=subscription_id, user=request.user
+        config_override = (
+            request.data.get("config")
+            if isinstance(request.data.get("config"), dict)
+            else None
         )
-        adapter = RelayAdapterRegistry.get_adapter(subscription.target_type)
+        strategies_override = (
+            request.data.get("strategies")
+            if isinstance(request.data.get("strategies"), dict)
+            else None
+        )
+        field_mappings_override = (
+            request.data.get("field_mappings")
+            if isinstance(request.data.get("field_mappings"), dict)
+            else None
+        )
+
+        draft_config = (
+            deepcopy((draft_subscription or {}).get("config") or {})
+            if isinstance(draft_subscription, dict)
+            else {}
+        )
+        draft_strategies = (
+            deepcopy((draft_subscription or {}).get("strategies") or {})
+            if isinstance(draft_subscription, dict)
+            else {}
+        )
+        draft_field_mappings = (
+            deepcopy((draft_subscription or {}).get("field_mappings") or {})
+            if isinstance(draft_subscription, dict)
+            else {}
+        )
+
+        if subscription:
+            resolved_config = _deep_merge_dicts(
+                subscription.config or {},
+                config_override or {},
+            )
+            if draft_config:
+                resolved_config = _deep_merge_dicts(
+                    resolved_config,
+                    draft_config,
+                )
+            resolved_strategies = _deep_merge_dicts(
+                subscription.strategies or {},
+                strategies_override or {},
+            )
+            if draft_strategies:
+                resolved_strategies = _deep_merge_dicts(
+                    resolved_strategies,
+                    draft_strategies,
+                )
+            resolved_field_mappings = _deep_merge_dicts(
+                subscription.field_mappings or {},
+                field_mappings_override or {},
+            )
+            if draft_field_mappings:
+                resolved_field_mappings = _deep_merge_dicts(
+                    resolved_field_mappings,
+                    draft_field_mappings,
+                )
+        else:
+            resolved_config = draft_config
+            if config_override:
+                resolved_config = _deep_merge_dicts(
+                    resolved_config,
+                    config_override,
+                )
+            resolved_strategies = draft_strategies
+            if strategies_override:
+                resolved_strategies = _deep_merge_dicts(
+                    resolved_strategies,
+                    strategies_override,
+                )
+            resolved_field_mappings = draft_field_mappings
+            if field_mappings_override:
+                resolved_field_mappings = _deep_merge_dicts(
+                    resolved_field_mappings,
+                    field_mappings_override,
+                )
+
+        effective_subscription = SimpleNamespace(
+            id=getattr(subscription, "id", None),
+            user=request.user,
+            target_type=target_type,
+            config=resolved_config,
+            strategies=resolved_strategies,
+            field_mappings=resolved_field_mappings,
+        )
+        adapter = RelayAdapterRegistry.get_adapter(target_type)
         raw_attachments = request.data.get("attachments")
         temp_paths: list[str] = []
         try:
@@ -171,9 +288,17 @@ class RelayTestAPIView(APIView):
             }
             test_event = _build_test_event(artifact_snapshot)
             test_delivery = _build_test_delivery()
+            test_delivery.metadata["relay_delivery_plan"] = {
+                "action": "new",
+                "source": "test",
+                "reference_external_id": "",
+                "reference_delivery_id": None,
+                "related_issue_keys": [],
+                "linking_supported": False,
+            }
             result = adapter.deliver(
                 event=test_event,
-                subscription=subscription,
+                subscription=effective_subscription,
                 delivery=test_delivery,
             )
             return _response(

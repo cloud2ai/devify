@@ -25,8 +25,6 @@ class TestFeishuBitableIssueHandler:
                 "tenant_access_token": "tenant-token",
                 "app_token": "bascn123",
                 "table_id": "tbl123",
-                "attachment_upload_parent_node": "obj-token-123",
-                "attachment_upload_parent_folder_token": "folder-token-123",
                 "field_mappings": {
                     "标题": "title",
                     "描述": "description",
@@ -175,12 +173,85 @@ class TestFeishuBitableIssueHandler:
         upload_payload = mock_post.call_args_list[0].kwargs["data"]
         assert upload_payload["file_name"] == "demo.pdf"
         assert upload_payload["parent_type"] == "bitable_file"
-        assert upload_payload["parent_node"] == "obj-token-123"
+        assert upload_payload["parent_node"] == "bascn123"
 
         create_payload = mock_post.call_args_list[1].kwargs["json"]
         assert create_payload["fields"]["附件"] == [
             {"file_token": "file-token-123"}
         ]
+
+    @patch("threadline.utils.issues.feishu_bitable_handler.requests.post")
+    def test_create_issue_ignores_stale_attachment_parent_node_config(
+        self,
+        mock_post,
+        tmp_path,
+    ):
+        attachment_file = tmp_path / "demo.pdf"
+        attachment_file.write_bytes(b"demo-bytes")
+
+        handler = FeishuBitableIssueHandler(
+            {
+                "feishu_bitable": {
+                    "tenant_access_token": "tenant-token",
+                    "app_token": "bascn123",
+                    "table_id": "tbl123",
+                    "attachment_upload_parent_node": "obj-token-123",
+                    "field_mappings": {
+                        "标题": "title",
+                    },
+                }
+            }
+        )
+        handler._sdk_available = lambda: False  # type: ignore[attr-defined]
+
+        upload_response = Mock()
+        upload_response.raise_for_status.return_value = None
+        upload_response.status_code = 200
+        upload_response.text = "{\"code\":0}"
+        upload_response.json.return_value = {
+            "code": 0,
+            "data": {
+                "file_token": "file-token-123",
+            },
+        }
+
+        create_response = Mock()
+        create_response.raise_for_status.return_value = None
+        create_response.status_code = 200
+        create_response.text = "{\"code\":0}"
+        create_response.json.return_value = {
+            "code": 0,
+            "data": {
+                "record": {
+                    "record_id": "rec123",
+                }
+            },
+        }
+
+        mock_post.side_effect = [upload_response, create_response]
+
+        record_id = handler.create_issue(
+            issue_data={
+                "title": "New issue",
+                "description": "Description body",
+                "priority": "High",
+            },
+            email_data={
+                "id": "email-1",
+                "subject": "Subject line",
+                "metadata": {"scene": "product_issue"},
+            },
+            attachments=[
+                {
+                    "file_path": str(attachment_file),
+                    "filename": "demo.pdf",
+                }
+            ],
+        )
+
+        assert record_id == "rec123"
+        upload_payload = mock_post.call_args_list[0].kwargs["data"]
+        assert upload_payload["parent_node"] == "bascn123"
 
     @patch("threadline.utils.issues.feishu_bitable_handler.requests.post")
     def test_create_issue_uploads_attachment_tokens_in_wiki_mode(
@@ -198,7 +269,6 @@ class TestFeishuBitableIssueHandler:
                     "app_token": "wiki-token-123",
                     "app_token_type": "wiki",
                     "table_id": "tbl123",
-                    "attachment_upload_parent_node": "wiki-token-123",
                     "field_mappings": {
                         "标题": "title",
                     },
@@ -255,7 +325,7 @@ class TestFeishuBitableIssueHandler:
         assert record_id == "rec-wiki-123"
         upload_payload = mock_post.call_args_list[0].kwargs["data"]
         assert upload_payload["parent_type"] == "bitable_file"
-        assert upload_payload["parent_node"] == "wiki-token-123"
+        assert upload_payload["parent_node"] == "obj-token-456"
 
     @patch("threadline.utils.issues.feishu_bitable_handler.requests.get")
     @patch("threadline.utils.issues.feishu_bitable_handler.requests.post")
@@ -344,6 +414,7 @@ class TestFeishuBitableIssueHandler:
 
         assert record_id == "rec-wiki-123"
         mock_get.assert_called_once()
+        assert mock_get.call_args.kwargs["params"]["obj_type"] == "wiki"
         upload_payload = mock_post.call_args_list[0].kwargs["data"]
         assert upload_payload["parent_type"] == "bitable_file"
         assert upload_payload["parent_node"] == "obj-token-456"

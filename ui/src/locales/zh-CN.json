@@ -682,7 +682,7 @@
     "feishuTableNamePlaceholder": "需求转化",
     "feishuTableNameHelp": "要写入的多维表格数据表名称，必须和飞书里实际表头名称完全一致。",
     "feishuSummaryPrefix": "标题前缀",
-    "feishuSummaryPrefixPlaceholder": "[DEVIFY TEST] ",
+    "feishuSummaryPrefixPlaceholder": "[AI] ",
     "feishuSummaryPrefixHelp": "会自动加在飞书标题前面，留空则不加。",
     "feishuAttachmentFieldName": "附件字段名",
     "feishuAttachmentFieldNamePlaceholder": "附件",

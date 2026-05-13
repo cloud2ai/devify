@@ -673,7 +673,7 @@
     "feishuTableNamePlaceholder": "Issue collection",
     "feishuTableNameHelp": "The target table name must match the actual Feishu table name exactly.",
     "feishuSummaryPrefix": "Title prefix",
-    "feishuSummaryPrefixPlaceholder": "[DEVIFY TEST] ",
+    "feishuSummaryPrefixPlaceholder": "[AI] ",
     "feishuSummaryPrefixHelp": "Automatically prepended to the Feishu title. Leave it empty to disable.",
     "feishuAttachmentFieldName": "Attachment field name",
     "feishuAttachmentFieldNamePlaceholder": "Attachments",

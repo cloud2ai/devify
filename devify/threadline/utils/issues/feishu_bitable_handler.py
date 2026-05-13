@@ -44,6 +44,7 @@ DEFAULT_RECORD_URL = (
     "/bitable/v1/apps/{app_token}/tables/{table_id}/records/{record_id}"
 )
 DEFAULT_UPLOAD_URL = "/drive/v1/files/upload_all"
+DEFAULT_UPLOAD_PARENT_TYPE = "bitable_file"
 
 
 class FeishuBitableIssueHandler:
@@ -77,18 +78,6 @@ class FeishuBitableIssueHandler:
         )
         self.image_field_name = self.feishu_config.get(
             "image_field_name", self.attachment_field_name
-        )
-        self.attachment_upload_parent_type = self.feishu_config.get(
-            "attachment_upload_parent_type", "bitable_file"
-        )
-        self.image_upload_parent_type = self.feishu_config.get(
-            "image_upload_parent_type", self.attachment_upload_parent_type
-        )
-        self.attachment_upload_parent_node = self.feishu_config.get(
-            "attachment_upload_parent_node"
-        )
-        self.attachment_upload_parent_folder_token = self.feishu_config.get(
-            "attachment_upload_parent_folder_token"
         )
         self.field_mappings = self.feishu_config.get("field_mappings", {})
         self.app_id = self.feishu_config.get("app_id")
@@ -429,7 +418,6 @@ class FeishuBitableIssueHandler:
         if attachment_field_name:
             file_tokens = self._upload_attachments_to_tokens(
                 attachments,
-                parent_type=self.attachment_upload_parent_type,
                 parent_node=self._resolve_attachment_parent_node(),
             )
             if file_tokens:
@@ -440,7 +428,6 @@ class FeishuBitableIssueHandler:
     def _upload_attachments_to_tokens(
         self,
         attachments: List[Dict[str, Any]],
-        parent_type: str,
         parent_node: str | None = None,
     ) -> List[Dict[str, str]]:
         """
@@ -476,7 +463,6 @@ class FeishuBitableIssueHandler:
                         or attachment.get("filename")
                         or file_path.rsplit("/", 1)[-1]
                     ),
-                    parent_type=parent_type,
                     parent_node=resolved_parent_node,
                 )
                 uploaded.append({"file_token": file_token})
@@ -604,43 +590,20 @@ class FeishuBitableIssueHandler:
 
     def _resolve_attachment_parent_node(self) -> str:
         """
-        Resolve the configured parent node token used for attachment uploads.
-        """
-        explicit_parent_node = (
-            self.attachment_upload_parent_node or ""
-        ).strip()
-        if explicit_parent_node:
-            return explicit_parent_node
+        Resolve the parent node token used for attachment uploads.
 
+        Native Bitable uploads use the app token directly. Wiki uploads need
+        the writable obj_token resolved from the wiki node token.
+        """
         if self.app_token_type == "wiki":
             return self._resolve_wiki_obj_token()
 
-        parent_type = (self.attachment_upload_parent_type or "").strip()
-        if parent_type in {"bitable", "bitable_file"}:
-            if self.app_token:
-                return self.app_token
-
-            legacy_folder_token = (
-                self.attachment_upload_parent_folder_token or ""
-            ).strip()
-            if legacy_folder_token:
-                return legacy_folder_token
-
-            raise ValueError(
-                "Feishu bitable attachment upload requires app_token or "
-                "feishu_bitable.attachment_upload_parent_node"
-            )
-
-        folder_token = (
-            self.attachment_upload_parent_folder_token or ""
-        ).strip()
-        if folder_token:
-            return folder_token
+        if self.app_token:
+            return self.app_token
 
         raise ValueError(
-            "Feishu attachment upload requires "
-            "feishu_bitable.attachment_upload_parent_node or "
-            "feishu_bitable.attachment_upload_parent_folder_token"
+            "Feishu attachment upload requires feishu_bitable.app_token "
+            "for Bitable mode or a resolvable wiki token for Wiki mode"
         )
 
     def _resolve_wiki_obj_token(self) -> str:
@@ -661,7 +624,7 @@ class FeishuBitableIssueHandler:
                 request = (
                     GetNodeSpaceRequest.builder()
                     .token(self.app_token)
-                    .obj_type("bitable")
+                    .obj_type("wiki")
                     .build()
                 )
                 response = client.wiki.v2.space.get_node(
@@ -683,7 +646,7 @@ class FeishuBitableIssueHandler:
                 headers=headers,
                 params={
                     "token": self.app_token,
-                    "obj_type": "bitable",
+                    "obj_type": "wiki",
                 },
                 timeout=15,
             )
@@ -722,7 +685,6 @@ class FeishuBitableIssueHandler:
         self,
         file_path: str,
         file_name: str,
-        parent_type: str,
         parent_node: str | None = None,
     ) -> str:
         """
@@ -737,7 +699,6 @@ class FeishuBitableIssueHandler:
                     file_obj=file_obj,
                     file_bytes=file_bytes,
                     file_name=file_name,
-                    parent_type=parent_type,
                     parent_node=parent_node,
                 )
 
@@ -752,7 +713,7 @@ class FeishuBitableIssueHandler:
 
         form_data = {
             "file_name": file_name,
-            "parent_type": parent_type,
+            "parent_type": DEFAULT_UPLOAD_PARENT_TYPE,
             "parent_node": parent_node,
             "size": str(len(file_bytes)),
         }
@@ -935,7 +896,6 @@ class FeishuBitableIssueHandler:
         file_obj,
         file_bytes: bytes,
         file_name: str,
-        parent_type: str,
         parent_node: str | None = None,
     ) -> str:
         """
@@ -961,7 +921,7 @@ class FeishuBitableIssueHandler:
                 .request_body(
                     UploadAllFileRequestBody.builder()
                     .file_name(file_name)
-                    .parent_type(parent_type)
+                    .parent_type(DEFAULT_UPLOAD_PARENT_TYPE)
                     .parent_node(parent_node)
                     .size(len(file_bytes))
                     .file(file_obj)

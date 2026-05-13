@@ -207,7 +207,7 @@ def test_relay_test_endpoint_uses_subscription_configuration(api_client, monkeyp
     assert response.data["data"]["external_id"] == "record-1"
     assert captured["subscription_config"]["feishu_bitable"]["app_id"] == "cli_xxx"
     assert captured["event_subject"] == "devify test summary"
-    assert captured["delivery_metadata"] == {}
+    assert captured["delivery_metadata"]["relay_delivery_plan"]["action"] == "new"
     assert captured["attachments"][0]["filename"] == "builtin-test-image.png"
     assert captured["attachments"][0]["content_type"] == "image/png"
 
@@ -267,6 +267,162 @@ def test_relay_test_endpoint_returns_400_when_delivery_fails(api_client, monkeyp
 
     assert response.status_code == 400
     assert "attachment upload failed" in response.data["message"].lower()
+
+
+@pytest.mark.django_db
+def test_relay_test_endpoint_accepts_draft_subscription_config(api_client, monkeypatch):
+    user = User.objects.create_user(
+        username="relay-user-draft-config",
+        email="relay-draft-config@example.com",
+        password="secret",
+    )
+    captured = {}
+
+    class _TestRelayAdapter:
+        def deliver(self, *, event, subscription, delivery):
+            captured["subscription_config"] = subscription.config
+            captured["subscription_target_type"] = subscription.target_type
+            captured["delivery_plan"] = delivery.metadata.get("relay_delivery_plan")
+            return SimpleNamespace(
+                external_id="record-draft-1",
+                external_url="https://example.com/record-draft-1",
+                metadata={"adapter": subscription.target_type},
+            )
+
+    monkeypatch.setattr(
+        "relay.services.adapters.RelayAdapterRegistry.get_adapter",
+        lambda target_type: _TestRelayAdapter(),
+    )
+
+    api_client.force_authenticate(user=user)
+    response = api_client.post(
+        reverse("relay-test"),
+        {
+            "target_type": "feishu_bitable",
+            "subscription": {
+                "target_type": "feishu_bitable",
+                "config": {
+                    "issue_engine": "feishu_bitable",
+                    "enable": True,
+                    "feishu_bitable": {
+                        "app_id": "cli_xxx",
+                        "app_secret": "secret",
+                        "app_token_type": "wiki",
+                        "app_token": "wiki-node-token",
+                        "table_name": "Issue Table",
+                        "attachment_field_name": "附件",
+                        "field_mappings": {
+                            "任务简述": "title",
+                        },
+                    },
+                },
+                "strategies": {
+                    "auto_merge_strategy": "new",
+                    "manual_merge_strategy": "linked",
+                    "retry_issue_strategy": "update",
+                },
+                "field_mappings": {"任务简述": "title"},
+            },
+            "artifact_snapshot": {
+                "summary_title": "draft summary",
+                "summary_content": "draft body",
+                "llm_content": "draft body",
+            },
+        },
+        format="json",
+    )
+
+    assert response.status_code == 200
+    assert response.data["data"]["external_id"] == "record-draft-1"
+    assert captured["subscription_target_type"] == "feishu_bitable"
+    assert captured["subscription_config"]["feishu_bitable"]["app_token_type"] == "wiki"
+    assert captured["subscription_config"]["feishu_bitable"]["app_token"] == "wiki-node-token"
+    assert captured["delivery_plan"]["action"] == "new"
+
+
+@pytest.mark.django_db
+def test_relay_test_endpoint_merges_draft_over_existing_subscription(
+    api_client, monkeypatch
+):
+    user = User.objects.create_user(
+        username="relay-user-draft-merge",
+        email="relay-draft-merge@example.com",
+        password="secret",
+    )
+    subscription = RelaySubscription.objects.create(
+        user=user,
+        name="Existing subscription",
+        target_type="feishu_bitable",
+        enabled=True,
+        config={
+            "issue_engine": "feishu_bitable",
+            "enable": True,
+            "feishu_bitable": {
+                "app_token_type": "bitable",
+                "app_token": "bascn-old-token",
+                "table_name": "Issue Table",
+                "attachment_field_name": "附件",
+            },
+        },
+        strategies={"auto_merge_strategy": "new"},
+        field_mappings={"任务简述": "title"},
+    )
+    captured = {}
+
+    class _TestRelayAdapter:
+        def deliver(self, *, event, subscription, delivery):
+            captured["subscription_config"] = subscription.config
+            captured["subscription_target_type"] = subscription.target_type
+            return SimpleNamespace(
+                external_id="record-merge-1",
+                external_url="https://example.com/record-merge-1",
+                metadata={"adapter": subscription.target_type},
+            )
+
+    monkeypatch.setattr(
+        "relay.services.adapters.RelayAdapterRegistry.get_adapter",
+        lambda target_type: _TestRelayAdapter(),
+    )
+
+    api_client.force_authenticate(user=user)
+    response = api_client.post(
+        reverse("relay-test"),
+        {
+            "subscription_id": subscription.id,
+            "subscription": {
+                "target_type": "feishu_bitable",
+                "config": {
+                    "issue_engine": "feishu_bitable",
+                    "enable": True,
+                    "feishu_bitable": {
+                        "app_token_type": "wiki",
+                        "app_token": "wiki-node-token",
+                        "table_name": "Issue Table",
+                        "attachment_field_name": "附件",
+                        "field_mappings": {"任务简述": "title"},
+                    },
+                },
+                "strategies": {
+                    "auto_merge_strategy": "new",
+                    "manual_merge_strategy": "linked",
+                    "retry_issue_strategy": "update",
+                },
+                "field_mappings": {"任务简述": "title"},
+            },
+            "artifact_snapshot": {
+                "summary_title": "draft summary",
+                "summary_content": "draft body",
+                "llm_content": "draft body",
+            },
+        },
+        format="json",
+    )
+
+    assert response.status_code == 200
+    assert response.data["data"]["external_id"] == "record-merge-1"
+    assert captured["subscription_target_type"] == "feishu_bitable"
+    assert captured["subscription_config"]["feishu_bitable"]["app_token_type"] == "wiki"
+    assert captured["subscription_config"]["feishu_bitable"]["app_token"] == "wiki-node-token"
 
 
 @pytest.mark.django_db

@@ -367,7 +367,55 @@ export function useRelayEditor({ reloadAll, activeTab }) {
   }
 
   function buildTestPayload() {
+    const strategies = {
+      auto_merge_strategy:
+        editorForm.strategies.auto_merge_strategy || 'new',
+      manual_merge_strategy:
+        editorForm.strategies.manual_merge_strategy || 'linked',
+      retry_issue_strategy:
+        editorForm.strategies.retry_issue_strategy || 'update'
+    }
     return {
+      subscription: {
+        target_type: editorForm.target_type || 'feishu_bitable',
+        name: editorForm.name || '',
+        enabled: Boolean(editorForm.enabled),
+        config:
+          editorForm.target_type === 'feishu_bitable'
+            ? {
+                issue_engine: 'feishu_bitable',
+                enable: Boolean(editorForm.enabled),
+                language: editorForm.language || 'Chinese',
+                ...strategies,
+                feishu_bitable: {
+                  app_token_type:
+                    editorForm.feishuConfig.app_token_type || 'bitable',
+                  app_token: editorForm.feishuConfig.app_token || '',
+                  table_name: editorForm.feishuConfig.table_name || '',
+                  app_id: editorForm.feishuConfig.app_id || '',
+                  app_secret: editorForm.feishuConfig.app_secret || '',
+                  attachment_field_name:
+                    editorForm.feishuConfig.attachment_field_name || '附件',
+                  summary_prefix: editorForm.feishuConfig.summary_prefix || '',
+                  field_mappings: buildFieldMappingsFromRows(
+                    editorForm.fieldMappingRows
+                  )
+                }
+              }
+            : {
+                issue_engine: 'jira',
+                enable: Boolean(editorForm.enabled),
+                language: editorForm.language || 'Chinese',
+                ...strategies,
+                jira: {
+                  url: editorForm.jiraConfig.url || '',
+                  username: editorForm.jiraConfig.username || '',
+                  api_token: editorForm.jiraConfig.api_token || ''
+                }
+              },
+        strategies,
+        field_mappings: buildFieldMappingsFromRows(editorForm.fieldMappingRows)
+      },
       artifact_snapshot: {
         summary_title: 'devify test summary',
         summary_content: 'devify test description',
@@ -584,15 +632,15 @@ export function useRelayEditor({ reloadAll, activeTab }) {
   }
 
   async function runTest(subscriptionId) {
-    const targetSubscriptionId =
-      subscriptionId || testSubscriptionId.value || editorForm.id
-    if (!targetSubscriptionId) return null
     testing.value = true
     try {
-      const data = await relayApi.testSubscription({
-        subscription_id: targetSubscriptionId,
-        ...buildTestPayload()
-      })
+      const payload = buildTestPayload()
+      const targetSubscriptionId =
+        subscriptionId || testSubscriptionId.value || editorForm.id
+      if (targetSubscriptionId) {
+        payload.subscription_id = targetSubscriptionId
+      }
+      const data = await relayApi.testSubscription(payload)
       editorTestSignature.value = editorCurrentSignature.value
       showSuccess(t('relay.testSuccess'))
       return data
@@ -607,14 +655,6 @@ export function useRelayEditor({ reloadAll, activeTab }) {
 
   async function runEditorTest() {
     try {
-      if (!editorForm.id) {
-        const result = await persistEditor()
-        await reloadAll()
-        editorForm.id = result.id || editorForm.id
-        testSubscriptionId.value = String(
-          result.id || testSubscriptionId.value || ''
-        )
-      }
       await runTest(editorForm.id || testSubscriptionId.value)
       editorMode.value = 'edit'
       activeTab.value = 'channels'
