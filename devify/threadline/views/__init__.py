@@ -30,6 +30,12 @@ from .email_message import (
     EmailMessageBatchMergeAPIView,
     EmailMessageBatchRetryAPIView,
 )
+from .admin_conversations import (
+    AdminConversationListAPIView,
+    AdminConversationDetailAPIView,
+    AdminConversationTasksAPIView,
+    AdminConversationTaskDetailAPIView,
+)
 from .email_todo import (
     EmailTodoAPIView,
     EmailTodoDetailAPIView,
@@ -62,6 +68,10 @@ __all__ = [
     "EmailMessageIssueClusterAPIView",
     "EmailMessageBatchMergeAPIView",
     "EmailMessageBatchRetryAPIView",
+    "AdminConversationListAPIView",
+    "AdminConversationDetailAPIView",
+    "AdminConversationTasksAPIView",
+    "AdminConversationTaskDetailAPIView",
     "EmailTodoAPIView",
     "EmailTodoDetailAPIView",
     "EmailTodoStatsAPIView",

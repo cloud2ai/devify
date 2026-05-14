@@ -52,6 +52,7 @@
                 v-model="filterUserId"
                 class="rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary-500 focus:border-primary-500 min-w-[10rem]"
                 @change="onFilterChange"
+                @focus="ensureUserOptionsLoaded"
               >
                 <option value="">
                   {{ t('taskManagement.list.userFilterAll') }}
@@ -340,6 +341,8 @@ const currentPage = ref(1)
 const totalCount = ref(0)
 const totalPages = ref(1)
 const pageSize = ref(20)
+const userOptionsLoading = ref(false)
+const userOptionsLoaded = ref(false)
 
 const paginationShowing = computed(() => ({
   from: (currentPage.value - 1) * pageSize.value + 1,
@@ -444,6 +447,8 @@ function toUserLabel(u) {
 }
 
 async function fetchUserOptions() {
+  if (userOptionsLoaded.value || userOptionsLoading.value) return
+  userOptionsLoading.value = true
   try {
     const data = await managementApi.getUsers({ page_size: 200 })
     const list = Array.isArray(data)
@@ -452,9 +457,17 @@ async function fetchUserOptions() {
         ? data.results
         : []
     userOptions.value = list.map((u) => ({ id: u.id, label: toUserLabel(u) }))
+    userOptionsLoaded.value = true
   } catch {
     userOptions.value = []
+  } finally {
+    userOptionsLoading.value = false
   }
+}
+
+function ensureUserOptionsLoaded() {
+  if (userOptions.value.length > 0 || userOptionsLoaded.value) return
+  void fetchUserOptions()
 }
 
 const debouncedLoad = useDebounceFn(() => {
@@ -473,7 +486,7 @@ async function handlePreview(task) {
 }
 
 onMounted(() => {
-  fetchUserOptions()
+  ensureUserOptionsLoaded()
   loadTasks()
 })
 </script>

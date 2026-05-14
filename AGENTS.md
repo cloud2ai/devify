@@ -55,6 +55,7 @@ These supplement the repo-specific rules above.
 - Avoid refactoring unrelated code, formatting adjacent sections, or renaming things that are not part of the task.
 - Keep the existing style unless there is a clear reason not to.
 - Remove only the imports, variables, or helpers made unused by your own edits.
+- When working on the frontend, split Vue pages/components early instead of letting a single SFC grow large. If a page starts combining list, detail, filters, drawers, and heavy computed logic, extract child components immediately and keep the parent as a thin state/orchestration layer.
 
 ### Goal-Driven Execution
 - Turn each task into a verifiable result.

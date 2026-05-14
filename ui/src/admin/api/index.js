@@ -2,6 +2,7 @@
  * Admin API aggregate exports.
  */
 export { managementApi } from './management'
+export { dataManagementApi } from './dataManagement'
 export { llmAdminApi } from './llmAdmin'
 export { threadlineAdminApi } from './threadline'
 export { relayAdminApi } from './relay'

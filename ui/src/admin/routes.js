@@ -53,6 +53,17 @@ export const adminRoutes = [
     meta: { requiresAuth: true, requiresAdmin: true }
   },
   {
+    path: '/management/data-management',
+    redirect: '/management/data-management/conversations'
+  },
+  {
+    path: '/management/data-management/conversations',
+    name: 'DataManagementConversations',
+    component: () =>
+      import('@/admin/pages/DataManagement/ConversationsPage.vue'),
+    meta: { requiresAuth: true, requiresAdmin: true }
+  },
+  {
     path: '/management/threadline',
     redirect: '/management/threadline/config'
   },

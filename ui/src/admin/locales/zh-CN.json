@@ -1,4 +1,30 @@
 {
+  "common": {
+    "reset": "重置",
+    "loading": "加载中",
+    "refresh": "刷新",
+    "dateRange": "日期范围",
+    "language": "语言",
+    "close": "关闭",
+    "confirm": "确定",
+    "pagination": {
+      "showing": "显示 {from}-{to} 条，共 {total} 条",
+      "itemsPerPage": "每页条数",
+      "previous": "上一页",
+      "next": "下一页"
+    },
+    "status": {
+      "success": "成功",
+      "failed": "失败",
+      "processing": "处理中",
+      "pending": "待处理",
+      "completed": "已完成",
+      "fetched": "已抓取",
+      "canonical": "规范化",
+      "merged": "已合并",
+      "unknown": "未知"
+    }
+  },
   "management": {
     "adminConsole": "管理员控制台",
     "logoTitle": "管理控制台",
@@ -40,7 +66,7 @@
   "appSettings": {
     "menuTitle": "应用设置",
     "title": "应用设置",
-    "subtitle": "统一管理 Threadline、Relay 和失败通知等最终运行配置。",
+    "subtitle": "统一管理 Threadline、智能渠道和失败通知等最终运行配置。",
     "sections": {
       "global": {
         "title": "全局设置",
@@ -51,8 +77,8 @@
         "description": "配置图片识别和文本处理所使用的大语言模型。"
       },
       "relay": {
-        "title": "智能投递",
-        "description": "配置 Relay 专用的大语言模型绑定。"
+        "title": "智能渠道",
+        "description": "配置智能渠道专用的大语言模型绑定。"
       },
       "llm": {
         "title": "大语言模型",
@@ -73,7 +99,86 @@
     "availableConfigs": "当前可用配置：{count} 个",
     "selectedImageModel": "图片模型：{label}",
     "selectedTextModel": "文本模型：{label}",
-    "selectedRelayModel": "Relay 模型：{label}"
+    "selectedRelayModel": "智能渠道模型：{label}"
+  },
+  "dataManagement": {
+    "menuTitle": "数据管理",
+    "conversations": {
+      "menuTitle": "对话管理",
+      "title": "对话管理",
+      "subtitle": "按用户查看消息、关联的智能渠道投递和任务执行情况。",
+      "searchPlaceholder": "搜索主题、发件人、收件人、正文或消息 ID",
+      "searchLabel": "搜索",
+      "userFilter": "用户",
+      "statusFilter": "状态",
+      "statusAll": "全部状态",
+      "filter": "筛选",
+      "filterHint": "在右侧面板中选择用户、状态和日期范围。",
+      "activeFilters": "当前筛选",
+      "activeFiltersHint": "下面这些条件已生效，可单独移除或一键清除。",
+      "clearFilters": "清除筛选",
+      "removeFilter": "移除 {label} 筛选",
+      "to": "至",
+      "subject": "主题",
+      "sender": "发件人",
+      "recipients": "收件人",
+      "summaryTitle": "摘要标题",
+      "messageId": "消息 ID",
+      "receivedAt": "接收时间",
+      "createdAt": "创建时间",
+      "relay": "智能渠道",
+      "relayCount": "智能渠道投递 {count} 次",
+      "relayLatest": "最新投递：{status}",
+      "relayNone": "无智能渠道记录",
+      "mergeRelation": "合并关系",
+      "tabAiInfo": "AI整理信息",
+      "tabRelay": "智能渠道",
+      "tabMergeRelation": "合并关系",
+      "tabRawInfo": "原始信息",
+      "tabAttachments": "附件",
+      "tabTaskManagement": "任务管理",
+      "detailTitle": "消息详情",
+      "aiSectionTitle": "AI整理信息",
+      "aiSummaryContent": "摘要内容",
+      "aiLlmContent": "大模型处理内容",
+      "metadataTitle": "元数据",
+      "relayDetailTitle": "智能渠道",
+      "relayDetailHint": "查看消息投递到智能渠道后的记录。",
+      "mergeRelationTitle": "合并关系",
+      "mergeRelationHint": "查看当前记录与合并主记录、原始记录之间的关系。",
+      "mergeRelationRole": "关系",
+      "mergeParentRecord": "父对话",
+      "mergeChildRecord": "子对话",
+      "currentState": "当前状态",
+      "mergeReason": "合并原因",
+      "lastMergedAt": "最近合并时间",
+      "mergedIntoRecord": "合并到",
+      "mergedChildren": "合并来源",
+      "openRecordDetail": "打开记录详情",
+      "noMergeRelation": "暂无合并关系",
+      "imagesTitle": "图片",
+      "todosTitle": "待办信息",
+      "todoLabel": "待办",
+      "noTodos": "暂无待办信息",
+      "rawInfoTitle": "原始邮件信息",
+      "rawTextTitle": "文本原文",
+      "attachmentsTitle": "附件",
+      "imagesAlreadyShown": "图片已在 AI整理信息中展示",
+      "attachmentName": "文件名",
+      "attachmentType": "类型",
+      "attachmentSize": "大小",
+      "attachmentSafeName": "安全文件名",
+      "noAttachments": "暂无非图片附件",
+      "taskHint": "点击任务行可打开任务详情。",
+      "taskStage": "阶段 {index}",
+      "emailIdShort": "邮件ID",
+      "userIdShort": "用户ID",
+      "sceneShort": "场景",
+      "triggerSourceShort": "来源",
+      "languageShort": "语言",
+      "noData": "暂无消息记录",
+      "listSummary": "共 {count} 条消息"
+    }
   },
   "llm": {
     "menuTitle": "大模型管理",
@@ -295,12 +400,12 @@
       "saveSuccess": "保存成功",
       "saveFailed": "保存失败",
       "selectionRequired": "请先选择图片识别和文本处理模型",
-      "relayConfigTitle": "Relay 设置",
-      "relayConfigDesc": "绑定 Relay 专用适配器使用的大模型配置，例如 Jira。",
-      "relayConfigHelp": "留空则表示不使用独立的 Relay LLM 绑定。",
-      "saveRelayChanges": "保存 Relay 设置",
-      "relaySaveSuccess": "Relay 设置保存成功",
-      "relaySaveFailed": "Relay 设置保存失败"
+      "relayConfigTitle": "智能渠道设置",
+      "relayConfigDesc": "绑定智能渠道专用适配器使用的大模型配置，例如 Jira。",
+      "relayConfigHelp": "留空则表示不使用独立的智能渠道 LLM 绑定。",
+      "saveRelayChanges": "保存智能渠道设置",
+      "relaySaveSuccess": "智能渠道设置保存成功",
+      "relaySaveFailed": "智能渠道设置保存失败"
     },
     "periodicTasks": {
       "menuTitle": "定时任务设置",

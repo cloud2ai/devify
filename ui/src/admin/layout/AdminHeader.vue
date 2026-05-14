@@ -170,6 +170,7 @@ const pageTitle = computed(() => {
     TaskManagementStats: t('taskManagement.stats.title'),
     TaskManagementSettings: t('taskManagement.settings.title'),
     AppSettings: t('appSettings.title'),
+    DataManagementConversations: t('dataManagement.conversations.menuTitle'),
     ThreadlineConfig: t('threadline.config.title'),
     ThreadlinePeriodicTasks: t('threadline.periodicTasks.title'),
     AdminNotificationsStats: t('notificationManagement.stats.title'),

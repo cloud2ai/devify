@@ -1,4 +1,30 @@
 {
+  "common": {
+    "reset": "Reset",
+    "loading": "Loading",
+    "refresh": "Refresh",
+    "dateRange": "Date range",
+    "language": "Language",
+    "close": "Close",
+    "confirm": "Confirm",
+    "pagination": {
+      "showing": "Showing {from}-{to} of {total}",
+      "itemsPerPage": "Items per page",
+      "previous": "Previous",
+      "next": "Next"
+    },
+    "status": {
+      "success": "Success",
+      "failed": "Failed",
+      "processing": "Processing",
+      "pending": "Pending",
+      "completed": "Completed",
+      "fetched": "Fetched",
+      "canonical": "Canonical",
+      "merged": "Merged",
+      "unknown": "Unknown"
+    }
+  },
   "management": {
     "adminConsole": "Admin Console",
     "logoTitle": "Management Console",
@@ -40,7 +66,7 @@
   "appSettings": {
     "menuTitle": "App Settings",
     "title": "App Settings",
-    "subtitle": "Centralize final runtime settings for Threadline, Relay, and failure notifications.",
+    "subtitle": "Centralize final runtime settings for Threadline, the smart channel, and failure notifications.",
     "sections": {
       "global": {
         "title": "Global Settings",
@@ -51,8 +77,8 @@
         "description": "Configure the LLMs used for image understanding and text processing."
       },
       "relay": {
-        "title": "Smart Delivery",
-        "description": "Configure the dedicated LLM binding for Relay."
+        "title": "Smart Channel",
+        "description": "Configure the dedicated LLM binding for the smart channel."
       },
       "llm": {
         "title": "Large Language Models",
@@ -73,7 +99,86 @@
     "availableConfigs": "Available configs: {count}",
     "selectedImageModel": "Image model: {label}",
     "selectedTextModel": "Text model: {label}",
-    "selectedRelayModel": "Relay model: {label}"
+    "selectedRelayModel": "Smart channel model: {label}"
+  },
+  "dataManagement": {
+    "menuTitle": "Data Management",
+    "conversations": {
+      "menuTitle": "Conversation Management",
+      "title": "Conversation Management",
+      "subtitle": "Review messages by user, related smart channel deliveries, and task execution details.",
+      "searchPlaceholder": "Search subject, sender, recipients, content, or message ID",
+      "searchLabel": "Search",
+      "userFilter": "User",
+      "statusFilter": "Status",
+      "statusAll": "All statuses",
+      "filter": "Filter",
+      "filterHint": "Choose user, status, and date range in the right panel.",
+      "activeFilters": "Active filters",
+      "activeFiltersHint": "These filters are currently applied. Remove them individually or clear all.",
+      "clearFilters": "Clear filters",
+      "removeFilter": "Remove {label} filter",
+      "to": "to",
+      "subject": "Subject",
+      "sender": "Sender",
+      "recipients": "Recipients",
+      "summaryTitle": "Summary title",
+      "messageId": "Message ID",
+      "receivedAt": "Received at",
+      "createdAt": "Created at",
+      "relay": "Smart Channel",
+      "relayCount": "Smart channel deliveries: {count}",
+      "relayLatest": "Latest delivery: {status}",
+      "relayNone": "No smart channel records",
+      "mergeRelation": "Merge relation",
+      "tabAiInfo": "AI Organized Info",
+      "tabRelay": "Smart Channel",
+      "tabMergeRelation": "Merge relation",
+      "tabRawInfo": "Raw Info",
+      "tabAttachments": "Attachments",
+      "tabTaskManagement": "Task Management",
+      "detailTitle": "Message Details",
+      "aiSectionTitle": "AI Organized Info",
+      "aiSummaryContent": "Summary content",
+      "aiLlmContent": "LLM output",
+      "metadataTitle": "Metadata",
+      "relayDetailTitle": "Smart Channel",
+      "relayDetailHint": "Review message delivery records for the smart channel.",
+      "mergeRelationTitle": "Merge relation",
+      "mergeRelationHint": "Review the relationship between the current record, the canonical record, and merged source records.",
+      "mergeRelationRole": "Relation",
+      "mergeParentRecord": "Parent conversation",
+      "mergeChildRecord": "Child conversation",
+      "currentState": "Current state",
+      "mergeReason": "Merge reason",
+      "lastMergedAt": "Last merged at",
+      "mergedIntoRecord": "Merged into",
+      "mergedChildren": "Merged sources",
+      "openRecordDetail": "Open record detail",
+      "noMergeRelation": "No merge relation yet",
+      "imagesTitle": "Images",
+      "todosTitle": "To-dos",
+      "todoLabel": "To-do",
+      "noTodos": "No to-dos yet",
+      "rawInfoTitle": "Raw email info",
+      "rawTextTitle": "Text source",
+      "attachmentsTitle": "Attachments",
+      "imagesAlreadyShown": "Images are already shown under AI Organized Info",
+      "attachmentName": "File name",
+      "attachmentType": "Type",
+      "attachmentSize": "Size",
+      "attachmentSafeName": "Safe file name",
+      "noAttachments": "No non-image attachments",
+      "taskHint": "Click a task row to open task details.",
+      "taskStage": "Stage {index}",
+      "emailIdShort": "Email ID",
+      "userIdShort": "User ID",
+      "sceneShort": "Scene",
+      "triggerSourceShort": "Source",
+      "languageShort": "Language",
+      "noData": "No messages yet",
+      "listSummary": "{count} messages"
+    }
   },
   "llm": {
     "menuTitle": "Models",
@@ -295,12 +400,12 @@
       "saveSuccess": "Saved successfully",
       "saveFailed": "Save failed",
       "selectionRequired": "Please choose both image and text models",
-      "relayConfigTitle": "Relay settings",
-      "relayConfigDesc": "Bind the LLM config used by Relay-specific adapters such as Jira.",
-      "relayConfigHelp": "Leave empty to disable a dedicated Relay LLM binding.",
-      "saveRelayChanges": "Save Relay settings",
-      "relaySaveSuccess": "Relay settings saved successfully",
-      "relaySaveFailed": "Relay settings save failed"
+      "relayConfigTitle": "Smart channel settings",
+      "relayConfigDesc": "Bind the LLM config used by smart-channel adapters such as Jira.",
+      "relayConfigHelp": "Leave empty to disable a dedicated smart channel LLM binding.",
+      "saveRelayChanges": "Save smart channel settings",
+      "relaySaveSuccess": "Smart channel settings saved successfully",
+      "relaySaveFailed": "Smart channel settings save failed"
     },
     "periodicTasks": {
       "menuTitle": "Scheduled Tasks",

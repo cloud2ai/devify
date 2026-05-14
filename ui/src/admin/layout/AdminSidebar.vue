@@ -166,6 +166,83 @@
 
         <div class="menu-group">
           <button
+            @click="toggleDataManagementMenu"
+            class="admin-nav-item admin-nav-item-parent w-full"
+          >
+            <svg
+              class="w-5 h-5"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M4 6h16M4 12h16M4 18h16"
+              />
+            </svg>
+            <span class="flex-1 text-left">{{
+              t('dataManagement.menuTitle')
+            }}</span>
+            <svg
+              class="w-4 h-4 transition-transform"
+              :class="dataManagementMenuOpen ? 'rotate-90' : ''"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M9 5l7 7-7 7"
+              />
+            </svg>
+          </button>
+          <Transition
+            enter-active-class="transition-all duration-200 ease-out"
+            enter-from-class="opacity-0 max-h-0"
+            enter-to-class="opacity-100 max-h-96"
+            leave-active-class="transition-all duration-200 ease-in"
+            leave-from-class="opacity-100 max-h-96"
+            leave-to-class="opacity-0 max-h-0"
+          >
+            <div v-if="dataManagementMenuOpen" class="submenu">
+              <router-link
+                to="/management/data-management/conversations"
+                class="admin-nav-item admin-nav-item-child"
+                :class="
+                  isActive('/management/data-management/conversations')
+                    ? 'admin-nav-item-active'
+                    : ''
+                "
+                @click="isMobile && $emit('close')"
+                @mouseenter="
+                  preloadRoute('/management/data-management/conversations')
+                "
+              >
+                <svg
+                  class="w-4 h-4"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M8 10h8M8 14h5m-9 4h14a2 2 0 002-2V8a2 2 0 00-2-2H6a2 2 0 00-2 2v8a2 2 0 002 2z"
+                  />
+                </svg>
+                <span>{{ t('dataManagement.conversations.menuTitle') }}</span>
+              </router-link>
+            </div>
+          </Transition>
+        </div>
+
+        <div class="menu-group">
+          <button
             @click="toggleUserManagementMenu"
             class="admin-nav-item admin-nav-item-parent w-full"
           >
@@ -727,6 +804,7 @@ const router = useRouter()
 const userManagementMenuOpen = ref(true)
 const llmMenuOpen = ref(true)
 const threadlineMenuOpen = ref(true)
+const dataManagementMenuOpen = ref(true)
 const taskManagementMenuOpen = ref(true)
 const notificationManagementMenuOpen = ref(true)
 
@@ -752,6 +830,10 @@ const toggleThreadlineMenu = () => {
   threadlineMenuOpen.value = !threadlineMenuOpen.value
 }
 
+const toggleDataManagementMenu = () => {
+  dataManagementMenuOpen.value = !dataManagementMenuOpen.value
+}
+
 const toggleTaskManagementMenu = () => {
   taskManagementMenuOpen.value = !taskManagementMenuOpen.value
 }
@@ -774,6 +856,8 @@ watch(
       newPath.startsWith('/management/threadline/periodic-tasks')
     )
       threadlineMenuOpen.value = true
+    if (newPath.startsWith('/management/data-management'))
+      dataManagementMenuOpen.value = true
     if (newPath.startsWith('/management/task-management'))
       taskManagementMenuOpen.value = true
     if (newPath.startsWith('/management/notifier'))
