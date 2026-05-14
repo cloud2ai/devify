@@ -171,21 +171,41 @@ const tasks = ref([])
 const initialTasks = ref([])
 
 const taskMeta = {
+  'threadline-schedule-email-fetch': {
+    titleKey: 'threadline.periodicTasks.tasks.emailFetch.title',
+    descKey: 'threadline.periodicTasks.tasks.emailFetch.description'
+  },
   schedule_email_fetch: {
     titleKey: 'threadline.periodicTasks.tasks.emailFetch.title',
     descKey: 'threadline.periodicTasks.tasks.emailFetch.description'
+  },
+  'threadline-reset-stuck-emails': {
+    titleKey: 'threadline.periodicTasks.tasks.resetStuckEmails.title',
+    descKey: 'threadline.periodicTasks.tasks.resetStuckEmails.description'
   },
   reset_stuck_emails: {
     titleKey: 'threadline.periodicTasks.tasks.resetStuckEmails.title',
     descKey: 'threadline.periodicTasks.tasks.resetStuckEmails.description'
   },
+  'threadline-haraka-cleanup': {
+    titleKey: 'threadline.periodicTasks.tasks.harakaCleanup.title',
+    descKey: 'threadline.periodicTasks.tasks.harakaCleanup.description'
+  },
   schedule_haraka_cleanup: {
     titleKey: 'threadline.periodicTasks.tasks.harakaCleanup.title',
     descKey: 'threadline.periodicTasks.tasks.harakaCleanup.description'
   },
+  'threadline-email-task-cleanup': {
+    titleKey: 'threadline.periodicTasks.tasks.emailTaskCleanup.title',
+    descKey: 'threadline.periodicTasks.tasks.emailTaskCleanup.description'
+  },
   schedule_email_task_cleanup: {
     titleKey: 'threadline.periodicTasks.tasks.emailTaskCleanup.title',
     descKey: 'threadline.periodicTasks.tasks.emailTaskCleanup.description'
+  },
+  'threadline-share-link-cleanup': {
+    titleKey: 'threadline.periodicTasks.tasks.shareLinkCleanup.title',
+    descKey: 'threadline.periodicTasks.tasks.shareLinkCleanup.description'
   },
   schedule_share_link_cleanup: {
     titleKey: 'threadline.periodicTasks.tasks.shareLinkCleanup.title',
@@ -237,6 +257,15 @@ function snapshotTasks() {
   initialTasks.value = cloneTasks(tasks.value)
 }
 
+function replaceTaskByName(source, task) {
+  const normalizedTask = normalizeTask(task)
+  const index = source.findIndex((item) => item.name === normalizedTask.name)
+  if (index === -1) {
+    return
+  }
+  source[index] = normalizedTask
+}
+
 function getTaskTitle(task) {
   const meta = taskMeta[task?.name] || {}
   return meta.titleKey ? t(meta.titleKey) : task?.label || task?.name || '-'
@@ -272,8 +301,11 @@ async function saveSingleTask(task) {
     })
     const data = extractResponseData(response)
     const list = Array.isArray(data?.tasks) ? data.tasks : []
-    tasks.value = list.map(normalizeTask)
-    snapshotTasks()
+    const persistedTask = list.find((item) => item.name === task.name)
+    if (persistedTask) {
+      replaceTaskByName(tasks.value, persistedTask)
+      replaceTaskByName(initialTasks.value, persistedTask)
+    }
   } catch (error) {
     task.enabled = !task.enabled
     showError(

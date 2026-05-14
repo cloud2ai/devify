@@ -82,6 +82,21 @@ def _task_definitions() -> list[dict]:
             "queue": None,
         },
         {
+            "name": "threadline-reset-stuck-emails",
+            "task": (
+                "threadline.tasks.scheduler."
+                "schedule_reset_stuck_processing_emails"
+            ),
+            "module": "threadline",
+            "label": "Stuck email reset",
+            "description": "Requeue emails that were left in processing state.",
+            "default_enabled": True,
+            "default_crontab": "*/10 * * * *",
+            "args": (),
+            "kwargs": {},
+            "queue": None,
+        },
+        {
             "name": "threadline-haraka-cleanup",
             "task": "threadline.tasks.scheduler.schedule_haraka_cleanup",
             "module": "threadline",
@@ -94,8 +109,24 @@ def _task_definitions() -> list[dict]:
             "queue": None,
         },
         {
+            "name": "threadline-email-task-cleanup",
+            "task": (
+                "threadline.tasks.scheduler.schedule_email_task_cleanup"
+            ),
+            "module": "threadline",
+            "label": "EmailTask cleanup",
+            "description": "Delete old EmailTask records from the database.",
+            "default_enabled": True,
+            "default_crontab": "0 3 * * *",
+            "args": (),
+            "kwargs": {},
+            "queue": None,
+        },
+        {
             "name": "threadline-share-link-cleanup",
-            "task": "threadline.tasks.scheduler.schedule_share_link_cleanup",
+            "task": (
+                "threadline.tasks.scheduler.schedule_share_link_cleanup"
+            ),
             "module": "threadline",
             "label": "Share link cleanup",
             "description": "Delete expired share links.",
@@ -233,7 +264,8 @@ class AdminPeriodicTaskSettingsAPIView(APIView):
     )
     def patch(self, request: Request) -> Response:
         serializer = PeriodicTaskSettingsUpdateSerializer(
-            data=request.data, partial=False,
+            data=request.data,
+            partial=False,
         )
         serializer.is_valid(raise_exception=True)
         definitions = {item["name"]: item for item in _task_definitions()}
