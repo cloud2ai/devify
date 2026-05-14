@@ -37,6 +37,44 @@
     "permissionCount": "Permissions",
     "selectGroups": "Select groups"
   },
+  "appSettings": {
+    "menuTitle": "App Settings",
+    "title": "App Settings",
+    "subtitle": "Centralize final runtime settings for Threadline, Relay, and failure notifications.",
+    "sections": {
+      "global": {
+        "title": "Global Settings",
+        "description": "Configure global runtime parameters such as failure notification channels."
+      },
+      "threadline": {
+        "title": "Conversation List Settings",
+        "description": "Configure the LLMs used for image understanding and text processing."
+      },
+      "relay": {
+        "title": "Smart Delivery",
+        "description": "Configure the dedicated LLM binding for Relay."
+      },
+      "llm": {
+        "title": "Large Language Models",
+        "description": "Review available model configs and open the full model management page."
+      }
+    },
+    "selectPlaceholder": "Select",
+    "notificationChannelTitle": "Failure notification channel",
+    "notificationChannelDesc": "When Threadline workflows or jobs fail, notifications are sent through the selected webhook channel.",
+    "notificationChannelPlaceholder": "Select a webhook channel",
+    "noNotificationChannels": "No webhook channels found. Create one in Notification Channels first.",
+    "saveChanges": "Save changes",
+    "saveSuccess": "Saved successfully",
+    "saveFailed": "Save failed",
+    "reset": "Reset",
+    "openLlmConfig": "Open model management",
+    "openLlmConfigHint": "Model creation, editing, testing, and deletion still happen in the dedicated model management page.",
+    "availableConfigs": "Available configs: {count}",
+    "selectedImageModel": "Image model: {label}",
+    "selectedTextModel": "Text model: {label}",
+    "selectedRelayModel": "Relay model: {label}"
+  },
   "llm": {
     "menuTitle": "Models",
     "stats": {

@@ -47,6 +47,12 @@ export const adminRoutes = [
     meta: { requiresAuth: true, requiresAdmin: true }
   },
   {
+    path: '/management/app-settings',
+    name: 'AppSettings',
+    component: () => import('@/admin/pages/AppSettings/Index.vue'),
+    meta: { requiresAuth: true, requiresAdmin: true }
+  },
+  {
     path: '/management/threadline',
     redirect: '/management/threadline/config'
   },

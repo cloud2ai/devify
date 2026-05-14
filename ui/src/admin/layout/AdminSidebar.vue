@@ -80,7 +80,7 @@
               />
             </svg>
             <span class="flex-1 text-left">{{
-              t('threadline.menuTitle')
+              t('appSettings.menuTitle')
             }}</span>
             <svg
               class="w-4 h-4 transition-transform"
@@ -107,15 +107,15 @@
           >
             <div v-if="threadlineMenuOpen" class="submenu">
               <router-link
-                to="/management/threadline/config"
+                to="/management/app-settings"
                 class="admin-nav-item admin-nav-item-child"
                 :class="
-                  isActive('/management/threadline/config')
+                  isActive('/management/app-settings')
                     ? 'admin-nav-item-active'
                     : ''
                 "
                 @click="isMobile && $emit('close')"
-                @mouseenter="preloadRoute('/management/threadline/config')"
+                @mouseenter="preloadRoute('/management/app-settings')"
               >
                 <svg
                   class="w-4 h-4"
@@ -130,7 +130,7 @@
                     d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
                   />
                 </svg>
-                <span>{{ t('threadline.config.menuTitle') }}</span>
+                <span>{{ t('appSettings.menuTitle') }}</span>
               </router-link>
               <router-link
                 to="/management/threadline/periodic-tasks"
@@ -355,32 +355,6 @@
                   />
                 </svg>
                 <span>{{ t('llm.usage.title') }}</span>
-              </router-link>
-              <router-link
-                to="/management/llm/config"
-                class="admin-nav-item admin-nav-item-child"
-                :class="
-                  isActive('/management/llm/config')
-                    ? 'admin-nav-item-active'
-                    : ''
-                "
-                @click="isMobile && $emit('close')"
-                @mouseenter="preloadRoute('/management/llm/config')"
-              >
-                <svg
-                  class="w-4 h-4"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                    d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
-                  />
-                </svg>
-                <span>{{ t('llm.config.title') }}</span>
               </router-link>
               <router-link
                 to="/management/llm/data-settings"
@@ -795,7 +769,10 @@ watch(
     )
       userManagementMenuOpen.value = true
     if (newPath.startsWith('/management/llm')) llmMenuOpen.value = true
-    if (newPath.startsWith('/management/threadline'))
+    if (
+      newPath.startsWith('/management/app-settings') ||
+      newPath.startsWith('/management/threadline/periodic-tasks')
+    )
       threadlineMenuOpen.value = true
     if (newPath.startsWith('/management/task-management'))
       taskManagementMenuOpen.value = true
