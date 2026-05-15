@@ -1,8 +1,8 @@
 import stripe
-from django.conf import settings
 from django.core.management.base import BaseCommand
 
 from djstripe.models import WebhookEndpoint
+from billing.services.config_service import get_stripe_secret_key
 
 
 class Command(BaseCommand):
@@ -30,11 +30,7 @@ class Command(BaseCommand):
         self.stdout.write('=' * 70)
         self.stdout.write('')
 
-        stripe.api_key = (
-            settings.STRIPE_LIVE_SECRET_KEY
-            if settings.STRIPE_LIVE_MODE
-            else settings.STRIPE_TEST_SECRET_KEY
-        )
+        stripe.api_key = get_stripe_secret_key()
 
         local_webhooks = WebhookEndpoint.objects.all()
         self.stdout.write(

@@ -6,6 +6,7 @@ from billing.viewsets import (
     UserCreditsViewSet,
     SubscriptionViewSet
 )
+from billing.views import BillingStatusAPIView
 
 router = DefaultRouter(trailing_slash=False)
 router.register(r'plans', PlanViewSet, basename='plan')
@@ -18,5 +19,6 @@ router.register(
 
 urlpatterns = [
     path('', include(router.urls)),
+    path('status', BillingStatusAPIView.as_view(), name='billing-status'),
     path('webhooks/stripe/', include('djstripe.urls', namespace='djstripe')),
 ]

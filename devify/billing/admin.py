@@ -3,6 +3,7 @@ from django_json_widget.widgets import JSONEditorWidget
 from django.db import models
 
 from billing.models import (
+    BillingConfig,
     Plan,
     PlanPrice,
     UserCredits,
@@ -13,6 +14,19 @@ from billing.models import (
     PaymentProvider,
     EmailWorkflowUsage,
 )
+
+
+@admin.register(BillingConfig)
+class BillingConfigAdmin(admin.ModelAdmin):
+    list_display = [
+        'singleton_key',
+        'stripe_live_mode',
+        'default_free_credits',
+        'workflow_cost_credits',
+        'auto_refund_system_errors',
+        'updated_at',
+    ]
+    readonly_fields = ['created_at', 'updated_at']
 
 
 @admin.register(Plan)

@@ -53,6 +53,7 @@ urlpatterns = [
     path("api/v1/management/", include("accounts.management_urls")),
     # Agentcore admin APIs for LLM metering and notifications
     path("api/v1/admin/", include("agentcore_metering.adapters.django.urls")),
+    path("api/v1/admin/billing/", include("billing.admin_urls")),
     path(
         "api/v1/admin/notifications/",
         include("agentcore_notifier.adapters.django.urls"),

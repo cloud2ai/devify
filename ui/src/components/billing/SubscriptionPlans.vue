@@ -83,7 +83,16 @@
 
           <div class="flex-shrink-0 w-full sm:w-auto">
             <button
-              v-if="
+              v-if="!billingConfigured"
+              disabled
+              :class="getButtonClass('unavailable')"
+            >
+              {{ t('billing.plans.stripeNotConfigured') }}
+            </button>
+
+            <button
+              v-else-if="
+                billingConfigured &&
                 isCurrentPlan(plan) &&
                 plan.slug !== 'free' &&
                 currentSubscription?.auto_renew === false
@@ -96,7 +105,9 @@
             </button>
 
             <button
-              v-else-if="isCurrentPlan(plan) && plan.slug !== 'free'"
+              v-else-if="
+                billingConfigured && isCurrentPlan(plan) && plan.slug !== 'free'
+              "
               @click="handleManageSubscription"
               :disabled="isInternalUser"
               :class="getButtonClass('cancel')"
@@ -105,7 +116,9 @@
             </button>
 
             <button
-              v-else-if="isCurrentPlan(plan) && plan.slug === 'free'"
+              v-else-if="
+                billingConfigured && isCurrentPlan(plan) && plan.slug === 'free'
+              "
               disabled
               :class="getButtonClass('current')"
             >
@@ -113,7 +126,7 @@
             </button>
 
             <button
-              v-else-if="canUpgrade(plan)"
+              v-else-if="billingConfigured && canUpgrade(plan)"
               @click="handleUpgrade(plan)"
               :disabled="upgrading || isInternalUser"
               :class="getButtonClass('upgrade')"
@@ -122,7 +135,7 @@
             </button>
 
             <button
-              v-else-if="canDowngrade(plan)"
+              v-else-if="billingConfigured && canDowngrade(plan)"
               @click="handleDowngradeClick(plan)"
               :disabled="downgrading || isInternalUser"
               :class="getButtonClass('downgrade')"
@@ -437,6 +450,10 @@ const props = defineProps({
   currentSubscription: {
     type: Object,
     default: null
+  },
+  billingStatus: {
+    type: Object,
+    default: null
   }
 })
 
@@ -466,6 +483,11 @@ const isInternalUser = computed(() => {
     props.currentSubscription?.plan_is_internal ||
     props.currentSubscription?.plan?.is_internal
   )
+})
+
+const billingConfigured = computed(() => {
+  if (!props.billingStatus) return true
+  return props.billingStatus.stripe_configured !== false
 })
 
 const formattedPeriodEnd = computed(() => {
@@ -519,6 +541,9 @@ function getButtonClass(type) {
 }
 
 function canUpgrade(plan) {
+  if (!billingConfigured.value) {
+    return false
+  }
   if (isInternalUser.value) {
     return false
   }
@@ -528,6 +553,9 @@ function canUpgrade(plan) {
 }
 
 function canDowngrade(plan) {
+  if (!billingConfigured.value) {
+    return false
+  }
   if (isInternalUser.value) {
     return false
   }

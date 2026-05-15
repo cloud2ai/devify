@@ -19,6 +19,7 @@ from billing.models import (
     Subscription,
     EmailCreditsTransaction
 )
+from billing.services.config_service import get_stripe_secret_key
 from billing.serializers import (
     PlanSerializer,
     SubscriptionSerializer,
@@ -373,11 +374,7 @@ class SubscriptionViewSet(viewsets.ModelViewSet):
             )
 
         try:
-            stripe.api_key = (
-                settings.STRIPE_LIVE_SECRET_KEY
-                if settings.STRIPE_LIVE_MODE
-                else settings.STRIPE_TEST_SECRET_KEY
-            )
+            stripe.api_key = get_stripe_secret_key()
 
             customer = Customer.objects.filter(
                 subscriber=request.user
@@ -428,11 +425,7 @@ class SubscriptionViewSet(viewsets.ModelViewSet):
         """
         self._check_internal_user(request.user)
         try:
-            stripe.api_key = (
-                settings.STRIPE_LIVE_SECRET_KEY
-                if settings.STRIPE_LIVE_MODE
-                else settings.STRIPE_TEST_SECRET_KEY
-            )
+            stripe.api_key = get_stripe_secret_key()
 
             customer = Customer.objects.filter(
                 subscriber=request.user
@@ -481,11 +474,7 @@ class SubscriptionViewSet(viewsets.ModelViewSet):
             )
 
         try:
-            stripe.api_key = (
-                settings.STRIPE_LIVE_SECRET_KEY
-                if settings.STRIPE_LIVE_MODE
-                else settings.STRIPE_TEST_SECRET_KEY
-            )
+            stripe.api_key = get_stripe_secret_key()
 
             # Get current active subscription
             current_subscription = Subscription.objects.filter(

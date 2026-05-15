@@ -6,7 +6,8 @@ from billing.models import (
     UserCredits,
     Subscription,
     CreditsTransaction,
-    EmailCreditsTransaction
+    EmailCreditsTransaction,
+    PaymentRecord,
 )
 
 
@@ -196,3 +197,43 @@ class EmailCreditsTransactionSerializer(serializers.ModelSerializer):
             'created_at'
         ]
         read_only_fields = ['id', 'created_at']
+
+
+class PaymentRecordSerializer(serializers.ModelSerializer):
+    """
+    Payment record serializer
+    """
+
+    username = serializers.CharField(
+        source='user.username',
+        read_only=True
+    )
+    subscription_plan_name = serializers.CharField(
+        source='subscription.plan.name',
+        read_only=True,
+        allow_null=True
+    )
+    provider_name = serializers.CharField(
+        source='provider.display_name',
+        read_only=True
+    )
+
+    class Meta:
+        model = PaymentRecord
+        fields = [
+            'id',
+            'user',
+            'username',
+            'subscription',
+            'subscription_plan_name',
+            'provider',
+            'provider_name',
+            'provider_payment_id',
+            'amount_cents',
+            'currency',
+            'status',
+            'metadata',
+            'created_at',
+            'updated_at',
+        ]
+        read_only_fields = ['id', 'created_at', 'updated_at']

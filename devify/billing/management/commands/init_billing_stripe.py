@@ -11,6 +11,7 @@ from django.core.management.base import BaseCommand
 from djstripe.models import APIKey, WebhookEndpoint
 
 from billing.models import Plan, PaymentProvider, PlanPrice
+from billing.services.config_service import get_stripe_secret_key, get_billing_config
 
 
 class Command(BaseCommand):
@@ -64,11 +65,7 @@ class Command(BaseCommand):
         self.stdout.write('=' * 70)
         self.stdout.write('')
 
-        stripe.api_key = (
-            settings.STRIPE_LIVE_SECRET_KEY
-            if settings.STRIPE_LIVE_MODE
-            else settings.STRIPE_TEST_SECRET_KEY
-        )
+        stripe.api_key = get_stripe_secret_key()
 
         self.stdout.write(
             self.style.WARNING('[1/4] Initializing Local Database...')
@@ -184,12 +181,9 @@ class Command(BaseCommand):
         """
         Initialize Stripe API Key in database (idempotent)
         """
-        is_live_mode = settings.STRIPE_LIVE_MODE
-        secret_key = (
-            settings.STRIPE_LIVE_SECRET_KEY
-            if is_live_mode
-            else settings.STRIPE_TEST_SECRET_KEY
-        )
+        billing_config = get_billing_config()
+        is_live_mode = billing_config.stripe_live_mode
+        secret_key = get_stripe_secret_key()
         key_name = 'Production API Key' if is_live_mode else 'Test API Key'
 
         if not secret_key:
@@ -540,6 +534,7 @@ class Command(BaseCommand):
         )
 
         try:
+            billing_config = get_billing_config()
             webhook = stripe.WebhookEndpoint.create(
                 url=webhook_url,
                 enabled_events=[
@@ -562,7 +557,7 @@ class Command(BaseCommand):
                 secret=webhook.secret,
                 enabled_events=webhook.enabled_events,
                 status=webhook.status,
-                livemode=settings.STRIPE_LIVE_MODE,
+                livemode=billing_config.stripe_live_mode,
             )
 
             self.stdout.write(

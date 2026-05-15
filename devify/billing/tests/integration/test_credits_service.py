@@ -238,6 +238,25 @@ class TestGrantBonusCredits:
         assert credits.bonus_credits == 50
         assert credits.available_credits == 60
 
+    def test_grant_bonus_credits_creates_user_credits_when_missing(self, test_user):
+        """
+        Manual grants should work even if the user has no credits row yet
+        """
+        transaction = CreditsService.grant_bonus_credits(
+            user_id=test_user.id,
+            amount=25,
+            reason='Manual top up',
+            operator_id=None,
+        )
+
+        credits = UserCredits.objects.get(user=test_user, is_active=True)
+
+        assert transaction.amount == 25
+        assert transaction.user == test_user
+        assert credits.base_credits > 0
+        assert credits.bonus_credits == 25
+        assert credits.available_credits == credits.base_credits + 25
+
         transaction = CreditsTransaction.objects.get(
             user=test_user,
             transaction_type='bonus'

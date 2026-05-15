@@ -15,6 +15,7 @@ from billing.models import (
     Subscription,
     UserCredits,
 )
+from billing.services.config_service import get_stripe_secret_key
 from billing.services.credits_service import CreditsService
 
 logger = logging.getLogger(__name__)
@@ -222,7 +223,7 @@ class SubscriptionService:
             ).first()
 
         # Get period dates from subscription items or billing cycle
-        stripe.api_key = settings.STRIPE_TEST_SECRET_KEY
+        stripe.api_key = get_stripe_secret_key()
         stripe_sub = stripe.Subscription.retrieve(
             djstripe_subscription.id
         )
@@ -324,11 +325,7 @@ class SubscriptionService:
         subscription = Subscription.objects.get(id=subscription_id)
 
         if subscription.djstripe_subscription:
-            stripe.api_key = (
-                settings.STRIPE_LIVE_SECRET_KEY
-                if settings.STRIPE_LIVE_MODE
-                else settings.STRIPE_TEST_SECRET_KEY
-            )
+            stripe.api_key = get_stripe_secret_key()
 
             stripe.Subscription.modify(
                 subscription.djstripe_subscription.id,
@@ -365,11 +362,7 @@ class SubscriptionService:
         subscription = Subscription.objects.get(id=subscription_id)
 
         if subscription.djstripe_subscription:
-            stripe.api_key = (
-                settings.STRIPE_LIVE_SECRET_KEY
-                if settings.STRIPE_LIVE_MODE
-                else settings.STRIPE_TEST_SECRET_KEY
-            )
+            stripe.api_key = get_stripe_secret_key()
 
             stripe.Subscription.modify(
                 subscription.djstripe_subscription.id,

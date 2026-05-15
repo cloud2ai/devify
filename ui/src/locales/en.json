@@ -785,6 +785,9 @@
     "menuTitle": "Plan & Billing",
     "title": "Plan & Billing",
     "description": "Manage your subscription plan and view usage statistics",
+    "status": {
+      "stripeMissingHint": "Stripe payment is not configured yet. You can still view Credits and subscription status, but cannot start a recharge or subscription change."
+    },
     "currentSubscription": {
       "title": "Current Subscription",
       "provider": "Payment Provider",

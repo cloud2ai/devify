@@ -14,23 +14,14 @@ import os
 # Billing System Master Controls
 # ============================
 
-# BILLING_ENABLED: Master switch for the entire billing system
-# - When False: All users can execute workflows freely (development mode)
-# - When True: Billing system is active, subscriptions are enforced
-# - Use Case: Set to False during development/testing to avoid charges
-# - Default: False (safe mode)
-BILLING_ENABLED = os.getenv("BILLING_ENABLED", "false").lower() == "true"
+# BILLING_ENABLED: Legacy compatibility flag.
+# Billing is always enabled now; usage tracking and credits accounting
+# are part of the core product behavior.
+BILLING_ENABLED = True
 
-# CREDITS_CHECK_ENABLED: Controls credits balance checking and consumption
-# - When False: Workflows execute without checking/consuming credits
-# - When True: Each workflow execution checks and consumes credits
-# - Use Case: Can be enabled independently from BILLING_ENABLED for
-#   gradual rollout (e.g., enable tracking first, then enforcement)
-# - Default: False (safe mode)
-# - Note: Only takes effect when BILLING_ENABLED=True
-CREDITS_CHECK_ENABLED = (
-    os.getenv("CREDITS_CHECK_ENABLED", "false").lower() == "true"
-)
+# CREDITS_CHECK_ENABLED: Legacy compatibility flag.
+# Credits are always enforced at runtime.
+CREDITS_CHECK_ENABLED = True
 
 # ============================
 # Stripe API Configuration

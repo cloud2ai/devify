@@ -185,7 +185,7 @@ class UserBootstrapService:
             description=email_description,
         )
 
-        if initialize_billing and getattr(settings, "BILLING_ENABLED", False):
+        if initialize_billing:
             UserBootstrapService._initialize_free_plan(user)
 
         logger.info(
@@ -198,10 +198,7 @@ class UserBootstrapService:
             bool(email_alias_obj),
             bool(prompt_setting),
             bool(email_setting),
-            bool(
-                initialize_billing
-                and getattr(settings, "BILLING_ENABLED", False)
-            ),
+            bool(initialize_billing),
         )
         return {
             "profile": profile,

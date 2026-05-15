@@ -6,6 +6,7 @@ from django.utils import timezone
 from billing.exceptions import InsufficientCreditsError
 from billing.models import EmailCreditsTransaction
 from billing.services.credits_service import CreditsService
+from billing.services.config_service import get_credit_policy
 from threadline.agents.email_state import EmailState, add_node_error
 from threadline.agents.nodes.base_node import BaseLangGraphNode
 from threadline.models import EmailMessage
@@ -34,33 +35,10 @@ class CreditsCheckNode(BaseLangGraphNode):
             state=state,
             ratio=0.2,
         )
-        if not settings.BILLING_ENABLED:
-            logger.info("Billing is disabled, skipping credits check")
-            self._record_progress_step(
-                self.workflow_stage,
-                "CREDITS_SKIPPED",
-                "Billing disabled, credits check skipped",
-                state=state,
-                ratio=1.0,
-                level="WARNING",
-            )
-            return state
-
-        if not settings.CREDITS_CHECK_ENABLED:
-            logger.info("Credits check is disabled, skipping")
-            self._record_progress_step(
-                self.workflow_stage,
-                "CREDITS_SKIPPED",
-                "Credits check disabled",
-                state=state,
-                ratio=1.0,
-                level="WARNING",
-            )
-            return state
-
         user_id = state.get('user_id')
         email_id = state.get('id')
         force = state.get('force', False)
+        workflow_cost_credits = get_credit_policy()['workflow_cost_credits']
 
         if state.get('credits_consumed'):
             logger.info(
@@ -173,7 +151,7 @@ class CreditsCheckNode(BaseLangGraphNode):
         try:
             transaction = CreditsService.consume_credits(
                 user_id=int(user_id),
-                amount=settings.WORKFLOW_COST_CREDITS,
+                amount=workflow_cost_credits,
                 reason='workflow_execution',
                 email_message_uuid=email_uuid,
                 email_message_id=int(email_id),
@@ -184,7 +162,7 @@ class CreditsCheckNode(BaseLangGraphNode):
             state['credits_transaction_id'] = str(transaction.id)
 
             logger.info(
-                f"Consumed {settings.WORKFLOW_COST_CREDITS} credit(s) "
+                f"Consumed {workflow_cost_credits} credit(s) "
                 f"for email {email_id} (UUID: {email_uuid}), "
                 f"transaction {transaction.id}"
             )

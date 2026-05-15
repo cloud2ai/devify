@@ -794,6 +794,9 @@
     "menuTitle": "订阅与账单",
     "title": "订阅与账单",
     "description": "管理您的订阅计划和查看使用情况",
+    "status": {
+      "stripeMissingHint": "当前尚未配置 Stripe 支付，您仍然可以查看 Credits 和订阅状态，但无法发起充值或订阅变更。"
+    },
     "currentSubscription": {
       "title": "当前订阅",
       "provider": "支付方式",

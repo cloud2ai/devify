@@ -208,9 +208,6 @@ class WorkflowPrepareNode(BaseLangGraphNode):
         Returns:
             int: Maximum attachment count or None
         """
-        if not django_settings.BILLING_ENABLED:
-            return None
-
         try:
             subscription = SubscriptionService.get_active_subscription(
                 self.email.user_id

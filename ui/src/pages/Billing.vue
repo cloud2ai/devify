@@ -90,6 +90,18 @@
         </button>
       </div>
 
+      <div
+        v-if="billingStatus && !billingStatus.stripe_configured"
+        class="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800"
+      >
+        <p class="font-medium">
+          {{ t('billing.plans.stripeNotConfigured') }}
+        </p>
+        <p class="mt-1">
+          {{ t('billing.status.stripeMissingHint') }}
+        </p>
+      </div>
+
       <div v-if="loading" class="flex items-center justify-center py-12">
         <div
           class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"
@@ -109,6 +121,7 @@
           <div class="lg:col-span-2">
             <SubscriptionPlans
               :current-subscription="currentSubscription"
+              :billing-status="billingStatus"
               @subscription-updated="handleSubscriptionUpdated"
               @operation-success="handleOperationSuccess"
               @operation-error="handleOperationError"
@@ -140,6 +153,7 @@ const route = useRoute()
 const router = useRouter()
 
 const loading = ref(true)
+const billingStatus = ref(null)
 const currentSubscription = ref(null)
 const credits = ref(null)
 const successMessage = ref('')
@@ -149,10 +163,17 @@ async function fetchData() {
   loading.value = true
 
   try {
-    const [subscriptionRes, creditsRes] = await Promise.allSettled([
+    const [statusRes, subscriptionRes, creditsRes] = await Promise.allSettled([
+      billingApi.getStatus(),
       billingApi.getCurrentSubscription(),
       billingApi.getUserCredits()
     ])
+
+    if (statusRes.status === 'fulfilled') {
+      const statusData =
+        statusRes.value.data?.data ?? statusRes.value.data ?? null
+      billingStatus.value = statusData
+    }
 
     if (subscriptionRes.status === 'fulfilled') {
       const subscriptionData =

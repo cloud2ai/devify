@@ -249,6 +249,37 @@ class PaymentProvider(models.Model):
         return self.display_name
 
 
+class BillingConfig(models.Model):
+    """
+    Singleton billing configuration for admin control plane.
+    """
+
+    singleton_key = models.CharField(
+        max_length=32,
+        unique=True,
+        default='default',
+    )
+    stripe_live_mode = models.BooleanField(default=False)
+    stripe_publishable_key = models.CharField(max_length=255, blank=True)
+    stripe_live_secret_key = models.TextField(blank=True, default='')
+    stripe_test_secret_key = models.TextField(blank=True, default='')
+    stripe_webhook_secret = models.TextField(blank=True, default='')
+    default_free_credits = models.IntegerField(default=10)
+    workflow_cost_credits = models.IntegerField(default=1)
+    auto_refund_system_errors = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'billing_config'
+        verbose_name = 'Billing Config'
+        verbose_name_plural = 'Billing Config'
+        ordering = ['-updated_at']
+
+    def __str__(self):
+        return 'Billing Config'
+
+
 class PlanPrice(models.Model):
     """
     Plan price mapping for different payment providers
