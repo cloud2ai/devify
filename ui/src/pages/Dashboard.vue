@@ -512,9 +512,18 @@
           </div>
         </div>
 
-        <!-- Load More Button -->
         <div v-if="pagination.hasMore && !loading" class="mt-6 text-center">
           <BaseButton
+            v-if="supportsIntersectionObserver"
+            ref="loadMoreSentinel"
+            :loading="loadingMore"
+            variant="outline"
+            size="md"
+          >
+            {{ loadingMore ? t('common.loading') : t('common.loadMore') }}
+          </BaseButton>
+          <BaseButton
+            v-else
             @click="loadMoreData"
             :loading="loadingMore"
             variant="outline"
@@ -698,7 +707,7 @@
 </template>
 
 <script setup>
-import { computed, ref, onMounted, onUnmounted, watch } from 'vue'
+import { computed, nextTick, ref, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { usePreferencesStore } from '@/store/preferences'
@@ -738,6 +747,7 @@ const batchRetryTargets = ref([])
 const searchQuery = ref('')
 const results = ref([])
 const selectedIds = ref([])
+const loadMoreSentinel = ref(null)
 const pagination = ref({
   page: 1,
   pageSize: 20,
@@ -754,6 +764,9 @@ const maxMergeCount = 5
 const LIST_POLL_INTERVAL_MS = 2000
 
 let listPollingTimer = null
+let loadMoreObserver = null
+const supportsIntersectionObserver = typeof IntersectionObserver === 'function'
+let isDashboardActive = true
 
 const selectedCount = computed(() => selectedIds.value.length)
 const canSelectMore = computed(() => selectedCount.value < maxMergeCount)
@@ -841,6 +854,56 @@ const stopListPolling = () => {
   }
 }
 
+const disconnectLoadMoreObserver = () => {
+  if (loadMoreObserver) {
+    loadMoreObserver.disconnect()
+    loadMoreObserver = null
+  }
+}
+
+const refreshLoadMoreObserver = () => {
+  if (!isDashboardActive) {
+    return
+  }
+
+  if (!supportsIntersectionObserver) {
+    return
+  }
+
+  disconnectLoadMoreObserver()
+
+  if (
+    !loadMoreSentinel.value?.$el ||
+    !pagination.value.hasMore ||
+    loading.value ||
+    loadingMore.value
+  ) {
+    return
+  }
+
+  loadMoreObserver = new IntersectionObserver(
+    (entries) => {
+      if (
+        entries.some((entry) => entry.isIntersecting) &&
+        pagination.value.hasMore &&
+        !loading.value &&
+        !loadingMore.value
+      ) {
+        loadMoreData().catch((error) => {
+          console.error('Failed to load more threadlines:', error)
+        })
+      }
+    },
+    {
+      root: null,
+      rootMargin: '200px 0px',
+      threshold: 0.1
+    }
+  )
+
+  loadMoreObserver.observe(loadMoreSentinel.value.$el)
+}
+
 const startListPolling = () => {
   if (listPollingTimer) return
 
@@ -911,6 +974,10 @@ const refreshActiveThreadlines = async () => {
 }
 
 const loadData = async (isLoadMore = false) => {
+  if (!isDashboardActive) {
+    return
+  }
+
   if (isLoadMore) {
     loadingMore.value = true
   } else {
@@ -970,9 +1037,20 @@ const loadData = async (isLoadMore = false) => {
     loadingMore.value = false
     syncListPolling()
   }
+
+  if (!isDashboardActive) {
+    return
+  }
+
+  await nextTick()
+  refreshLoadMoreObserver()
 }
 
 const loadMoreData = async () => {
+  if (!isDashboardActive) {
+    return
+  }
+
   if (loadingMore.value || !pagination.value.hasMore) return
 
   pagination.value.page += 1
@@ -1258,6 +1336,8 @@ const getRemainingTagsCount = (tags) => {
 }
 
 onMounted(async () => {
+  isDashboardActive = true
+
   // Refresh user info if missing virtual_email (important after OAuth setup completion)
   // Otherwise use existing user data from store
   if (!userStore.userInfo?.virtual_email) {
@@ -1275,7 +1355,9 @@ watch(activeThreadlineIds, () => {
 })
 
 onUnmounted(() => {
+  isDashboardActive = false
   stopListPolling()
+  disconnectLoadMoreObserver()
   showBatchRetryDialog.value = false
 })
 </script>

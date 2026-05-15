@@ -38,14 +38,23 @@ const getInitialLanguage = () => {
   return detectBrowserLanguage()
 }
 
+const mergeCommonMessages = (base, override) => ({
+  ...base,
+  ...override,
+  common: {
+    ...(base.common || {}),
+    ...(override.common || {})
+  }
+})
+
 // Create Vue i18n instance
 const i18n = createI18n({
   legacy: false,
   locale: getInitialLanguage(),
   fallbackLocale: 'en',
   messages: {
-    en: { ...en, ...adminEn },
-    'zh-CN': { ...zhCN, ...adminZhCN },
+    en: mergeCommonMessages(en, adminEn),
+    'zh-CN': mergeCommonMessages(zhCN, adminZhCN),
     es: es
   }
 })

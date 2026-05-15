@@ -39,7 +39,31 @@
         </div>
       </div>
 
-      <BaseCard v-if="activeTab === 'deliveries'">
+      <div v-if="loading" class="space-y-6">
+        <BaseCard>
+          <div class="space-y-4 animate-pulse">
+            <div class="h-5 w-40 rounded bg-gray-200"></div>
+            <div class="space-y-3">
+              <div class="h-24 rounded-2xl bg-gray-100"></div>
+              <div class="h-24 rounded-2xl bg-gray-100"></div>
+              <div class="h-24 rounded-2xl bg-gray-100"></div>
+            </div>
+          </div>
+        </BaseCard>
+
+        <BaseCard>
+          <div class="space-y-4 animate-pulse">
+            <div class="h-5 w-48 rounded bg-gray-200"></div>
+            <div class="space-y-3">
+              <div class="h-20 rounded-2xl bg-gray-100"></div>
+              <div class="h-20 rounded-2xl bg-gray-100"></div>
+              <div class="h-20 rounded-2xl bg-gray-100"></div>
+            </div>
+          </div>
+        </BaseCard>
+      </div>
+
+      <BaseCard v-else-if="activeTab === 'deliveries'">
         <template #header>
           <div class="flex items-center justify-between gap-3">
             <div class="text-base font-semibold text-gray-900">
@@ -1111,11 +1135,11 @@
                       </div>
 
                       <div class="grid grid-cols-1 gap-4 lg:grid-cols-2">
-                      <BaseInput
-                        v-model="editorForm.jiraConfig.summary_prefix"
-                        :label="t('relay.jiraSummaryPrefix')"
-                        :placeholder="t('relay.jiraSummaryPrefixPlaceholder')"
-                      />
+                        <BaseInput
+                          v-model="editorForm.jiraConfig.summary_prefix"
+                          :label="t('relay.jiraSummaryPrefix')"
+                          :placeholder="t('relay.jiraSummaryPrefixPlaceholder')"
+                        />
 
                         <div class="space-y-3">
                           <label
@@ -1776,12 +1800,12 @@
                     :help="t('settings.feishuTableNameHelp')"
                   />
 
-                      <BaseInput
-                        v-model="editorForm.feishuConfig.summary_prefix"
-                        :label="t('relay.feishuSummaryPrefix')"
-                        :placeholder="t('relay.feishuSummaryPrefixPlaceholder')"
-                        :help="t('relay.feishuSummaryPrefixHelp')"
-                      />
+                  <BaseInput
+                    v-model="editorForm.feishuConfig.summary_prefix"
+                    :label="t('relay.feishuSummaryPrefix')"
+                    :placeholder="t('relay.feishuSummaryPrefixPlaceholder')"
+                    :help="t('relay.feishuSummaryPrefixHelp')"
+                  />
 
                   <div
                     class="rounded-lg border border-gray-200 bg-gray-50 p-4 space-y-4"
@@ -1939,11 +1963,11 @@
                   </div>
 
                   <div class="grid grid-cols-1 gap-4 lg:grid-cols-2">
-                      <BaseInput
-                        v-model="editorForm.jiraConfig.summary_prefix"
-                        :label="t('relay.jiraSummaryPrefix')"
-                        :placeholder="t('relay.jiraSummaryPrefixPlaceholder')"
-                      />
+                    <BaseInput
+                      v-model="editorForm.jiraConfig.summary_prefix"
+                      :label="t('relay.jiraSummaryPrefix')"
+                      :placeholder="t('relay.jiraSummaryPrefixPlaceholder')"
+                    />
 
                     <div class="space-y-3">
                       <label class="block text-sm font-medium text-gray-700">
@@ -2304,6 +2328,7 @@ const tabs = computed(() => [
 
 const deliveryList = useRelayDeliveryList({ loadSubscriptions, activeTab })
 const {
+  loading,
   deliveries,
   deliveryPagination,
   deliveryLoadMoreSentinel,

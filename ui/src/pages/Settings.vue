@@ -92,33 +92,54 @@
                 {{ t('settings.aiEmail') }}
               </h4>
               <div
-                v-if="hasDisplayedAiEmail"
-                class="rounded-lg border border-blue-200 bg-blue-50 p-3"
+                v-if="loadingSettings"
+                class="rounded-lg border border-gray-200 bg-gray-50 p-3 animate-pulse"
               >
-                <div class="flex items-center justify-between gap-3">
+                <div class="flex items-start justify-between gap-3">
+                  <div class="min-w-0 flex-1 space-y-3">
+                    <div class="h-3 w-20 rounded bg-gray-200"></div>
+                    <div class="h-4 w-56 max-w-full rounded bg-gray-200"></div>
+                    <div class="h-3 w-72 max-w-full rounded bg-gray-200"></div>
+                  </div>
+                  <div class="h-8 w-24 rounded-md bg-gray-200"></div>
+                </div>
+              </div>
+              <div
+                v-else-if="hasDisplayedAiEmail"
+                class="rounded-lg border p-3 transition-colors"
+                :class="'border-blue-200 bg-blue-50'"
+              >
+                <div class="flex items-start justify-between gap-3">
                   <div class="min-w-0 flex-1">
                     <div
-                      class="text-xs font-medium tracking-wide text-blue-700"
+                      class="text-xs font-medium tracking-wide"
+                      :class="'text-blue-700'"
                     >
                       {{ t('settings.aiEmail') }}
                     </div>
-                    <div class="mt-1 text-sm font-mono text-blue-900 truncate">
+                    <div
+                      class="mt-1 text-sm font-mono truncate"
+                      :class="'text-blue-900'"
+                    >
                       {{ displayedAiEmail }}
+                    </div>
+                    <div
+                      class="mt-2 text-xs leading-5"
+                      :class="'text-blue-700'"
+                    >
+                      {{ t('settings.aiEmailDesc') }}
                     </div>
                   </div>
                   <button
                     type="button"
-                    class="flex-shrink-0 inline-flex items-center text-xs font-medium text-blue-700 hover:text-blue-900 bg-blue-100 hover:bg-blue-200 px-2.5 py-1 rounded-md transition-colors"
+                    class="flex-shrink-0 inline-flex items-center text-xs font-medium px-2.5 py-1 rounded-md transition-colors"
+                    :class="'text-blue-700 hover:text-blue-900 bg-blue-100 hover:bg-blue-200'"
                     @click="goToEmailSettings"
                   >
                     {{ t('settings.goToEmailSettings') }}
                   </button>
                 </div>
-                <div class="mt-2 text-xs leading-5 text-blue-700">
-                  {{ t('settings.aiEmailDesc') }}
-                </div>
               </div>
-
               <div
                 v-else
                 class="rounded-lg border border-amber-200 bg-amber-50 p-3"
@@ -508,7 +529,7 @@
             </div>
           </template>
 
-          <div class="space-y-5">
+          <form class="space-y-5" @submit.prevent="saveEmailConfig">
             <div
               class="grid grid-cols-1 gap-2 md:grid-cols-3 md:gap-4 md:items-start"
             >
@@ -571,6 +592,8 @@
                   v-model="emailForm.password"
                   :label="t('settings.imapPassword')"
                   type="password"
+                  name="imap_password"
+                  autocomplete="current-password"
                   :placeholder="t('settings.imapPasswordPlaceholder')"
                 />
                 <BaseInput
@@ -689,74 +712,17 @@
                   }}
                 </BaseButton>
                 <BaseButton
-                  type="button"
+                  type="submit"
                   variant="primary"
                   class="w-full sm:w-auto"
                   :loading="savingEmailConfig"
                   :disabled="savingEmailConfig || validatingEmailConfig"
-                  @click="saveEmailConfig"
                 >
                   {{ saveEmailButtonLabel }}
                 </BaseButton>
               </div>
             </div>
-          </div>
-        </BaseCard>
-      </div>
-
-      <div v-else class="space-y-6">
-        <BaseCard :header-muted="true">
-          <template #header>
-            <div class="flex items-center gap-2 text-gray-800">
-              <svg
-                class="w-5 h-5 -mt-px flex-none"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
-                />
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
-                />
-              </svg>
-              <h3 class="text-base font-semibold leading-5">
-                {{ t('settings.legacySyncRedirectTitle') }}
-              </h3>
-            </div>
-          </template>
-
-          <div class="space-y-4">
-            <div class="rounded-lg border border-amber-200 bg-amber-50 p-4">
-              <p class="text-sm font-medium text-amber-900">
-                {{ t('settings.legacySyncRedirectTitle') }}
-              </p>
-              <p class="mt-1 text-sm leading-6 text-amber-800">
-                {{ t('settings.legacySyncRedirectDesc') }}
-              </p>
-            </div>
-
-            <div
-              class="flex flex-col gap-3 rounded-lg border border-gray-200 bg-white p-4 sm:flex-row sm:items-center sm:justify-between"
-            >
-              <p class="text-sm leading-6 text-gray-600">
-                {{ t('settings.legacySyncRedirectHelp') }}
-              </p>
-              <RouterLink
-                to="/apps/relay"
-                class="inline-flex items-center justify-center rounded-md bg-primary-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary-700"
-              >
-                {{ t('settings.goToRelayApp') }}
-              </RouterLink>
-            </div>
-          </div>
+          </form>
         </BaseCard>
       </div>
     </div>
@@ -872,18 +838,15 @@ const userStore = useUserStore()
 const preferencesStore = usePreferencesStore()
 
 const activeSettingsTab = ref('account')
-const loadingSettings = ref(false)
+const loadingSettings = ref(true)
 const savingPreferences = ref(false)
 const savingEmailConfig = ref(false)
-const savingIssueConfig = ref(false)
 const validatingEmailConfig = ref(false)
 const errorMessage = ref('')
 const preferenceError = ref('')
 const preferenceSuccess = ref('')
 const emailError = ref('')
 const emailSuccess = ref('')
-const issueError = ref('')
-const issueSuccess = ref('')
 
 const sendingResetEmail = ref(false)
 const resetEmailSent = ref(false)
@@ -911,61 +874,6 @@ const emailForm = reactive({
   maxAgeDays: 7
 })
 
-const issueConfigForm = reactive({
-  enable: false,
-  issueEngine: 'jira',
-  language: 'Chinese',
-  autoMergeStrategy: 'new',
-  manualMergeStrategy: 'linked',
-  retryIssueStrategy: 'update'
-})
-
-const jiraForm = reactive({
-  url: '',
-  username: '',
-  apiToken: '',
-  projectKey: '',
-  issueType: '',
-  priority: '',
-  summaryPrefix: '',
-  addTimestamp: true,
-  descriptionField: 'description',
-  convertToJiraWiki: true,
-  assigneeUseLlm: true,
-  assigneeDefault: '',
-  assigneeAllowValuesText: '',
-  assigneePrompt: '',
-  componentsUseLlm: false,
-  componentsFetchFromApi: false,
-  componentsDefaultText: '',
-  componentsPrompt: '',
-  epicLinkUseLlm: true,
-  epicLinkFetchFromApi: true,
-  epicLinkDefault: '',
-  epicLinkJqlFilter: '',
-  epicLinkPrompt: ''
-})
-
-const feishuForm = reactive({
-  appTokenType: 'bitable',
-  appId: '',
-  appSecret: '',
-  appToken: '',
-  tableName: '',
-  attachmentFieldName: '附件'
-})
-
-const feishuFieldMappings = ref([
-  { source: '任务简述', target: 'title' },
-  { source: '需求收集管理', target: 'summary_content' },
-  { source: '备注', target: 'llm_content' },
-  { source: '优先级', target: 'feishu_priority' },
-  { source: '状态', target: 'feishu_status' },
-  { source: 'SourceID', target: 'email_id_str' }
-])
-
-const issueConfigRaw = ref({})
-
 const settingsTabs = computed(() => [
   {
     value: 'account',
@@ -978,10 +886,6 @@ const settingsTabs = computed(() => [
   {
     value: 'email',
     label: t('settings.emailConfigTitle')
-  },
-  {
-    value: 'sync',
-    label: t('settings.issueConfigTitle')
   }
 ])
 
@@ -1005,12 +909,6 @@ const autoAssignedEmail = computed(() => {
 
 const saveEmailButtonLabel = computed(() => {
   return savingEmailConfig.value ? t('common.saving') : t('common.save')
-})
-
-const saveIssueButtonLabel = computed(() => {
-  return savingIssueConfig.value
-    ? t('common.saving')
-    : t('settings.saveIssueConfig')
 })
 
 const displayName = computed(() => {
@@ -1059,15 +957,6 @@ const matchedTimezoneLabel = computed(() => {
   return getTimezoneLabel(timezone || 'UTC')
 })
 
-const showJiraConfig = computed(
-  () => issueConfigForm.enable && issueConfigForm.issueEngine === 'jira'
-)
-
-const showFeishuConfig = computed(
-  () =>
-    issueConfigForm.enable && issueConfigForm.issueEngine === 'feishu_bitable'
-)
-
 function goToEmailSettings() {
   activeSettingsTab.value = 'email'
 }
@@ -1077,6 +966,11 @@ function parseListValue(text) {
     .split('\n')
     .map((item) => item.trim())
     .filter(Boolean)
+}
+
+function formatListValue(value) {
+  if (!Array.isArray(value)) return ''
+  return value.join('\n')
 }
 
 function normalizeUiLanguageCode(language) {
@@ -1092,11 +986,6 @@ function normalizeUiLanguageCode(language) {
     return 'es'
   }
   return 'en'
-}
-
-function formatListValue(value) {
-  if (!Array.isArray(value)) return ''
-  return value.join('\n')
 }
 
 function normalizeEmailConfig(value) {
@@ -1121,293 +1010,10 @@ function normalizeEmailConfig(value) {
   emailForm.deleteAfterFetch = Boolean(imapConfig.delete_after_fetch)
   emailForm.folder = filterConfig.folder || 'INBOX'
   emailForm.filtersText = formatListValue(filterConfig.filters)
-  emailForm.excludePatternsText = formatListValue(filterConfig.exclude_patterns)
+  emailForm.excludePatternsText = Array.isArray(filterConfig.exclude_patterns)
+    ? filterConfig.exclude_patterns.join('\n')
+    : ''
   emailForm.maxAgeDays = filterConfig.max_age_days || 7
-}
-
-function normalizeIssueConfig(value) {
-  const raw = value && typeof value === 'object' ? value : {}
-  const jiraConfig = raw.jira && typeof raw.jira === 'object' ? raw.jira : {}
-  const fields = raw.fields && typeof raw.fields === 'object' ? raw.fields : {}
-  const feishuConfig =
-    raw.feishu_bitable && typeof raw.feishu_bitable === 'object'
-      ? raw.feishu_bitable
-      : raw.feishu && typeof raw.feishu === 'object'
-        ? raw.feishu
-        : {}
-
-  issueConfigRaw.value = raw
-  issueConfigForm.enable = Boolean(raw.enable)
-  issueConfigForm.issueEngine = raw.issue_engine || 'jira'
-  issueConfigForm.language = raw.language || 'Chinese'
-  issueConfigForm.autoMergeStrategy = raw.auto_merge_strategy || 'new'
-  issueConfigForm.manualMergeStrategy = raw.manual_merge_strategy || 'linked'
-  issueConfigForm.retryIssueStrategy = raw.retry_issue_strategy || 'update'
-
-  jiraForm.url = jiraConfig.url || ''
-  jiraForm.username = jiraConfig.username || ''
-  jiraForm.apiToken = jiraConfig.api_token || ''
-  jiraForm.projectKey = fields.project_key_config?.default || ''
-  jiraForm.issueType = fields.issue_type_config?.default || ''
-  jiraForm.priority = fields.priority_config?.default || ''
-  jiraForm.summaryPrefix = fields.summary_config?.prefix || '[AI]'
-  jiraForm.addTimestamp = Boolean(fields.summary_config?.add_timestamp)
-  jiraForm.descriptionField =
-    fields.description_config?.jira_field || 'description'
-  jiraForm.convertToJiraWiki = Boolean(
-    fields.description_config?.convert_to_jira_wiki !== undefined
-      ? fields.description_config.convert_to_jira_wiki
-      : true
-  )
-  jiraForm.assigneeUseLlm =
-    fields.assignee_config?.use_llm !== undefined
-      ? Boolean(fields.assignee_config.use_llm)
-      : true
-  jiraForm.assigneeDefault = fields.assignee_config?.default || ''
-  jiraForm.assigneeAllowValuesText = formatListValue(
-    fields.assignee_config?.allow_values
-  )
-  jiraForm.assigneePrompt = fields.assignee_config?.prompt || ''
-  jiraForm.componentsUseLlm =
-    fields.components_config?.use_llm !== undefined
-      ? Boolean(fields.components_config.use_llm)
-      : false
-  jiraForm.componentsFetchFromApi =
-    fields.components_config?.fetch_from_api !== undefined
-      ? Boolean(fields.components_config.fetch_from_api)
-      : false
-  jiraForm.componentsDefaultText = formatListValue(
-    fields.components_config?.default
-  )
-  jiraForm.componentsPrompt = fields.components_config?.prompt || ''
-  jiraForm.epicLinkUseLlm =
-    fields.epic_link_config?.use_llm !== undefined
-      ? Boolean(fields.epic_link_config.use_llm)
-      : true
-  jiraForm.epicLinkFetchFromApi =
-    fields.epic_link_config?.fetch_from_api !== undefined
-      ? Boolean(fields.epic_link_config.fetch_from_api)
-      : true
-  jiraForm.epicLinkDefault = fields.epic_link_config?.default || ''
-  jiraForm.epicLinkJqlFilter = fields.epic_link_config?.jql_filter || ''
-  jiraForm.epicLinkPrompt = fields.epic_link_config?.prompt || ''
-
-  feishuForm.appId = feishuConfig.app_id || ''
-  feishuForm.appSecret = feishuConfig.app_secret || ''
-  feishuForm.appTokenType = feishuConfig.app_token_type || 'bitable'
-  feishuForm.appToken = feishuConfig.app_token || ''
-  feishuForm.tableName =
-    feishuConfig.table_name || feishuConfig.default_table_name || ''
-  feishuForm.attachmentFieldName = feishuConfig.attachment_field_name || '附件'
-
-  const fieldMappings = feishuConfig.field_mappings || {}
-  const mappingEntries = Object.entries(fieldMappings)
-  feishuFieldMappings.value = mappingEntries.length
-    ? mappingEntries.map(([source, target]) => ({
-        source,
-        target: String(target || '')
-      }))
-    : [
-        { source: '任务简述', target: 'title' },
-        { source: '需求收集管理', target: 'summary_content' },
-        { source: '备注', target: 'llm_content' },
-        { source: '优先级', target: 'feishu_priority' },
-        { source: '状态', target: 'feishu_status' },
-        { source: 'SourceID', target: 'email_id_str' }
-      ]
-}
-
-function buildIssueConfigPayload() {
-  const payload = JSON.parse(JSON.stringify(issueConfigRaw.value || {}))
-
-  payload.enable = Boolean(issueConfigForm.enable)
-  payload.issue_engine = issueConfigForm.issueEngine
-  payload.language = issueConfigForm.language
-  payload.auto_merge_strategy = issueConfigForm.autoMergeStrategy
-  payload.manual_merge_strategy = issueConfigForm.manualMergeStrategy
-  payload.retry_issue_strategy = issueConfigForm.retryIssueStrategy
-  payload.jira = {
-    ...(payload.jira && typeof payload.jira === 'object' ? payload.jira : {}),
-    url: jiraForm.url.trim(),
-    username: jiraForm.username.trim(),
-    api_token: jiraForm.apiToken
-  }
-  payload.fields = {
-    ...(payload.fields && typeof payload.fields === 'object'
-      ? payload.fields
-      : {}),
-    project_key_config: {
-      jira_field: 'project',
-      default: jiraForm.projectKey.trim()
-    },
-    issue_type_config: {
-      jira_field: 'issuetype',
-      default: jiraForm.issueType.trim()
-    },
-    priority_config: {
-      jira_field: 'priority',
-      default: jiraForm.priority.trim()
-    },
-    summary_config: {
-      prefix: jiraForm.summaryPrefix.trim() || '[AI]',
-      add_timestamp: Boolean(jiraForm.addTimestamp)
-    },
-    description_config: {
-      jira_field: jiraForm.descriptionField.trim() || 'description',
-      convert_to_jira_wiki: Boolean(jiraForm.convertToJiraWiki)
-    },
-    assignee_config: {
-      use_llm: Boolean(jiraForm.assigneeUseLlm),
-      jira_field: 'assignee',
-      default: jiraForm.assigneeDefault.trim(),
-      allow_values: parseListValue(jiraForm.assigneeAllowValuesText),
-      prompt: jiraForm.assigneePrompt.trim()
-    },
-    epic_link_config: {
-      use_llm: Boolean(jiraForm.epicLinkUseLlm),
-      fetch_from_api: Boolean(jiraForm.epicLinkFetchFromApi),
-      jira_field: 'customfield_10014',
-      default: jiraForm.epicLinkDefault.trim(),
-      jql_filter: jiraForm.epicLinkJqlFilter.trim(),
-      prompt: jiraForm.epicLinkPrompt.trim()
-    }
-  }
-  const componentsDefault = parseListValue(jiraForm.componentsDefaultText)
-  const componentsConfig = {
-    use_llm: Boolean(jiraForm.componentsUseLlm),
-    fetch_from_api: Boolean(jiraForm.componentsFetchFromApi),
-    jira_field: 'components',
-    default: componentsDefault,
-    prompt: jiraForm.componentsPrompt.trim()
-  }
-  if (
-    componentsConfig.use_llm ||
-    componentsConfig.fetch_from_api ||
-    componentsConfig.default.length > 0 ||
-    componentsConfig.prompt
-  ) {
-    payload.fields.components_config = componentsConfig
-  } else {
-    delete payload.fields.components_config
-  }
-  payload.feishu_bitable = {
-    ...(payload.feishu_bitable && typeof payload.feishu_bitable === 'object'
-      ? payload.feishu_bitable
-      : payload.feishu && typeof payload.feishu === 'object'
-        ? payload.feishu
-        : {}),
-    app_id: feishuForm.appId.trim(),
-    app_secret: feishuForm.appSecret,
-    app_token_type: feishuForm.appTokenType,
-    app_token: feishuForm.appToken.trim(),
-    table_name: feishuForm.tableName.trim(),
-    attachment_field_name: feishuForm.attachmentFieldName.trim() || '附件',
-    field_mappings: Object.fromEntries(
-      feishuFieldMappings.value
-        .map((mapping) => [mapping.source.trim(), mapping.target.trim()])
-        .filter(([source, target]) => source && target)
-    )
-  }
-  delete payload.feishu_bitable.table_id
-  delete payload.feishu_bitable.default_table_name
-  delete payload.feishu_bitable.obj_token
-  delete payload.feishu_bitable.attachment_upload_parent_node
-  delete payload.feishu_bitable.attachment_upload_parent_folder_token
-  delete payload.feishu_bitable.attachment_upload_parent_type
-  delete payload.feishu_bitable.image_field_name
-  delete payload.feishu_bitable.record_url_template
-  delete payload.feishu_bitable.base_url
-  delete payload.feishu_bitable.tenant_access_token
-  delete payload.feishu_bitable.attachment_upload_folder_name
-
-  return payload
-}
-
-function validateJiraConfig() {
-  const missingFields = []
-  if (!jiraForm.url.trim()) missingFields.push(t('settings.jiraUrl'))
-  if (!jiraForm.username.trim()) missingFields.push(t('settings.jiraUsername'))
-  if (!jiraForm.apiToken.trim()) missingFields.push(t('settings.jiraApiToken'))
-
-  if (issueConfigForm.enable && issueConfigForm.issueEngine === 'jira') {
-    if (!jiraForm.projectKey.trim()) {
-      missingFields.push(t('settings.jiraProjectKey'))
-    }
-    if (!jiraForm.issueType.trim()) {
-      missingFields.push(t('settings.jiraIssueType'))
-    }
-  }
-
-  if (missingFields.length) {
-    return `${t('settings.settingsError')}: ${missingFields.join(', ')}`
-  }
-
-  return null
-}
-
-function validateFeishuConfig() {
-  const missingFields = []
-  if (!feishuForm.appId.trim()) missingFields.push(t('settings.feishuAppId'))
-  if (!feishuForm.appSecret.trim()) {
-    missingFields.push(t('settings.feishuAppSecret'))
-  }
-  if (!feishuForm.appToken.trim())
-    missingFields.push(t('settings.feishuAppToken'))
-  if (!feishuForm.tableName.trim()) {
-    missingFields.push(t('settings.feishuTableName'))
-  }
-  if (!feishuForm.attachmentFieldName.trim()) {
-    missingFields.push(t('settings.feishuAttachmentFieldName'))
-  }
-
-  if (
-    issueConfigForm.enable &&
-    issueConfigForm.issueEngine === 'feishu_bitable'
-  ) {
-    if (
-      !feishuFieldMappings.value.some(
-        (mapping) => mapping.source.trim() && mapping.target.trim()
-      )
-    ) {
-      missingFields.push(t('settings.feishuFieldMappings'))
-    }
-  }
-
-  if (missingFields.length) {
-    return `${t('settings.settingsError')}: ${missingFields.join(', ')}`
-  }
-
-  return null
-}
-function validateIssueConfig() {
-  if (!['jira', 'feishu_bitable'].includes(issueConfigForm.issueEngine)) {
-    return t('settings.issueEngineInvalid')
-  }
-
-  if (
-    !['new', 'update'].includes(issueConfigForm.autoMergeStrategy) ||
-    !['linked', 'unlinked'].includes(issueConfigForm.manualMergeStrategy)
-  ) {
-    return t('settings.issueMergeStrategyInvalid')
-  }
-
-  if (!['new', 'update'].includes(issueConfigForm.retryIssueStrategy)) {
-    return t('settings.issueRetryStrategyInvalid')
-  }
-
-  if (!issueConfigForm.enable) {
-    return null
-  }
-
-  if (issueConfigForm.issueEngine === 'jira') {
-    return validateJiraConfig()
-  }
-
-  if (issueConfigForm.issueEngine === 'feishu_bitable') {
-    return validateFeishuConfig()
-  }
-
-  return null
 }
 function buildEmailConfig() {
   return {
@@ -1468,18 +1074,9 @@ async function loadSettings() {
     preferenceForm.scene = promptConfig.scene || ''
 
     normalizeEmailConfig(settingsByKey.email_config?.value)
-
-    normalizeIssueConfig(settingsByKey.issue_config?.value)
   } catch (error) {
     console.error('Failed to load settings:', error)
     errorMessage.value = extractErrorMessage(error, t('settings.settingsError'))
-    normalizeIssueConfig({
-      enable: false,
-      issue_engine: 'jira',
-      language: 'Chinese',
-      auto_merge_strategy: 'new',
-      manual_merge_strategy: 'linked'
-    })
   } finally {
     loadingSettings.value = false
   }
@@ -1492,9 +1089,6 @@ function clearSectionFeedback(section) {
   } else if (section === 'email') {
     emailError.value = ''
     emailSuccess.value = ''
-  } else if (section === 'issue') {
-    issueError.value = ''
-    issueSuccess.value = ''
   }
 }
 
@@ -1513,13 +1107,6 @@ function setSectionSuccess(section, message) {
         emailSuccess.value = ''
       }
     }, 3000)
-  } else if (section === 'issue') {
-    issueSuccess.value = message
-    setTimeout(() => {
-      if (issueSuccess.value === message) {
-        issueSuccess.value = ''
-      }
-    }, 3000)
   }
 }
 
@@ -1528,8 +1115,6 @@ function setSectionError(section, message) {
     preferenceError.value = message
   } else if (section === 'email') {
     emailError.value = message
-  } else if (section === 'issue') {
-    issueError.value = message
   }
 }
 
@@ -1553,17 +1138,6 @@ function validateEmailConfig() {
   }
 
   return null
-}
-
-function addFeishuMapping() {
-  feishuFieldMappings.value.push({ source: '', target: '' })
-}
-
-function removeFeishuMapping(index) {
-  if (feishuFieldMappings.value.length <= 1) {
-    return
-  }
-  feishuFieldMappings.value.splice(index, 1)
 }
 
 async function savePreferences() {
@@ -1663,36 +1237,6 @@ async function validateEmailConfigOnly() {
     )
   } finally {
     validatingEmailConfig.value = false
-  }
-}
-
-async function saveIssueConfig() {
-  savingIssueConfig.value = true
-  clearSectionFeedback('issue')
-
-  try {
-    const validationError = validateIssueConfig()
-    if (validationError) {
-      throw new Error(validationError)
-    }
-
-    const nextIssueConfig = buildIssueConfigPayload()
-    await settingsApi.saveSettingByKey({
-      key: 'issue_config',
-      value: nextIssueConfig,
-      description: 'User issue creation configuration'
-    })
-
-    issueConfigRaw.value = nextIssueConfig
-    setSectionSuccess('issue', t('settings.settingsSaved'))
-  } catch (error) {
-    console.error('Failed to save issue config:', error)
-    setSectionError(
-      'issue',
-      extractErrorMessage(error, t('settings.settingsError'))
-    )
-  } finally {
-    savingIssueConfig.value = false
   }
 }
 
