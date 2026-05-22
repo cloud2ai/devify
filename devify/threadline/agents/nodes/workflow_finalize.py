@@ -627,7 +627,7 @@ class WorkflowFinalizeNode(BaseLangGraphNode):
         if not state.get("credits_consumed"):
             logger.info(
                 "No credits consumed, skipping usage metrics "
-                "(billing disabled or insufficient credits)"
+                "(credits not consumed or insufficient credits)"
             )
             return
 

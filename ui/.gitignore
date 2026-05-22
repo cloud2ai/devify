@@ -83,3 +83,7 @@ temp/
 
 # AI/IDE directories
 .cursor/
+
+# Playwright E2E test artifacts
+tests/reports/
+tests/e2e/reports/

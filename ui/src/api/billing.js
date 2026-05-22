@@ -5,6 +5,10 @@ export const billingApi = {
     return apiClient.get('/billing/plans')
   },
 
+  getStatus() {
+    return apiClient.get('/billing/status')
+  },
+
   getCurrentSubscription() {
     return apiClient.get('/billing/subscriptions/me').catch((error) => {
       if (error?.response?.status === 404) {

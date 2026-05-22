@@ -25,6 +25,8 @@ export function useRelayFormatters() {
     if (status === 'failed') return 'bg-red-100 text-red-700 ring-red-200'
     if (status === 'processing')
       return 'bg-yellow-100 text-yellow-700 ring-yellow-200'
+    if (status === 'pending')
+      return 'bg-blue-100 text-blue-700 ring-blue-200'
     return 'bg-gray-100 text-gray-600 ring-gray-200'
   }
 
@@ -40,6 +42,7 @@ export function useRelayFormatters() {
       return 'bg-green-100 text-green-700'
     if (status === 'failed') return 'bg-red-100 text-red-700'
     if (status === 'processing') return 'bg-blue-100 text-blue-700'
+    if (status === 'pending') return 'bg-blue-100 text-blue-700'
     return 'bg-gray-100 text-gray-600'
   }
 
@@ -48,6 +51,7 @@ export function useRelayFormatters() {
       return t('common.status.success')
     if (status === 'failed') return t('common.status.failed')
     if (status === 'processing') return t('common.status.processing')
+    if (status === 'pending') return t('common.status.pending')
     return status
   }
 
@@ -58,6 +62,7 @@ export function useRelayFormatters() {
       return 'M12 9v4m0 4h.01M10.29 3.86l-7.05 12.21A2 2 0 0 0 4.97 19h14.06a2 2 0 0 0 1.73-2.93L13.71 3.86a2 2 0 0 0-3.42 0Z'
     }
     if (status === 'processing') return 'M12 6V12L16 14'
+    if (status === 'pending') return 'M12 8v4l3 3m6-3a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z'
     return ''
   }
 

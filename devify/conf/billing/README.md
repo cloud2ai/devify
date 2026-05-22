@@ -45,10 +45,10 @@ plans:
 
 ### Default Usage
 
-The initialization command automatically loads `conf/billing/plans.yaml`:
+The local bootstrap command automatically loads `conf/billing/plans.yaml`:
 
 ```bash
-python manage.py init_billing_stripe
+python manage.py init_billing_base
 ```
 
 ### Custom Configuration File
@@ -56,7 +56,7 @@ python manage.py init_billing_stripe
 Specify a different configuration file:
 
 ```bash
-python manage.py init_billing_stripe --plans-config=/path/to/custom-plans.yaml
+python manage.py init_billing_base --plans-config=/path/to/custom-plans.yaml
 ```
 
 ### Environment-Specific Configurations
@@ -65,10 +65,10 @@ You can maintain different plan configurations for different environments:
 
 ```bash
 # Development
-python manage.py init_billing_stripe --plans-config=conf/billing/plans.dev.yaml
+python manage.py init_billing_base --plans-config=conf/billing/plans.dev.yaml
 
 # Production
-python manage.py init_billing_stripe --plans-config=conf/billing/plans.prod.yaml
+python manage.py init_billing_base --plans-config=conf/billing/plans.prod.yaml
 ```
 
 ## Modifying Plans
@@ -85,20 +85,21 @@ python manage.py init_billing_stripe --plans-config=conf/billing/plans.prod.yaml
 ### Adding New Plans
 
 1. Add a new plan to the `plans` list in `plans.yaml`
-2. Run `python manage.py init_billing_stripe`
-3. The system will create the new plan in both local database and Stripe
+2. Run `python manage.py init_billing_base`
+3. The system will create the new plan in the local database
+4. Run `python manage.py init_billing_stripe` if you also want to sync it to Stripe
 
 ### Updating Metadata
 
 1. Edit the `metadata` fields in `plans.yaml`
-2. Run `python manage.py init_billing_stripe`
+2. Run `python manage.py init_billing_base`
 3. Local plan records will be updated (Stripe products remain unchanged)
 
 ## Important Notes
 
 - **Slug must be unique**: The `slug` field is used as the unique identifier
 - **Free plan required**: At least one plan with `monthly_price_cents: 0` should exist
-- **Stripe sync**: Changes are automatically synced to Stripe when you run `init_billing_stripe`
+- **Stripe sync**: Use `init_billing_stripe` only for manual repair / sync
 - **Idempotent**: Safe to run multiple times, won't create duplicates
 - **Version control**: Keep this file in version control to track pricing changes
 

@@ -217,6 +217,12 @@ class TestGrantBonusCredits:
         """
         Grant bonus credits increases bonus_credits
         """
+        operator = User.objects.create_user(
+            username='operator_user',
+            email='operator_user@example.com',
+            password='testpass123',
+        )
+
         UserCredits.objects.create(
             user=test_user,
             base_credits=10,
@@ -231,7 +237,7 @@ class TestGrantBonusCredits:
             user_id=test_user.id,
             amount=50,
             reason='Promotional bonus',
-            operator_id=1
+            operator_id=operator.id,
         )
 
         credits = UserCredits.objects.get(user=test_user, is_active=True)
@@ -244,7 +250,34 @@ class TestGrantBonusCredits:
         )
         assert transaction.amount == 50
         assert transaction.reason == 'Promotional bonus'
-        assert transaction.operator_id == 1
+        assert transaction.operator_id == operator.id
+
+    def test_grant_bonus_credits_creates_user_credits_when_missing(self, test_user):
+        """
+        Manual grants should work even if the user has no credits row yet
+        """
+        transaction = CreditsService.grant_bonus_credits(
+            user_id=test_user.id,
+            amount=25,
+            reason='Manual top up',
+            operator_id=None,
+        )
+
+        credits = UserCredits.objects.get(user=test_user, is_active=True)
+
+        assert transaction.amount == 25
+        assert transaction.user == test_user
+        assert credits.base_credits > 0
+        assert credits.bonus_credits == 25
+        assert credits.available_credits == credits.base_credits + 25
+
+        transaction = CreditsTransaction.objects.get(
+            user=test_user,
+            transaction_type='bonus'
+        )
+        assert transaction.amount == 25
+        assert transaction.reason == 'Manual top up'
+        assert transaction.operator_id is None
 
     def test_grant_bonus_credits_multiple_times(self, test_user):
         """

@@ -90,6 +90,18 @@
         </button>
       </div>
 
+      <div
+        v-if="billingStatus && billingStatus.recharge_enabled === false"
+        class="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800"
+      >
+        <p class="font-medium">
+          {{ t('billing.plans.stripeNotConfigured') }}
+        </p>
+        <p class="mt-1">
+          {{ t('billing.status.stripeMissingHint') }}
+        </p>
+      </div>
+
       <div v-if="loading" class="flex items-center justify-center py-12">
         <div
           class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"
@@ -109,6 +121,7 @@
           <div class="lg:col-span-2">
             <SubscriptionPlans
               :current-subscription="currentSubscription"
+              :billing-status="billingStatus"
               @subscription-updated="handleSubscriptionUpdated"
               @operation-success="handleOperationSuccess"
               @operation-error="handleOperationError"
@@ -125,7 +138,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import AppLayout from '@/components/layout/AppLayout.vue'
@@ -140,19 +153,28 @@ const route = useRoute()
 const router = useRouter()
 
 const loading = ref(true)
+const billingStatus = ref(null)
 const currentSubscription = ref(null)
 const credits = ref(null)
 const successMessage = ref('')
 const errorMessage = ref('')
+let billingSyncTimer = null
 
 async function fetchData() {
   loading.value = true
 
   try {
-    const [subscriptionRes, creditsRes] = await Promise.allSettled([
+    const [statusRes, subscriptionRes, creditsRes] = await Promise.allSettled([
+      billingApi.getStatus(),
       billingApi.getCurrentSubscription(),
       billingApi.getUserCredits()
     ])
+
+    if (statusRes.status === 'fulfilled') {
+      const statusData =
+        statusRes.value.data?.data ?? statusRes.value.data ?? null
+      billingStatus.value = statusData
+    }
 
     if (subscriptionRes.status === 'fulfilled') {
       const subscriptionData =
@@ -207,9 +229,31 @@ function handleStripeCallback() {
 
     router.replace({ query: {} })
 
-    setTimeout(() => {
-      fetchData()
-    }, 2000)
+    let attempts = 0
+    const maxAttempts = 5
+    const syncIntervalMs = 2000
+
+    const syncBillingState = async () => {
+      attempts += 1
+      await fetchData()
+
+      if (
+        currentSubscription.value?.status === 'active' ||
+        attempts >= maxAttempts
+      ) {
+        billingSyncTimer = null
+        return
+      }
+
+      billingSyncTimer = window.setTimeout(syncBillingState, syncIntervalMs)
+    }
+
+    if (billingSyncTimer) {
+      window.clearTimeout(billingSyncTimer)
+      billingSyncTimer = null
+    }
+
+    billingSyncTimer = window.setTimeout(syncBillingState, syncIntervalMs)
   } else if (canceled === 'true') {
     errorMessage.value = t('billing.messages.paymentCanceled')
 
@@ -220,5 +264,12 @@ function handleStripeCallback() {
 onMounted(() => {
   handleStripeCallback()
   fetchData()
+})
+
+onUnmounted(() => {
+  if (billingSyncTimer) {
+    window.clearTimeout(billingSyncTimer)
+    billingSyncTimer = null
+  }
 })
 </script>

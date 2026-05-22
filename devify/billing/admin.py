@@ -3,6 +3,8 @@ from django_json_widget.widgets import JSONEditorWidget
 from django.db import models
 
 from billing.models import (
+    BillingConfig,
+    BillingAuditLog,
     Plan,
     PlanPrice,
     UserCredits,
@@ -13,6 +15,24 @@ from billing.models import (
     PaymentProvider,
     EmailWorkflowUsage,
 )
+
+
+@admin.register(BillingConfig)
+class BillingConfigAdmin(admin.ModelAdmin):
+    exclude = [
+        'stripe_live_secret_key',
+        'stripe_test_secret_key',
+        'stripe_webhook_secret',
+    ]
+    list_display = [
+        'singleton_key',
+        'stripe_live_mode',
+        'default_free_credits',
+        'workflow_cost_credits',
+        'auto_refund_system_errors',
+        'updated_at',
+    ]
+    readonly_fields = ['created_at', 'updated_at']
 
 
 @admin.register(Plan)
@@ -112,6 +132,49 @@ class CreditsTransactionAdmin(admin.ModelAdmin):
     list_filter = ['transaction_type', 'created_at']
     search_fields = ['user__username', 'reason']
     readonly_fields = ['created_at']
+
+    formfield_overrides = {
+        models.JSONField: {'widget': JSONEditorWidget},
+    }
+
+
+@admin.register(BillingAuditLog)
+class BillingAuditLogAdmin(admin.ModelAdmin):
+    list_display = [
+        'action_type',
+        'source',
+        'actor_name',
+        'target_username',
+        'resource_type',
+        'resource_id',
+        'ip_address',
+        'created_at',
+    ]
+    list_filter = ['source', 'action_type', 'created_at']
+    search_fields = [
+        'actor_name',
+        'target_username',
+        'resource_type',
+        'resource_id',
+        'event_key',
+    ]
+    readonly_fields = [
+        'actor',
+        'actor_name',
+        'target_user',
+        'target_username',
+        'action_type',
+        'source',
+        'resource_type',
+        'resource_id',
+        'ip_address',
+        'user_agent',
+        'before_data',
+        'after_data',
+        'context',
+        'event_key',
+        'created_at',
+    ]
 
     formfield_overrides = {
         models.JSONField: {'widget': JSONEditorWidget},

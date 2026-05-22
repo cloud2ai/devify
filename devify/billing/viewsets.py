@@ -1,12 +1,10 @@
-import stripe
 from datetime import datetime, timedelta
 
-from django.conf import settings
+from django.shortcuts import get_object_or_404
 from django.core.paginator import Paginator
-from django.db.models import Sum
+from django.db.models import Prefetch, Sum
 from django.db.models.functions import TruncDate
 from django.utils import timezone
-from djstripe.models import Customer
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied
@@ -19,6 +17,14 @@ from billing.models import (
     Subscription,
     EmailCreditsTransaction
 )
+from billing.services.audit_service import (
+    get_request_ip,
+    get_request_user_agent,
+    queue_billing_audit_event,
+)
+from billing.services.payment_provider_gateway import get_billing_gateway
+from billing.services.purchase_policy import can_user_purchase
+from billing.services.config_service import get_public_billing_status
 from billing.serializers import (
     PlanSerializer,
     SubscriptionSerializer,
@@ -29,46 +35,61 @@ from billing.services.subscription_service import SubscriptionService
 from billing.services.credits_service import CreditsService
 
 
+def _get_credit_usage_display_title(email_msg):
+    if not email_msg:
+        return None
+
+    canonical_email = (
+        email_msg.merged_into
+        if getattr(email_msg, 'merged_into_id', None) and email_msg.merged_into
+        else email_msg
+    )
+
+    return (
+        canonical_email.summary_title
+        or canonical_email.subject
+        or email_msg.summary_title
+        or email_msg.subject
+        or None
+    )
+
+
 class PlanViewSet(viewsets.ReadOnlyModelViewSet):
     """
     Plans are read-only for users
     """
-    queryset = Plan.objects.filter(is_active=True)
     serializer_class = PlanSerializer
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
         """
-        Filter plans based on user type
-        - Internal users: see all plans (except internal plan itself) but
-          cannot purchase
-        - Regular users: exclude internal plans
-        - Staff users: all plans
+        Public billing page should never expose internal plans.
+        Admin users manage internal plans through the admin API instead.
         """
-        queryset = Plan.objects.filter(is_active=True)
-
-        # Always exclude internal plans from public view
-        if not self.request.user.is_staff:
-            queryset = queryset.filter(is_internal=False)
-
-        return queryset
+        return Plan.objects.filter(status='active', is_internal=False)
 
     def list(self, request, *args, **kwargs):
         """
         Get all active plans with Stripe price information
         """
-        queryset = self.get_queryset()
-        serializer = self.get_serializer(queryset, many=True)
+        queryset = self.get_queryset().prefetch_related(
+            Prefetch(
+                'plan_prices',
+                queryset=PlanPrice.objects.select_related('provider').filter(
+                    provider__name='stripe',
+                    is_active=True,
+                ),
+                to_attr='stripe_plan_prices',
+            ),
+        )
+        plans = list(queryset)
+        serializer = self.get_serializer(plans, many=True)
 
         plans_data = serializer.data
 
-        for plan_data in plans_data:
-            plan_id = plan_data['id']
-            plan_price = PlanPrice.objects.filter(
-                plan_id=plan_id,
-                provider__name='stripe',
-                is_active=True
-            ).first()
+        for plan, plan_data in zip(plans, plans_data):
+            prefetched_prices = getattr(plan, 'stripe_plan_prices', None)
+            plan_price = prefetched_prices[0] if prefetched_prices else None
 
             if plan_price:
                 plan_data['stripe_price_id'] = plan_price.provider_price_id
@@ -230,7 +251,10 @@ class UserCreditsViewSet(viewsets.ViewSet):
             transaction_type='consume',
             created_at__gte=start_date,
             created_at__lte=end_date
-        ).select_related('email_message').order_by('-created_at')
+        ).select_related(
+            'email_message',
+            'email_message__merged_into',
+        ).order_by('-created_at')
 
         # Apply pagination
         paginator = Paginator(transactions, page_size)
@@ -240,11 +264,22 @@ class UserCreditsViewSet(viewsets.ViewSet):
         results = []
         for transaction in page_obj:
             email_msg = transaction.email_message
+            canonical_email = (
+                email_msg.merged_into
+                if email_msg and email_msg.merged_into_id
+                else email_msg
+            )
             result_item = {
                 'id': transaction.id,
                 'amount': transaction.amount,
+                'display_title': _get_credit_usage_display_title(email_msg),
                 'subject': email_msg.subject if email_msg else None,
-                'chat_id': str(email_msg.uuid) if email_msg else None,
+                'summary_title': (
+                    email_msg.summary_title if email_msg else None
+                ),
+                'chat_id': (
+                    str(canonical_email.uuid) if canonical_email else None
+                ),
                 'status': email_msg.status if email_msg else None,
                 'created_at': transaction.created_at.isoformat()
             }
@@ -295,37 +330,6 @@ class SubscriptionViewSet(viewsets.ModelViewSet):
             return Response(serializer.data)
         return Response(None)
 
-    @action(detail=False, methods=['post'])
-    def create_subscription(self, request):
-        """
-        Create a new subscription
-        """
-        plan_id = request.data.get('plan_id')
-        provider = request.data.get('provider', 'stripe')
-
-        if not plan_id:
-            return Response(
-                {'error': 'plan_id is required'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        try:
-            subscription = SubscriptionService.create_subscription(
-                user_id=request.user.id,
-                plan_id=plan_id,
-                provider=provider
-            )
-            serializer = self.get_serializer(subscription)
-            return Response(
-                serializer.data,
-                status=status.HTTP_201_CREATED
-            )
-        except Exception as e:
-            return Response(
-                {'error': str(e)},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
     @action(detail=True, methods=['post'])
     def cancel(self, request, pk=None):
         """
@@ -334,7 +338,24 @@ class SubscriptionViewSet(viewsets.ModelViewSet):
         self._check_internal_user(request.user)
         subscription = self.get_object()
         try:
+            before_data = SubscriptionSerializer(subscription).data
             SubscriptionService.cancel_subscription(subscription.id)
+            subscription.refresh_from_db()
+            queue_billing_audit_event(
+                action_type='subscription.cancel',
+                source='user_api',
+                actor_id=request.user.id,
+                actor_name=request.user.username,
+                target_user_id=request.user.id,
+                target_username=request.user.username,
+                resource_type='subscription',
+                resource_id=subscription.id,
+                ip_address=get_request_ip(request),
+                user_agent=get_request_user_agent(request),
+                before_data=before_data,
+                after_data=SubscriptionSerializer(subscription).data,
+                context={'subscription_id': subscription.id},
+            )
             return Response({'status': 'cancelled'})
         except Exception as e:
             return Response(
@@ -350,7 +371,24 @@ class SubscriptionViewSet(viewsets.ModelViewSet):
         self._check_internal_user(request.user)
         subscription = self.get_object()
         try:
+            before_data = SubscriptionSerializer(subscription).data
             SubscriptionService.resume_subscription(subscription.id)
+            subscription.refresh_from_db()
+            queue_billing_audit_event(
+                action_type='subscription.resume',
+                source='user_api',
+                actor_id=request.user.id,
+                actor_name=request.user.username,
+                target_user_id=request.user.id,
+                target_username=request.user.username,
+                resource_type='subscription',
+                resource_id=subscription.id,
+                ip_address=get_request_ip(request),
+                user_agent=get_request_user_agent(request),
+                before_data=before_data,
+                after_data=SubscriptionSerializer(subscription).data,
+                context={'subscription_id': subscription.id},
+            )
             return Response({'status': 'resumed'})
         except Exception as e:
             return Response(
@@ -373,48 +411,39 @@ class SubscriptionViewSet(viewsets.ModelViewSet):
             )
 
         try:
-            stripe.api_key = (
-                settings.STRIPE_LIVE_SECRET_KEY
-                if settings.STRIPE_LIVE_MODE
-                else settings.STRIPE_TEST_SECRET_KEY
-            )
-
-            customer = Customer.objects.filter(
-                subscriber=request.user
-            ).first()
-
-            if not customer:
-                customer, created = Customer.get_or_create(
-                    subscriber=request.user
+            plan_price = (
+                PlanPrice.objects.select_related('plan')
+                .filter(
+                    provider__name='stripe',
+                    provider_price_id=price_id,
+                    is_active=True,
                 )
-
-            frontend_url = settings.FRONTEND_URL
-
-            checkout_session = stripe.checkout.Session.create(
-                customer=customer.id,
-                payment_method_types=['card'],
-                line_items=[
-                    {
-                        'price': price_id,
-                        'quantity': 1,
-                    },
-                ],
-                mode='subscription',
-                success_url=(
-                    f'{frontend_url}/billing?success=true&'
-                    f'session_id={{CHECKOUT_SESSION_ID}}'
-                ),
-                cancel_url=f'{frontend_url}/billing?canceled=true',
-                metadata={
-                    'user_id': request.user.id,
-                },
+                .first()
             )
-
-            return Response({
-                'checkout_url': checkout_session.url,
-                'session_id': checkout_session.id
-            })
-
+            if not plan_price:
+                return Response(
+                    {'error': 'Invalid price_id'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            if not can_user_purchase(
+                plan_price.plan,
+                'stripe',
+                get_public_billing_status(),
+            ):
+                return Response(
+                    {'error': 'This plan is not available for self-purchase'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            gateway = get_billing_gateway('stripe')
+            result = gateway.create_checkout_session(request.user, price_id)
+            if 'error' in result:
+                status_code = (
+                    status.HTTP_409_CONFLICT
+                    if 'Multiple Stripe customers' in result['error']
+                    else status.HTTP_400_BAD_REQUEST
+                )
+                return Response(result, status=status_code)
+            return Response(result)
         except Exception as e:
             return Response(
                 {'error': str(e)},
@@ -428,33 +457,16 @@ class SubscriptionViewSet(viewsets.ModelViewSet):
         """
         self._check_internal_user(request.user)
         try:
-            stripe.api_key = (
-                settings.STRIPE_LIVE_SECRET_KEY
-                if settings.STRIPE_LIVE_MODE
-                else settings.STRIPE_TEST_SECRET_KEY
-            )
-
-            customer = Customer.objects.filter(
-                subscriber=request.user
-            ).first()
-
-            if not customer:
-                return Response(
-                    {'error': 'No Stripe customer found for this user'},
-                    status=status.HTTP_404_NOT_FOUND
+            gateway = get_billing_gateway('stripe')
+            result = gateway.create_portal_session(request.user)
+            if 'error' in result:
+                status_code = (
+                    status.HTTP_409_CONFLICT
+                    if 'Multiple Stripe customers' in result['error']
+                    else status.HTTP_404_NOT_FOUND
                 )
-
-            frontend_url = settings.FRONTEND_URL
-
-            portal_session = stripe.billing_portal.Session.create(
-                customer=customer.id,
-                return_url=f'{frontend_url}/billing',
-            )
-
-            return Response({
-                'portal_url': portal_session.url
-            })
-
+                return Response(result, status=status_code)
+            return Response(result)
         except Exception as e:
             return Response(
                 {'error': str(e)},
@@ -481,59 +493,18 @@ class SubscriptionViewSet(viewsets.ModelViewSet):
             )
 
         try:
-            stripe.api_key = (
-                settings.STRIPE_LIVE_SECRET_KEY
-                if settings.STRIPE_LIVE_MODE
-                else settings.STRIPE_TEST_SECRET_KEY
-            )
-
-            # Get current active subscription
             current_subscription = Subscription.objects.filter(
                 user=request.user,
                 status='active'
             ).first()
-
-            has_djstripe_sub = (
-                current_subscription and
-                current_subscription.djstripe_subscription
+            gateway = get_billing_gateway('stripe')
+            result = gateway.schedule_downgrade(
+                current_subscription,
+                stripe_price_id,
             )
-            if not has_djstripe_sub:
-                return Response(
-                    {'error': 'No active subscription found'},
-                    status=status.HTTP_404_NOT_FOUND
-                )
-
-            # Update the subscription to use the new price at the end of period
-            djstripe_sub = current_subscription.djstripe_subscription
-
-            # Get the subscription from Stripe
-            stripe_sub = stripe.Subscription.retrieve(djstripe_sub.id)
-
-            # Get current subscription item
-            subscription_item = stripe_sub['items']['data'][0]
-            subscription_item_id = subscription_item['id']
-
-            # Update subscription to change price at period end
-            stripe.Subscription.modify(
-                djstripe_sub.id,
-                cancel_at_period_end=False,
-                proration_behavior='none',
-                items=[{
-                    'id': subscription_item_id,
-                    'price': stripe_price_id,
-                }],
-            )
-
-            # Get period end from original subscription item
-            effective_date = datetime.fromtimestamp(
-                subscription_item['current_period_end']
-            ).isoformat()
-
-            return Response({
-                'message': 'Downgrade scheduled successfully',
-                'effective_date': effective_date
-            })
-
+            if 'error' in result:
+                return Response(result, status=status.HTTP_404_NOT_FOUND)
+            return Response(result)
         except Exception as e:
             import logging
             logger = logging.getLogger(__name__)

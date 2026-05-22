@@ -13,8 +13,9 @@ from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 from django.utils import timezone
 
-from billing.models import Plan, PaymentProvider, Subscription
+from billing.models import Plan, Subscription
 from billing.services.credits_service import CreditsService
+from billing.services.subscription_service import SubscriptionService
 
 # Import models at module level to avoid circular imports
 try:
@@ -264,15 +265,16 @@ class Command(BaseCommand):
         except Plan.DoesNotExist:
             raise CommandError(
                 'Internal plan not found. '
-                'Please run init_billing_stripe first.'
+                'Please run init_billing_base first.'
             )
 
         try:
-            payment_provider = PaymentProvider.objects.get(name='stripe')
-        except PaymentProvider.DoesNotExist:
+            payment_provider = SubscriptionService.get_or_create_payment_provider(
+                'platform'
+            )
+        except Exception as exc:
             raise CommandError(
-                'Payment provider not found. '
-                'Please run init_billing_stripe first.'
+                f'Failed to initialize platform payment provider: {exc}'
             )
 
         current_time = timezone.now()
@@ -393,15 +395,16 @@ class Command(BaseCommand):
         except Plan.DoesNotExist:
             raise CommandError(
                 'Free plan not found. '
-                'Please run init_billing_stripe first.'
+                'Please run init_billing_base first.'
             )
 
         try:
-            payment_provider = PaymentProvider.objects.get(name='stripe')
-        except PaymentProvider.DoesNotExist:
+            payment_provider = SubscriptionService.get_or_create_payment_provider(
+                'platform'
+            )
+        except Exception as exc:
             raise CommandError(
-                'Payment provider not found. '
-                'Please run init_billing_stripe first.'
+                f'Failed to initialize platform payment provider: {exc}'
             )
 
         current_time = timezone.now()

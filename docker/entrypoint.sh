@@ -178,12 +178,8 @@ init_services() {
     log "→ Initializing Site & OAuth providers..."
     python manage.py init_social_apps || log "OAuth initialization completed with warnings"
 
-    if [ "${BILLING_ENABLED:-false}" = "true" ]; then
-        log "→ Initializing Stripe billing system..."
-        python manage.py init_billing_stripe || log "Billing initialization completed with warnings"
-    else
-        log "→ Billing disabled, skipping"
-    fi
+    log "→ Initializing billing base..."
+    python manage.py init_billing_base || log "Billing base initialization completed with warnings"
 }
 
 # --- Process Starters ---
@@ -230,7 +226,10 @@ start_flower() {
 
 start_development() {
     log "Starting Django development server (runserver)..."
-    # Keep nginx-served admin assets available in development mode too.
+    wait_for_db
+    run_migrations
+    register_periodic_tasks
+    init_services
     collect_static
     exec python manage.py runserver 0.0.0.0:8000
 }
@@ -262,11 +261,6 @@ case "$1" in
         start_flower
         ;;
     development)
-        generate_ssl_certs_if_missing
-        wait_for_db
-        run_migrations
-        register_periodic_tasks
-        init_services
         start_development
         ;;
     *)

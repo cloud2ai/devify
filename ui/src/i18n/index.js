@@ -38,14 +38,28 @@ const getInitialLanguage = () => {
   return detectBrowserLanguage()
 }
 
-const mergeCommonMessages = (base, override) => ({
-  ...base,
-  ...override,
-  common: {
-    ...(base.common || {}),
-    ...(override.common || {})
+const isPlainObject = (value) =>
+  value !== null && typeof value === 'object' && !Array.isArray(value)
+
+const mergeDeep = (base, override) => {
+  if (!isPlainObject(base) || !isPlainObject(override)) {
+    return override !== undefined ? override : base
   }
-})
+
+  const merged = { ...base }
+
+  for (const [key, value] of Object.entries(override)) {
+    if (isPlainObject(value) && isPlainObject(base[key])) {
+      merged[key] = mergeDeep(base[key], value)
+    } else {
+      merged[key] = value
+    }
+  }
+
+  return merged
+}
+
+const mergeCommonMessages = (base, override) => mergeDeep(base, override)
 
 // Create Vue i18n instance
 const i18n = createI18n({

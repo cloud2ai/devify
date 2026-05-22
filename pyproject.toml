@@ -54,7 +54,7 @@ dependencies = [
     "lark-oapi==1.5.3",
     "json-repair>=0.25.0",
     "dj-stripe>=2.8.0",
-    "stripe>=8.0.0",
+    "stripe>=8.0.0,<15.0.0",
     "agentcore-metering @ git+https://github.com/cloud2ai/agentcore-metering.git",
     "agentcore-task @ git+https://github.com/cloud2ai/agentcore-task.git",
     "agentcore-notifier @ git+https://github.com/cloud2ai/agentcore-notifier.git",

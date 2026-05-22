@@ -15,9 +15,8 @@ This node only executes when there are errors in the workflow.
 
 import logging
 
-from django.conf import settings
-
 from billing.services.credits_service import CreditsService
+from billing.services.config_service import is_auto_refund_system_errors_enabled
 from billing.services.error_classifier import ErrorClassifier
 from threadline.agents.email_state import EmailState
 from threadline.agents.nodes.base_node import BaseLangGraphNode
@@ -46,12 +45,11 @@ class ErrorHandlerNode(BaseLangGraphNode):
         Analyze workflow errors and refund credits if caused by system issues.
 
         Decision flow:
-        1. Check if billing system is enabled → Skip if disabled
-        2. Check if auto refund is enabled → Skip if disabled
-        3. Check if credits were consumed → Skip if no charge
-        4. Collect all error messages from failed nodes
-        5. Classify errors (system vs user)
-        6. Refund only for system errors
+        1. Check if auto refund is enabled → Skip if disabled
+        2. Check if credits were consumed → Skip if no charge
+        3. Collect all error messages from failed nodes
+        4. Classify errors (system vs user)
+        5. Refund only for system errors
 
         Args:
             state: EmailState containing node_errors and credits info
@@ -59,27 +57,21 @@ class ErrorHandlerNode(BaseLangGraphNode):
         Returns:
             EmailState with credits_refunded flag if refund occurred
         """
-        # STEP 1: Check if billing system is enabled
-        # If disabled, this node does nothing (safe for testing)
-        if not settings.BILLING_ENABLED:
-            logger.info("Billing is disabled, skipping error handler")
-            return state
-
-        # STEP 2: Check if auto refund feature is enabled
+        # STEP 1: Check if auto refund feature is enabled
         # Can be disabled to require manual review of all refunds
-        if not settings.AUTO_REFUND_SYSTEM_ERRORS:
+        if not is_auto_refund_system_errors_enabled():
             logger.info(
                 "Auto refund is disabled, skipping credit refund"
             )
             return state
 
-        # STEP 3: Check if credits were actually consumed
+        # STEP 2: Check if credits were actually consumed
         # No consumption = nothing to refund
         if not state.get('credits_consumed'):
             logger.info("No credits consumed, nothing to refund")
             return state
 
-        # STEP 4: Verify transaction ID exists
+        # STEP 3: Verify transaction ID exists
         # Should always exist if credits_consumed=True
         # Warning if missing (data inconsistency)
         if not state.get('credits_transaction_id'):
@@ -88,14 +80,14 @@ class ErrorHandlerNode(BaseLangGraphNode):
             )
             return state
 
-        # STEP 5: Check if there are any errors to process
+        # STEP 4: Check if there are any errors to process
         # node_errors format: {'node_name': [{'error_message': '...'}]}
         node_errors = state.get('node_errors', {})
         if not node_errors:
             logger.info("No errors to handle")
             return state
 
-        # STEP 6: Collect all error messages from all failed nodes
+        # STEP 5: Collect all error messages from all failed nodes
         # Combine all errors into a single string for classification
         # Example: "OCR timeout; LLM API rate limit exceeded"
         all_errors = []
@@ -105,7 +97,7 @@ class ErrorHandlerNode(BaseLangGraphNode):
 
         error_messages = ' '.join(all_errors)
 
-        # STEP 7: Classify error type and decide refund eligibility
+        # STEP 6: Classify error type and decide refund eligibility
         # System errors (our fault) → Refund
         # User errors (user's fault) → No refund
         if ErrorClassifier.is_system_error(error_messages):

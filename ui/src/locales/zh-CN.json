@@ -791,9 +791,12 @@
     "batchRetryError": "批量重试触发失败，请重试"
   },
   "billing": {
-    "menuTitle": "订阅与账单",
-    "title": "订阅与账单",
-    "description": "管理您的订阅计划和查看使用情况",
+    "menuTitle": "订阅管理",
+    "title": "订阅管理",
+    "description": "统一管理您的订阅、Credits 和使用情况。",
+    "status": {
+      "stripeMissingHint": "当前尚未配置 Stripe 支付，您仍然可以查看 Credits 和订阅状态，但无法发起充值或订阅变更。"
+    },
     "currentSubscription": {
       "title": "当前订阅",
       "provider": "支付方式",
@@ -807,6 +810,7 @@
       "creditsRemaining": "剩余 {remaining} 积分",
       "noSubscription": "暂无订阅",
       "upgradePrompt": "升级到付费计划以获得更多功能和积分",
+      "freePlanTitle": "免费计划",
       "freePlanDesc": "免费计划 - 升级以获得更多功能"
     },
     "plans": {
@@ -826,6 +830,7 @@
       "downgradeTo": "降级到 {plan}",
       "unavailable": "不可用",
       "notAvailable": "不可用",
+      "rechargeUnavailable": "充值不可用",
       "stripeNotConfigured": "Stripe支付未配置",
       "upgradeFailed": "升级失败，请重试",
       "portalFailed": "无法打开管理页面，请重试",

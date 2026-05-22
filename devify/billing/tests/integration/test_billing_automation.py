@@ -43,6 +43,7 @@ class TestUserRegistrationFreePlan:
         assert subscription.plan == free_plan
         assert subscription.status == 'active'
         assert subscription.auto_renew is True
+        assert subscription.provider.name == 'platform'
 
         credits = UserCredits.objects.get(user=test_user, is_active=True)
         assert credits.base_credits == 10
@@ -147,7 +148,7 @@ class TestCreditRenewal:
         assert credits.period_end > timezone.now()
 
     def test_b3_skip_canceled_subscription(
-        self, test_user, free_plan, payment_provider
+        self, test_user, free_plan, platform_payment_provider
     ):
         """
         B3: Boundary case - canceled subscription should not renew
@@ -155,7 +156,7 @@ class TestCreditRenewal:
         subscription = Subscription.objects.create(
             user=test_user,
             plan=free_plan,
-            provider=payment_provider,
+            provider=platform_payment_provider,
             status='canceled',
             auto_renew=False,
             current_period_start=timezone.now() - timedelta(days=30),
@@ -214,6 +215,7 @@ class TestCreditRenewal:
         credits.refresh_from_db()
         assert credits.consumed_credits == old_consumed
         assert credits.period_end == old_period_end
+        assert credits.subscription.provider.name == 'platform'
 
 
 @pytest.mark.django_db
@@ -252,6 +254,7 @@ class TestAutomaticDowngrade:
             status='active'
         )
         assert new_subscription.plan == free_plan
+        assert new_subscription.provider.name == 'platform'
 
         credits = UserCredits.objects.get(user=past_due_subscription, is_active=True)
         assert credits.subscription == new_subscription
@@ -299,7 +302,7 @@ class TestAutomaticDowngrade:
         assert subscription.auto_renew is True
 
     def test_c3_skip_free_plan_past_due(
-        self, test_user, free_plan, payment_provider
+        self, test_user, free_plan, platform_payment_provider
     ):
         """
         C3: Boundary case - Free plan past_due should not downgrade
@@ -311,7 +314,7 @@ class TestAutomaticDowngrade:
         subscription = Subscription.objects.create(
             user=test_user,
             plan=free_plan,
-            provider=payment_provider,
+            provider=platform_payment_provider,
             status='past_due',
             auto_renew=True,
             current_period_start=timezone.now() - timedelta(days=15),
@@ -389,6 +392,7 @@ class TestAutomaticDowngrade:
             status='active'
         )
         assert new_subscription.plan == free_plan
+        assert new_subscription.provider.name == 'platform'
 
     def test_c5_multiple_past_due_subscriptions(
         self, free_plan, starter_plan, payment_provider

@@ -1,7 +1,6 @@
 from datetime import timedelta
 import logging
 
-from django.conf import settings
 from django.db import transaction
 from django.db.models import F
 from django.utils import timezone
@@ -13,6 +12,7 @@ from billing.models import (
     Plan,
     UserCredits,
 )
+from billing.services.config_service import get_credit_policy
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +36,7 @@ class CreditsService:
             user_id=user_id,
             is_active=True,
             defaults={
-                'base_credits': settings.DEFAULT_FREE_CREDITS,
+                'base_credits': get_credit_policy()['default_free_credits'],
                 'bonus_credits': 0,
                 'consumed_credits': 0,
                 'period_start': timezone.now(),
@@ -47,7 +47,7 @@ class CreditsService:
         if created:
             logger.info(
                 f"Created new credits for user {user_id} with "
-                f"{settings.DEFAULT_FREE_CREDITS} free credits"
+                f"{credits.base_credits} free credits"
             )
 
         return credits
@@ -247,13 +247,14 @@ class CreditsService:
         """
         Grant bonus credits to user
         """
+        CreditsService.get_user_credits(user_id)
         UserCredits.objects.filter(
             user_id=user_id
         ).update(
             bonus_credits=F('bonus_credits') + amount
         )
 
-        CreditsTransaction.objects.create(
+        transaction_record = CreditsTransaction.objects.create(
             user_id=user_id,
             transaction_type='bonus',
             amount=amount,
@@ -265,3 +266,5 @@ class CreditsService:
             f"Granted {amount} bonus credits to user {user_id}: "
             f"{reason}"
         )
+
+        return transaction_record

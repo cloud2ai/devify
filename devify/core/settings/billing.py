@@ -14,64 +14,32 @@ import os
 # Billing System Master Controls
 # ============================
 
-# BILLING_ENABLED: Master switch for the entire billing system
-# - When False: All users can execute workflows freely (development mode)
-# - When True: Billing system is active, subscriptions are enforced
-# - Use Case: Set to False during development/testing to avoid charges
-# - Default: False (safe mode)
-BILLING_ENABLED = os.getenv("BILLING_ENABLED", "false").lower() == "true"
+# BILLING_ENABLED: Deprecated compatibility flag.
+# Billing is always enabled now; startup no longer reads this flag.
+BILLING_ENABLED = False
 
-# CREDITS_CHECK_ENABLED: Controls credits balance checking and consumption
-# - When False: Workflows execute without checking/consuming credits
-# - When True: Each workflow execution checks and consumes credits
-# - Use Case: Can be enabled independently from BILLING_ENABLED for
-#   gradual rollout (e.g., enable tracking first, then enforcement)
-# - Default: False (safe mode)
-# - Note: Only takes effect when BILLING_ENABLED=True
-CREDITS_CHECK_ENABLED = (
-    os.getenv("CREDITS_CHECK_ENABLED", "false").lower() == "true"
-)
+# CREDITS_CHECK_ENABLED: Legacy compatibility flag.
+# Credits are always enforced at runtime.
+CREDITS_CHECK_ENABLED = True
 
 # ============================
 # Stripe API Configuration
 # ============================
-
-# STRIPE_LIVE_SECRET_KEY: Stripe live mode secret API key
-# - Use Case: Production environment with real payments
-# - Security: Never commit this to version control
-# - Format: sk_live_xxxxx
-STRIPE_LIVE_SECRET_KEY = os.getenv("STRIPE_LIVE_SECRET_KEY", "")
-
-# STRIPE_TEST_SECRET_KEY: Stripe test mode secret API key
-# - Use Case: Development/staging with test payments
-# - Security: Safe to use in non-production environments
-# - Format: sk_test_xxxxx
-# - Note: Test mode uses fake card numbers and doesn't charge real money
-STRIPE_TEST_SECRET_KEY = os.getenv("STRIPE_TEST_SECRET_KEY", "")
-
-# STRIPE_LIVE_MODE: Determines which Stripe API key to use
-# - When False: Uses STRIPE_TEST_SECRET_KEY (safe for testing)
-# - When True: Uses STRIPE_LIVE_SECRET_KEY (real payments)
-# - Use Case: Set to True only in production
-# - Default: False (test mode)
-STRIPE_LIVE_MODE = os.getenv("STRIPE_LIVE_MODE", "false").lower() == "true"
-
-# STRIPE_PUBLISHABLE_KEY: Stripe publishable key for frontend integration
-# - Use Case: Client-side Stripe.js integration (future)
-# - Format: pk_test_xxxxx (test) or pk_live_xxxxx (live)
-# - Security: Safe to expose in frontend code
-STRIPE_PUBLISHABLE_KEY = os.getenv("STRIPE_PUBLISHABLE_KEY", "")
+#
+# Stripe configuration is managed at runtime through BillingConfig in the
+# database. These constants are intentionally left empty so environment
+# variables no longer seed or override billing behavior at startup.
+STRIPE_LIVE_SECRET_KEY = ""
+STRIPE_TEST_SECRET_KEY = ""
+STRIPE_LIVE_MODE = False
+STRIPE_PUBLISHABLE_KEY = ""
 
 # ============================
 # dj-stripe Integration Configuration
 # ============================
 
-# DJSTRIPE_WEBHOOK_SECRET: Secret for validating Stripe webhook signatures
-# - Use Case: Ensures webhooks are actually from Stripe
-# - Security: Critical for webhook security, prevents spoofing
-# - Format: whsec_xxxxx
-# - How to get: Stripe Dashboard → Webhooks → Signing secret
-DJSTRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET", "")
+# DJSTRIPE_WEBHOOK_SECRET is managed at runtime through BillingConfig.
+DJSTRIPE_WEBHOOK_SECRET = ""
 
 # DJSTRIPE_FOREIGN_KEY_TO_FIELD: Field used for ForeignKey relationships
 # - Value: "id" (use Stripe object IDs as foreign keys)

@@ -8,9 +8,10 @@ from django.contrib.auth import get_user_model
 from django.utils import timezone
 from datetime import timedelta
 
+pytestmark = pytest.mark.django_db
+
 
 @pytest.fixture
-@pytest.mark.django_db
 def payment_provider():
     """
     Create a Stripe payment provider
@@ -27,7 +28,23 @@ def payment_provider():
 
 
 @pytest.fixture
-@pytest.mark.django_db
+def platform_payment_provider():
+    """
+    Create a platform payment provider
+    """
+    from billing.models import PaymentProvider
+
+    provider, _ = PaymentProvider.objects.get_or_create(
+        name='platform',
+        defaults={
+            'display_name': 'Platform',
+            'is_active': True,
+        }
+    )
+    return provider
+
+
+@pytest.fixture
 def free_plan():
     """
     Create Free plan
@@ -40,6 +57,8 @@ def free_plan():
             'name': 'Free Plan',
             'description': 'Free plan for testing',
             'monthly_price_cents': 0,
+            'status': 'active',
+            'allow_self_purchase': False,
             'metadata': {
                 'credits_per_period': 10,
                 'period_days': 30,
@@ -51,7 +70,6 @@ def free_plan():
 
 
 @pytest.fixture
-@pytest.mark.django_db
 def starter_plan():
     """
     Create Starter plan
@@ -64,6 +82,8 @@ def starter_plan():
             'name': 'Starter Plan',
             'description': 'Starter plan for testing',
             'monthly_price_cents': 999,
+            'status': 'active',
+            'allow_self_purchase': True,
             'metadata': {
                 'credits_per_period': 100,
                 'period_days': 30,
@@ -75,7 +95,6 @@ def starter_plan():
 
 
 @pytest.fixture
-@pytest.mark.django_db
 def test_user():
     """
     Create a test user with unique username and email
@@ -91,8 +110,9 @@ def test_user():
 
 
 @pytest.fixture
-@pytest.mark.django_db
-def test_user_with_free_subscription(test_user, free_plan, payment_provider):
+def test_user_with_free_subscription(
+    test_user, free_plan, platform_payment_provider
+):
     """
     Create a test user with active Free subscription
     """
@@ -101,7 +121,7 @@ def test_user_with_free_subscription(test_user, free_plan, payment_provider):
     subscription = Subscription.objects.create(
         user=test_user,
         plan=free_plan,
-        provider=payment_provider,
+        provider=platform_payment_provider,
         status='active',
         auto_renew=True,
         current_period_start=timezone.now(),
@@ -122,8 +142,9 @@ def test_user_with_free_subscription(test_user, free_plan, payment_provider):
 
 
 @pytest.fixture
-@pytest.mark.django_db
-def test_user_with_starter_subscription(test_user, starter_plan, payment_provider):
+def test_user_with_starter_subscription(
+    test_user, starter_plan, payment_provider
+):
     """
     Create a test user with active Starter subscription
     """
@@ -153,8 +174,9 @@ def test_user_with_starter_subscription(test_user, starter_plan, payment_provide
 
 
 @pytest.fixture
-@pytest.mark.django_db
-def expired_free_subscription(test_user, free_plan, payment_provider):
+def expired_free_subscription(
+    test_user, free_plan, platform_payment_provider
+):
     """
     Create a test user with expired Free subscription
     """
@@ -164,7 +186,7 @@ def expired_free_subscription(test_user, free_plan, payment_provider):
     subscription = Subscription.objects.create(
         user=test_user,
         plan=free_plan,
-        provider=payment_provider,
+        provider=platform_payment_provider,
         status='active',
         auto_renew=True,
         current_period_start=past_time - timedelta(days=30),
@@ -185,7 +207,6 @@ def expired_free_subscription(test_user, free_plan, payment_provider):
 
 
 @pytest.fixture
-@pytest.mark.django_db
 def past_due_subscription(test_user, starter_plan, payment_provider):
     """
     Create a test user with past_due Starter subscription (8 days ago)
@@ -222,7 +243,6 @@ def past_due_subscription(test_user, starter_plan, payment_provider):
 
 
 @pytest.fixture
-@pytest.mark.django_db
 def internal_plan():
     """
     Create Internal plan
@@ -235,7 +255,9 @@ def internal_plan():
             'name': 'Internal Plan',
             'description': 'Internal plan for testing',
             'monthly_price_cents': 0,
+            'status': 'active',
             'is_internal': True,
+            'allow_self_purchase': False,
             'metadata': {
                 'credits_per_period': 10000,
                 'period_days': 30,
@@ -247,8 +269,9 @@ def internal_plan():
 
 
 @pytest.fixture
-@pytest.mark.django_db
-def test_user_with_internal_subscription(test_user, internal_plan, payment_provider):
+def test_user_with_internal_subscription(
+    test_user, internal_plan, platform_payment_provider
+):
     """
     Create a test user with active Internal subscription
     """
@@ -257,7 +280,7 @@ def test_user_with_internal_subscription(test_user, internal_plan, payment_provi
     subscription = Subscription.objects.create(
         user=test_user,
         plan=internal_plan,
-        provider=payment_provider,
+        provider=platform_payment_provider,
         status='active',
         auto_renew=True,
         current_period_start=timezone.now(),

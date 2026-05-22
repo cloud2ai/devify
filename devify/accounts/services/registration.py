@@ -124,9 +124,9 @@ class RegistrationService:
         """
         Initialize Free Plan subscription and credits for new user.
 
-        Creates a Free Plan subscription with initial credits.
-        This runs automatically during registration when billing
-        is enabled.
+        Assigns the baseline Free Plan subscription and credits.
+        This runs automatically during registration and delegates
+        to the billing subscription service for idempotency.
 
         Args:
             user: Django User instance
@@ -135,49 +135,17 @@ class RegistrationService:
             Exception: If billing initialization fails
         """
         # Local import to avoid circular dependency and conditional loading.
-        # Note: Imports billing models locally to avoid import errors
-        # when BILLING_ENABLED=False or billing app not installed.
-        from billing.models import (
-            Plan,
-            Subscription,
-            PaymentProvider
-        )
-        from billing.services.credits_service import CreditsService
+        # Note: Imports billing models locally to avoid circular dependency.
+        from billing.services.subscription_service import SubscriptionService
 
         try:
-            free_plan = Plan.objects.get(slug='free')
-            payment_provider = PaymentProvider.objects.get(name='stripe')
-
-            current_time = timezone.now()
-            period_days = free_plan.metadata.get('period_days', 30)
-            period_end = current_time + timedelta(days=period_days)
-            base_credits = free_plan.metadata.get(
-                'credits_per_period', 10
+            subscription = SubscriptionService.assign_free_plan_to_user(
+                user
             )
-
-            # Create Free Plan subscription
-            subscription = Subscription.objects.create(
-                user=user,
-                plan=free_plan,
-                provider=payment_provider,
-                status='active',
-                current_period_start=current_time,
-                current_period_end=period_end,
-                auto_renew=False
-            )
-
-            # Initialize user credits using CreditsService to
-            # ensure idempotency
-            user_credits = CreditsService.get_user_credits(user.id)
-            user_credits.subscription = subscription
-            user_credits.base_credits = base_credits
-            user_credits.period_start = current_time
-            user_credits.period_end = period_end
-            user_credits.save()
 
             logger.info(
                 f"Initialized Free Plan for user {user.username}: "
-                f"{base_credits} credits, {period_days} days period"
+                f"subscription_id={subscription.id}"
             )
 
         except Exception as e:

@@ -14,6 +14,7 @@ project_root = Path(__file__).resolve().parent.parent.parent.parent
 sys.path.insert(0, str(project_root))
 
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'core.settings')
+os.environ.setdefault('CELERY_TASK_ALWAYS_EAGER', 'true')
 
 django.setup()
 

@@ -1,36 +1,31 @@
 import os
 import uuid
-from pathlib import Path
 
 import stripe
-import yaml
-from django.conf import settings
-from django.core.management import call_command
 from django.core.management.base import BaseCommand
 
 from djstripe.models import APIKey, WebhookEndpoint
 
-from billing.models import Plan, PaymentProvider, PlanPrice
+from billing.models import Plan
+from billing.services.djstripe_service import ensure_djstripe_owner_account
+from billing.services.billing_bootstrap_service import bootstrap_local_billing
+from billing.services.config_service import get_stripe_secret_key, get_billing_config
+from billing.services.stripe_sync_service import StripePlanSyncService
 
 
 class Command(BaseCommand):
     """
-    Initialize Stripe billing system
+    Manually sync billing data to Stripe.
 
-    This command handles:
-    1. Initialize Stripe API keys in database
-    2. Create PaymentProvider (Stripe)
-    3. Create billing Plans (Free, Starter, Standard, Pro)
-    4. Auto-create Stripe Products and Prices (with idempotency)
-    5. Auto-create Stripe Webhook (with idempotency)
-    6. Initialize user credits
+    This command is for repair / bootstrap use only. It does not run from the
+    service entrypoint anymore.
 
     Usage:
         python manage.py init_billing_stripe
         python manage.py init_billing_stripe --skip-webhook
         python manage.py init_billing_stripe --skip-credits
     """
-    help = 'Initialize Stripe billing system with full automation'
+    help = 'Manually sync billing plans to Stripe'
 
     def add_arguments(self, parser):
         parser.add_argument(
@@ -58,30 +53,25 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         self.stdout.write('')
         self.stdout.write('=' * 70)
-        self.stdout.write(
-            self.style.SUCCESS('STRIPE BILLING SYSTEM INITIALIZATION')
-        )
+        self.stdout.write(self.style.SUCCESS('BILLING STRIPE SYNC'))
         self.stdout.write('=' * 70)
         self.stdout.write('')
 
-        stripe.api_key = (
-            settings.STRIPE_LIVE_SECRET_KEY
-            if settings.STRIPE_LIVE_MODE
-            else settings.STRIPE_TEST_SECRET_KEY
-        )
+        stripe_secret_key = get_stripe_secret_key()
+        stripe_enabled = bool(stripe_secret_key)
+        stripe.api_key = stripe_secret_key
 
         self.stdout.write(
-            self.style.WARNING('[1/4] Initializing Local Database...')
+            self.style.WARNING('[1/3] Initializing Local Billing Base...')
         )
         self.stdout.write('')
 
         try:
-            plans_config = self._load_plans_config(
-                options.get('plans_config')
-            )
             self.init_stripe_api_key()
-            self.init_payment_provider()
-            self.init_plans(plans_config)
+            bootstrap_local_billing(
+                config_path=options.get('plans_config'),
+                initialize_credits=not options['skip_credits'],
+            )
             self.stdout.write(
                 self.style.SUCCESS(
                     '✓ Local database initialized successfully'
@@ -99,10 +89,17 @@ class Command(BaseCommand):
         self.stdout.write('-' * 70)
         self.stdout.write('')
 
-        if not options['skip_products']:
+        if not stripe_enabled:
             self.stdout.write(
                 self.style.WARNING(
-                    '[2/4] Creating/Updating Stripe Products & Prices...'
+                    '⊘ Stripe credentials not configured; '
+                    'skipping Stripe product and webhook sync'
+                )
+            )
+        elif not options['skip_products']:
+            self.stdout.write(
+                self.style.WARNING(
+                    '[2/3] Creating/Updating Stripe Products & Prices...'
                 )
             )
             self.stdout.write('')
@@ -128,9 +125,13 @@ class Command(BaseCommand):
         self.stdout.write('-' * 70)
         self.stdout.write('')
 
-        if not options['skip_webhook']:
+        if not stripe_enabled:
             self.stdout.write(
-                self.style.WARNING('[3/4] Configuring Webhook...')
+                self.style.WARNING('⊘ Skipping webhook configuration')
+            )
+        elif not options['skip_webhook']:
+            self.stdout.write(
+                self.style.WARNING('[3/3] Configuring Webhook...')
             )
             self.stdout.write('')
             try:
@@ -151,32 +152,9 @@ class Command(BaseCommand):
         self.stdout.write('-' * 70)
         self.stdout.write('')
 
-        if not options['skip_credits']:
-            self.stdout.write(
-                self.style.WARNING('[4/4] Initializing User Credits...')
-            )
-            self.stdout.write('')
-            try:
-                call_command('init_user_credits')
-                self.stdout.write(
-                    self.style.SUCCESS('✓ User credits initialized')
-                )
-            except Exception as e:
-                self.stdout.write(
-                    self.style.ERROR(
-                        f'✗ Failed to initialize user credits: {e}'
-                    )
-                )
-        else:
-            self.stdout.write(
-                self.style.WARNING('⊘ Skipping user credits initialization')
-            )
-
         self.stdout.write('')
         self.stdout.write('=' * 70)
-        self.stdout.write(
-            self.style.SUCCESS('BILLING SYSTEM INITIALIZATION COMPLETED!')
-        )
+        self.stdout.write(self.style.SUCCESS('BILLING STRIPE SYNC COMPLETED!'))
         self.stdout.write('=' * 70)
         self.stdout.write('')
 
@@ -184,17 +162,14 @@ class Command(BaseCommand):
         """
         Initialize Stripe API Key in database (idempotent)
         """
-        is_live_mode = settings.STRIPE_LIVE_MODE
-        secret_key = (
-            settings.STRIPE_LIVE_SECRET_KEY
-            if is_live_mode
-            else settings.STRIPE_TEST_SECRET_KEY
-        )
+        billing_config = get_billing_config()
+        is_live_mode = billing_config.stripe_live_mode
+        secret_key = get_stripe_secret_key()
         key_name = 'Production API Key' if is_live_mode else 'Test API Key'
 
         if not secret_key:
             self.stdout.write(
-                self.style.ERROR(
+                self.style.WARNING(
                     f'✗ Stripe secret key not configured for '
                     f'{"live" if is_live_mode else "test"} mode'
                 )
@@ -221,289 +196,31 @@ class Command(BaseCommand):
                 self.style.SUCCESS(f'  ✓ Updated Stripe API Key: {key_name}')
             )
 
-    def init_payment_provider(self):
-        """
-        Initialize Stripe payment provider (idempotent)
-        """
-        stripe_provider, created = PaymentProvider.objects.get_or_create(
-            name='stripe',
-            defaults={'display_name': 'Stripe', 'is_active': True}
-        )
-        if created:
-            self.stdout.write(
-                self.style.SUCCESS(
-                    f'  ✓ Created payment provider: {stripe_provider}'
-                )
-            )
-        else:
-            self.stdout.write(
-                self.style.SUCCESS(
-                    f'  ✓ Payment provider exists: {stripe_provider}'
-                )
-            )
-
-    def _load_plans_config(self, config_path=None):
-        """
-        Load plans configuration from YAML file
-        """
-        if config_path:
-            config_file = Path(config_path)
-        else:
-            base_path = Path(settings.BASE_DIR).parent
-            config_file = base_path / 'conf' / 'billing' / 'plans.yaml'
-
-        if not config_file.exists():
-            self.stdout.write(
-                self.style.ERROR(
-                    f'✗ Plans config file not found: {config_file}'
-                )
-            )
-            raise FileNotFoundError(f'Plans config not found: {config_file}')
-
-        with open(config_file, 'r', encoding='utf-8') as f:
-            config = yaml.safe_load(f)
-
-        self.stdout.write(
-            self.style.SUCCESS(
-                f'  ✓ Loaded plans config from: {config_file}'
-            )
-        )
-        return config
-
-    def init_plans(self, plans_config):
-        """
-        Initialize billing plans from configuration (idempotent)
-        """
-        plans = plans_config.get('plans', [])
-
-        for plan_data in plans:
-            # Create a copy to avoid modifying original dict
-            plan_data_copy = plan_data.copy()
-            # Extract metadata separately as it's nested
-            metadata = plan_data_copy.pop('metadata', {})
-            is_internal = plan_data_copy.pop('is_internal', False)
-
-            plan, created = Plan.objects.get_or_create(
-                slug=plan_data_copy['slug'],
-                defaults={
-                    **plan_data_copy,
-                    'metadata': metadata,
-                    'is_internal': is_internal
-                }
-            )
-
-            if not created:
-                # Update existing plan if needed
-                updated = False
-                updated_fields = []
-
-                # Check and update all fields
-                for field_name, field_value in plan_data_copy.items():
-                    if hasattr(plan, field_name):
-                        current_value = getattr(plan, field_name)
-                        if current_value != field_value:
-                            setattr(plan, field_name, field_value)
-                            updated = True
-                            updated_fields.append(field_name)
-
-                # Check metadata
-                if plan.metadata != metadata:
-                    plan.metadata = metadata
-                    updated = True
-                    updated_fields.append('metadata')
-
-                # Check is_internal (important for Internal Plan updates)
-                if plan.is_internal != is_internal:
-                    plan.is_internal = is_internal
-                    updated = True
-                    updated_fields.append('is_internal')
-
-                if updated:
-                    plan.save()
-                    fields_str = ', '.join(updated_fields)
-                    self.stdout.write(
-                        self.style.SUCCESS(
-                            f'  ✓ Updated plan: {plan} (fields: {fields_str})'
-                        )
-                    )
-                else:
-                    self.stdout.write(
-                        self.style.SUCCESS(f'  ✓ Plan exists: {plan}')
-                    )
-            else:
-                self.stdout.write(
-                    self.style.SUCCESS(f'  ✓ Created plan: {plan}')
-                )
+        ensure_djstripe_owner_account(secret_key)
 
     def create_stripe_products(self):
         """
         Create or update Stripe Products and Prices with idempotency.
-
-        Best Practice: One Product with multiple Prices.
-        All subscription plans share a single "aimychats.com Subscription"
-        product, with each plan as a separate price.
         """
-        stripe_provider = PaymentProvider.objects.get(name='stripe')
-        # Exclude free plan and internal plans (they don't need Stripe products)
-        plans = Plan.objects.exclude(
-            slug='free'
-        ).exclude(
-            is_internal=True
+        plans = Plan.objects.filter(
+            status='active',
+            is_internal=False,
+            allow_self_purchase=True,
         ).order_by('monthly_price_cents')
-
-        # Ensure unified product exists
-        product_id = self._ensure_unified_product()
-
-        # Create or update price for each plan
         for plan in plans:
             try:
-                price_id = self._ensure_stripe_price(plan, product_id)
-
-                PlanPrice.objects.update_or_create(
-                    plan=plan,
-                    provider=stripe_provider,
-                    interval='month',
-                    defaults={
-                        'provider_product_id': product_id,
-                        'provider_price_id': price_id,
-                        'currency': 'USD',
-                        'unit_amount_cents': plan.monthly_price_cents,
-                        'is_active': True
-                    }
-                )
-
+                result = StripePlanSyncService.sync_plan(plan)
                 self.stdout.write(
                     self.style.SUCCESS(
-                        f'  ✓ {plan.name}: Price {price_id}'
+                        f'  ✓ {plan.name}: Price {result["provider_price_id"]}'
                     )
                 )
-
             except Exception as e:
                 self.stdout.write(
                     self.style.ERROR(
                         f'  ✗ Failed to create price for {plan.name}: {e}'
                     )
                 )
-
-    def _ensure_unified_product(self):
-        """
-        Ensure unified Stripe Product exists (create or find existing).
-
-        Returns:
-            product_id: Stripe Product ID
-        """
-        # Search for existing unified product
-        search_query = (
-            'metadata["devify_managed"]:"true" AND '
-            'metadata["devify_unified"]:"true"'
-        )
-        search_results = stripe.Product.search(query=search_query)
-
-        if search_results.data:
-            product = search_results.data[0]
-            self.stdout.write(
-                f'  → Found existing unified product: {product.id}'
-            )
-            return product.id
-
-        # Create new unified product
-        product = stripe.Product.create(
-            name='aimychats.com Subscription',
-            description='Devify subscription plans for aimychats.com',
-            metadata={
-                'devify_managed': 'true',
-                'devify_unified': 'true'
-            }
-        )
-        self.stdout.write(
-            self.style.SUCCESS(
-                f'  ✓ Created unified product: {product.id}'
-            )
-        )
-        return product.id
-
-    def _ensure_stripe_price(self, plan, product_id):
-        """
-        Ensure Stripe Price exists for a plan (create or find existing).
-
-        Args:
-            plan: Plan model instance
-            product_id: Stripe Product ID
-
-        Returns:
-            price_id: Stripe Price ID
-        """
-        # Search for existing price by metadata
-        prices = stripe.Price.list(
-            product=product_id,
-            active=True,
-            limit=100
-        )
-
-        # Find price matching this plan
-        matching_price = self._find_matching_price(
-            prices.data,
-            plan.slug
-        )
-
-        if matching_price:
-            # Check if price amount matches
-            if matching_price.unit_amount != plan.monthly_price_cents:
-                # Deactivate old price and create new one
-                stripe.Price.modify(matching_price.id, active=False)
-                self.stdout.write(
-                    f'    → Deactivated old price: {matching_price.id}'
-                )
-            else:
-                self.stdout.write(
-                    f'    → Using existing price: {matching_price.id}'
-                )
-                return matching_price.id
-
-        # Create new price
-        return self._create_stripe_price(plan, product_id)
-
-    def _find_matching_price(self, prices, plan_slug):
-        """
-        Find price matching the plan slug in the prices list.
-
-        Args:
-            prices: List of Stripe Price objects
-            plan_slug: Plan slug to match
-
-        Returns:
-            Matching price object or None
-        """
-        for price in prices:
-            if price.metadata.get('devify_plan_slug') == plan_slug:
-                return price
-        return None
-
-    def _create_stripe_price(self, plan, product_id):
-        """
-        Create a new Stripe Price for the given plan.
-
-        Args:
-            plan: Plan model instance
-            product_id: Stripe Product ID
-
-        Returns:
-            price_id: Stripe Price ID
-        """
-        price = stripe.Price.create(
-            product=product_id,
-            unit_amount=plan.monthly_price_cents,
-            currency='usd',
-            recurring={'interval': 'month'},
-            metadata={
-                'devify_plan_slug': plan.slug,
-                'devify_managed': 'true'
-            }
-        )
-        self.stdout.write(
-            f'    → Created new price: {price.id}'
-        )
-        return price.id
 
     def create_or_update_webhook(self):
         """
@@ -540,6 +257,7 @@ class Command(BaseCommand):
         )
 
         try:
+            billing_config = get_billing_config()
             webhook = stripe.WebhookEndpoint.create(
                 url=webhook_url,
                 enabled_events=[
@@ -562,7 +280,7 @@ class Command(BaseCommand):
                 secret=webhook.secret,
                 enabled_events=webhook.enabled_events,
                 status=webhook.status,
-                livemode=settings.STRIPE_LIVE_MODE,
+                livemode=billing_config.stripe_live_mode,
             )
 
             self.stdout.write(

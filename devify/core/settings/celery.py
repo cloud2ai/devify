@@ -58,6 +58,12 @@ CELERY_RESULT_EXPIRES = 604800
 # Task acknowledgment settings
 CELERY_TASK_ACKS_LATE = True
 
+CELERY_TASK_ALWAYS_EAGER = os.getenv(
+    "CELERY_TASK_ALWAYS_EAGER",
+    "false",
+).lower() in {"1", "true", "yes"}
+CELERY_TASK_EAGER_PROPAGATES = CELERY_TASK_ALWAYS_EAGER
+
 # Prefetch multiplier (configurable based on worker setup)
 CELERY_WORKER_PREFETCH_MULTIPLIER = int(
     os.getenv("CELERY_WORKER_PREFETCH_MULTIPLIER", 4)

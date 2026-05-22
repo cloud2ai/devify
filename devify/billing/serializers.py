@@ -1,12 +1,14 @@
 from rest_framework import serializers
 
 from billing.models import (
+    BillingAuditLog,
     Plan,
     PlanPrice,
     UserCredits,
     Subscription,
     CreditsTransaction,
-    EmailCreditsTransaction
+    EmailCreditsTransaction,
+    PaymentRecord,
 )
 
 
@@ -30,8 +32,10 @@ class PlanSerializer(serializers.ModelSerializer):
             'credits_per_period',
             'period_days',
             'metadata',
+            'status',
             'is_active',
-            'is_internal'
+            'is_internal',
+            'allow_self_purchase',
         ]
 
     def get_credits_per_period(self, obj):
@@ -104,6 +108,10 @@ class SubscriptionSerializer(serializers.ModelSerializer):
         source='provider.display_name',
         read_only=True
     )
+    provider_key = serializers.CharField(
+        source='provider.name',
+        read_only=True
+    )
     username = serializers.CharField(
         source='user.username',
         read_only=True
@@ -122,6 +130,7 @@ class SubscriptionSerializer(serializers.ModelSerializer):
             'plan_is_internal',
             'provider',
             'provider_name',
+            'provider_key',
             'status',
             'current_period_start',
             'current_period_end',
@@ -173,6 +182,47 @@ class CreditsTransactionSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'created_at']
 
 
+class BillingAuditLogSerializer(serializers.ModelSerializer):
+    """
+    Billing audit log serializer
+    """
+
+    actor_username = serializers.CharField(
+        source='actor.username',
+        read_only=True,
+        allow_null=True,
+    )
+    target_user_username = serializers.CharField(
+        source='target_user.username',
+        read_only=True,
+        allow_null=True,
+    )
+
+    class Meta:
+        model = BillingAuditLog
+        fields = [
+            'id',
+            'event_key',
+            'action_type',
+            'source',
+            'actor',
+            'actor_username',
+            'actor_name',
+            'target_user',
+            'target_user_username',
+            'target_username',
+            'resource_type',
+            'resource_id',
+            'ip_address',
+            'user_agent',
+            'before_data',
+            'after_data',
+            'context',
+            'created_at',
+        ]
+        read_only_fields = ['id', 'created_at']
+
+
 class EmailCreditsTransactionSerializer(serializers.ModelSerializer):
     """
     Email credits transaction serializer
@@ -196,3 +246,48 @@ class EmailCreditsTransactionSerializer(serializers.ModelSerializer):
             'created_at'
         ]
         read_only_fields = ['id', 'created_at']
+
+
+class PaymentRecordSerializer(serializers.ModelSerializer):
+    """
+    Payment record serializer
+    """
+
+    username = serializers.CharField(
+        source='user.username',
+        read_only=True
+    )
+    subscription_plan_name = serializers.CharField(
+        source='subscription.plan.name',
+        read_only=True,
+        allow_null=True
+    )
+    provider_name = serializers.CharField(
+        source='provider.display_name',
+        read_only=True
+    )
+    provider_key = serializers.CharField(
+        source='provider.name',
+        read_only=True
+    )
+
+    class Meta:
+        model = PaymentRecord
+        fields = [
+            'id',
+            'user',
+            'username',
+            'subscription',
+            'subscription_plan_name',
+            'provider',
+            'provider_name',
+            'provider_key',
+            'provider_payment_id',
+            'amount_cents',
+            'currency',
+            'status',
+            'metadata',
+            'created_at',
+            'updated_at',
+        ]
+        read_only_fields = ['id', 'created_at', 'updated_at']

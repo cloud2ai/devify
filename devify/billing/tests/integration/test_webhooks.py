@@ -63,17 +63,20 @@ class TestSubscriptionCreatedWebhook:
         mock_sync.assert_called_once_with(djstripe_sub)
 
     @patch('billing.webhooks.SubscriptionService.sync_from_djstripe')
-    def test_subscription_created_auto_links_customer(
+    def test_subscription_created_skips_without_subscriber_even_if_metadata_matches(
         self, mock_sync, test_user
     ):
         """
-        Auto-link Customer to User if subscriber is None
+        Customer without subscriber linkage should not auto-link from metadata.
         """
         djstripe_sub = Mock()
         djstripe_sub.id = 'sub_link_123'
         djstripe_sub.customer = Mock()
         djstripe_sub.customer.subscriber = None
-        djstripe_sub.customer.email = test_user.email
+        djstripe_sub.customer.email = 'wrong@example.com'
+        djstripe_sub.customer.metadata = {
+            'djstripe_subscriber': str(test_user.id),
+        }
         djstripe_sub.customer.save = Mock()
 
         event = Mock()
@@ -89,9 +92,41 @@ class TestSubscriptionCreatedWebhook:
         ):
             handle_subscription_created(None, event=event)
 
-        assert djstripe_sub.customer.subscriber == test_user
-        djstripe_sub.customer.save.assert_called_once()
-        mock_sync.assert_called_once()
+        assert djstripe_sub.customer.subscriber is None
+        djstripe_sub.customer.save.assert_not_called()
+        mock_sync.assert_not_called()
+
+    @patch('billing.webhooks.SubscriptionService.sync_from_djstripe')
+    def test_subscription_created_skips_without_subscriber_even_if_email_matches(
+        self, mock_sync, test_user
+    ):
+        """
+        A Stripe customer without subscriber linkage should not be auto-linked
+        from email alone.
+        """
+        djstripe_sub = Mock()
+        djstripe_sub.id = 'sub_link_124'
+        djstripe_sub.customer = Mock()
+        djstripe_sub.customer.subscriber = None
+        djstripe_sub.customer.email = test_user.email
+        djstripe_sub.customer.metadata = {}
+        djstripe_sub.customer.save = Mock()
+
+        event = Mock()
+        event.data = {
+            'object': {
+                'id': 'sub_link_124'
+            }
+        }
+
+        with patch(
+            'billing.webhooks.DjstripeSubscription.objects.get',
+            return_value=djstripe_sub
+        ):
+            handle_subscription_created(None, event=event)
+
+        djstripe_sub.customer.save.assert_not_called()
+        mock_sync.assert_not_called()
 
 
 @pytest.mark.django_db
@@ -111,7 +146,9 @@ class TestSubscriptionUpdatedWebhook:
         djstripe_sub.id = 'sub_updated_123'
         djstripe_sub.customer = Mock()
         djstripe_sub.customer.subscriber = test_user
-        djstripe_sub.customer.email = test_user.email
+        djstripe_sub.customer.metadata = {
+            'djstripe_subscriber': str(test_user.id),
+        }
 
         event = Mock()
         event.data = {
@@ -160,12 +197,16 @@ class TestPaymentSucceededWebhook:
     Test invoice.payment_succeeded webhook
     """
 
+    @patch('billing.webhooks.SubscriptionService.handle_payment_success')
+    @patch('billing.webhooks.upsert_payment_record_from_stripe_invoice')
     @patch('billing.webhooks.send_payment_success_notification.delay')
     @patch('billing.webhooks.Subscription.objects.filter')
     @patch('billing.webhooks.DjstripeSubscription.objects.filter')
     def test_payment_succeeded_recovers_past_due_subscription(
         self, mock_djstripe_filter, mock_subscription_filter,
-        mock_send_email, test_user, starter_plan, payment_provider
+        mock_send_email, mock_upsert_payment_record,
+        mock_handle_payment_success,
+        test_user, starter_plan, payment_provider
     ):
         """
         Payment success recovers past_due subscription to active
@@ -195,6 +236,12 @@ class TestPaymentSucceededWebhook:
 
         mock_djstripe_filter.return_value.first.return_value = djstripe_sub
         mock_subscription_filter.return_value.first.return_value = subscription
+        mock_upsert_payment_record.return_value = Mock(
+            skipped=False,
+            created=True,
+            updated=False,
+            reason='',
+        )
 
         handle_payment_succeeded(None, event=event)
 
@@ -205,13 +252,17 @@ class TestPaymentSucceededWebhook:
             user_id=test_user.id,
             amount=29.99
         )
+        mock_handle_payment_success.assert_called_once_with('sub_payment_success')
+        mock_upsert_payment_record.assert_called_once()
 
+    @patch('billing.webhooks.upsert_payment_record_from_stripe_invoice')
     @patch('billing.webhooks.send_payment_success_notification.delay')
     @patch('billing.webhooks.Subscription.objects.filter')
     @patch('billing.webhooks.DjstripeSubscription.objects.filter')
     def test_payment_succeeded_active_subscription_no_change(
         self, mock_djstripe_filter, mock_subscription_filter,
-        mock_send_email, test_user, starter_plan, payment_provider
+        mock_send_email, mock_upsert_payment_record,
+        test_user, starter_plan, payment_provider
     ):
         """
         Payment success for active subscription does not send email
@@ -231,10 +282,17 @@ class TestPaymentSucceededWebhook:
 
         mock_djstripe_filter.return_value.first.return_value = djstripe_sub
         mock_subscription_filter.return_value.first.return_value = None
+        mock_upsert_payment_record.return_value = Mock(
+            skipped=False,
+            created=True,
+            updated=False,
+            reason='',
+        )
 
         handle_payment_succeeded(None, event=event)
 
         mock_send_email.assert_not_called()
+        mock_upsert_payment_record.assert_called_once()
 
 
 @pytest.mark.django_db
@@ -243,12 +301,14 @@ class TestPaymentFailedWebhook:
     Test invoice.payment_failed webhook
     """
 
+    @patch('billing.webhooks.upsert_payment_record_from_stripe_invoice')
     @patch('billing.webhooks.send_payment_failure_notification.delay')
     @patch('billing.webhooks.Subscription.objects.filter')
     @patch('billing.webhooks.DjstripeSubscription.objects.filter')
     def test_payment_failed_sets_past_due_status(
         self, mock_djstripe_filter, mock_subscription_filter,
-        mock_send_email, test_user, starter_plan, payment_provider
+        mock_send_email, mock_upsert_payment_record,
+        test_user, starter_plan, payment_provider
     ):
         """
         Payment failure sets subscription to past_due
@@ -281,6 +341,12 @@ class TestPaymentFailedWebhook:
 
         mock_djstripe_filter.return_value.first.return_value = djstripe_sub
         mock_subscription_filter.return_value.first.return_value = subscription
+        mock_upsert_payment_record.return_value = Mock(
+            skipped=False,
+            created=True,
+            updated=False,
+            reason='',
+        )
 
         handle_payment_failed(None, event=event)
 
@@ -292,13 +358,16 @@ class TestPaymentFailedWebhook:
             attempt_count=2,
             failure_reason='Card declined'
         )
+        mock_upsert_payment_record.assert_called_once()
 
+    @patch('billing.webhooks.upsert_payment_record_from_stripe_invoice')
     @patch('billing.webhooks.send_payment_failure_notification.delay')
     @patch('billing.webhooks.Subscription.objects.filter')
     @patch('billing.webhooks.DjstripeSubscription.objects.filter')
     def test_payment_failed_past_due_subscription_no_duplicate_email(
         self, mock_djstripe_filter, mock_subscription_filter,
-        mock_send_email, test_user, starter_plan, payment_provider
+        mock_send_email, mock_upsert_payment_record,
+        test_user, starter_plan, payment_provider
     ):
         """
         Payment failure for already past_due subscription
@@ -321,7 +390,14 @@ class TestPaymentFailedWebhook:
 
         mock_djstripe_filter.return_value.first.return_value = djstripe_sub
         mock_subscription_filter.return_value.first.return_value = None
+        mock_upsert_payment_record.return_value = Mock(
+            skipped=False,
+            created=True,
+            updated=False,
+            reason='',
+        )
 
         handle_payment_failed(None, event=event)
 
         mock_send_email.assert_not_called()
+        mock_upsert_payment_record.assert_called_once()

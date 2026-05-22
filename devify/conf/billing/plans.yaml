@@ -6,6 +6,8 @@ plans:
     slug: free
     description: Free plan for testing
     monthly_price_cents: 0
+    status: active
+    allow_self_purchase: false
     metadata:
       credits_per_period: 10
       period_days: 30
@@ -19,6 +21,8 @@ plans:
     slug: starter
     description: Perfect for getting started
     monthly_price_cents: 499
+    status: active
+    allow_self_purchase: true
     metadata:
       credits_per_period: 100
       period_days: 30
@@ -32,6 +36,8 @@ plans:
     slug: standard
     description: Ideal for regular users
     monthly_price_cents: 990
+    status: active
+    allow_self_purchase: true
     metadata:
       credits_per_period: 500
       period_days: 30
@@ -45,6 +51,8 @@ plans:
     slug: pro
     description: Designed for professional users
     monthly_price_cents: 2999
+    status: active
+    allow_self_purchase: true
     metadata:
       credits_per_period: 2000
       period_days: 30
@@ -58,7 +66,9 @@ plans:
     slug: internal
     description: Internal plan for staff and partners
     monthly_price_cents: 0
+    status: active
     is_internal: true
+    allow_self_purchase: false
     metadata:
       credits_per_period: 10000
       period_days: 30

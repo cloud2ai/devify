@@ -17,3 +17,21 @@ def register_periodic_tasks():
         task="billing.tasks.downgrade_failed_paid_subscriptions",
         schedule=crontab(hour=5, minute=0),
     )
+    TASK_REGISTRY.add(
+        name="billing-payment-check",
+        task="billing.tasks.payment_check",
+        schedule=crontab(hour="*", minute=0),
+        kwargs={
+            "mode": "auto_fix_safe",
+        },
+        enabled=False,
+    )
+    TASK_REGISTRY.add(
+        name="billing-payment-record-backfill",
+        task="billing.tasks.payment_record_backfill",
+        schedule=crontab(hour=3, minute=0),
+        kwargs={
+            "source": "scheduled_task",
+        },
+        enabled=False,
+    )

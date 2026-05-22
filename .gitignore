@@ -218,6 +218,11 @@ output
 # Patch files
 .patch
 
+# Test artifacts
+test-results/
+test_report.html
+tests/reports/
+
 # Docker compose data
 docker/data
 docker/logs

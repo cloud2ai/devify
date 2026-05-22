@@ -2,11 +2,20 @@ from django.db import models
 from django.contrib.auth.models import User
 from django.utils import timezone
 
+from billing.fields import EncryptedTextField
+
 
 class Plan(models.Model):
     """
     Subscription plan definition
     """
+    STATUS_DRAFT = 'draft'
+    STATUS_ACTIVE = 'active'
+    STATUS_CHOICES = [
+        (STATUS_DRAFT, 'Draft'),
+        (STATUS_ACTIVE, 'Active'),
+    ]
+
     name = models.CharField(max_length=100)
     slug = models.SlugField(unique=True)
     description = models.TextField()
@@ -21,10 +30,21 @@ class Plan(models.Model):
             "max_attachment_count, storage_quota_mb"
         )
     )
+    status = models.CharField(
+        max_length=16,
+        choices=STATUS_CHOICES,
+        blank=True,
+        default=STATUS_DRAFT,
+        help_text='Plan lifecycle status: draft or active',
+    )
     is_active = models.BooleanField(default=True)
     is_internal = models.BooleanField(
         default=False,
         help_text="Internal plan for staff/partners, not visible to public"
+    )
+    allow_self_purchase = models.BooleanField(
+        default=False,
+        help_text='Whether users can purchase this plan directly',
     )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -37,6 +57,13 @@ class Plan(models.Model):
 
     def __str__(self):
         return f"{self.name} (${self.monthly_price_cents / 100:.2f}/mo)"
+
+    def save(self, *args, **kwargs):
+        if not self.status:
+            self.status = (
+                self.STATUS_ACTIVE if self.is_active else self.STATUS_DRAFT
+            )
+        super().save(*args, **kwargs)
 
 
 class UserCredits(models.Model):
@@ -167,6 +194,90 @@ class CreditsTransaction(models.Model):
         )
 
 
+class BillingAuditLog(models.Model):
+    """
+    Central audit log for billing-related write operations.
+
+    This model stores the who/what/when/where of billing mutations and keeps
+    flexible before/after/context payloads in JSON for future expansion.
+    """
+
+    actor = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='billing_audit_logs_as_actor',
+    )
+    actor_name = models.CharField(
+        max_length=150,
+        blank=True,
+        default='',
+        help_text='Snapshot of the operator name at write time',
+    )
+    target_user = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='billing_audit_logs',
+    )
+    target_username = models.CharField(
+        max_length=150,
+        blank=True,
+        default='',
+        help_text='Snapshot of the target user name at write time',
+    )
+    action_type = models.CharField(max_length=64, db_index=True)
+    source = models.CharField(
+        max_length=32,
+        default='system',
+        db_index=True,
+    )
+    resource_type = models.CharField(
+        max_length=64,
+        blank=True,
+        default='',
+        db_index=True,
+    )
+    resource_id = models.CharField(
+        max_length=64,
+        blank=True,
+        default='',
+        db_index=True,
+    )
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    user_agent = models.TextField(blank=True, default='')
+    before_data = models.JSONField(default=dict)
+    after_data = models.JSONField(default=dict)
+    context = models.JSONField(default=dict)
+    event_key = models.CharField(
+        max_length=255,
+        unique=True,
+        db_index=True,
+        help_text='Idempotency key for audit write retries',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'billing_audit_log'
+        verbose_name = 'Billing Audit Log'
+        verbose_name_plural = 'Billing Audit Logs'
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['action_type', 'created_at']),
+            models.Index(fields=['source', 'created_at']),
+            models.Index(fields=['target_user', 'created_at']),
+        ]
+
+    def __str__(self):
+        return (
+            f"{self.action_type} "
+            f"actor={self.actor_name or self.actor_id or '-'} "
+            f"target={self.target_username or self.target_user_id or '-'}"
+        )
+
+
 class EmailCreditsTransaction(models.Model):
     """
     Credits transaction specifically for Email Workflow execution
@@ -228,12 +339,17 @@ class EmailCreditsTransaction(models.Model):
 
 class PaymentProvider(models.Model):
     """
-    Payment provider definition (Stripe, Alipay, WeChat, etc.)
+    Payment provider definition for billing flows.
+
+    Examples:
+    - platform: admin-granted or internal billing source
+    - stripe: card-based payment provider
+    - alipay / wechat: future external payment providers
     """
     name = models.CharField(
         max_length=50,
         unique=True,
-        help_text="e.g., 'stripe', 'alipay', 'wechat'"
+        help_text="e.g., 'platform', 'stripe', 'alipay', 'wechat'"
     )
     display_name = models.CharField(max_length=100)
     is_active = models.BooleanField(default=True)
@@ -247,6 +363,44 @@ class PaymentProvider(models.Model):
 
     def __str__(self):
         return self.display_name
+
+
+class BillingConfig(models.Model):
+    """
+    Singleton billing configuration for admin control plane.
+    """
+
+    singleton_key = models.CharField(
+        max_length=32,
+        unique=True,
+        default='default',
+    )
+    stripe_live_mode = models.BooleanField(default=False)
+    stripe_publishable_key = models.CharField(max_length=255, blank=True)
+    stripe_live_secret_key = EncryptedTextField(blank=True, default='')
+    stripe_test_secret_key = EncryptedTextField(blank=True, default='')
+    stripe_webhook_secret = EncryptedTextField(blank=True, default='')
+    payment_callback_url = models.CharField(max_length=255, blank=True, default='')
+    self_purchase_enabled = models.BooleanField(default=False)
+    payment_check_enabled = models.BooleanField(default=False)
+    payment_check_providers = models.JSONField(default=list, blank=True)
+    payment_check_schedule = models.CharField(max_length=255, blank=True, default='')
+    payment_record_backfill = models.JSONField(default=dict, blank=True)
+    enabled_providers = models.JSONField(default=list, blank=True)
+    default_free_credits = models.IntegerField(default=10)
+    workflow_cost_credits = models.IntegerField(default=1)
+    auto_refund_system_errors = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'billing_config'
+        verbose_name = 'Billing Config'
+        verbose_name_plural = 'Billing Config'
+        ordering = ['-updated_at']
+
+    def __str__(self):
+        return 'Billing Config'
 
 
 class PlanPrice(models.Model):

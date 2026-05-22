@@ -87,13 +87,18 @@
                 />
               </svg>
             </div>
-          </div>
+              </div>
 
           <!-- Chat info -->
           <div class="flex-1 min-w-0">
             <div class="flex items-center gap-2 mb-1">
               <p class="text-sm font-medium text-gray-900 truncate">
-                {{ item.subject || t('billing.creditUsage.noSubject') }}
+                {{
+                  item.display_title ||
+                  item.summary_title ||
+                  item.subject ||
+                  t('billing.creditUsage.noSubject')
+                }}
               </p>
               <!-- Status badge -->
               <StatusBadge v-if="item.status" :status="item.status" />

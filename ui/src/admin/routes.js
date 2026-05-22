@@ -53,6 +53,38 @@ export const adminRoutes = [
     meta: { requiresAuth: true, requiresAdmin: true }
   },
   {
+    path: '/management/billing',
+    redirect: '/management/billing/users'
+  },
+  {
+    path: '/management/billing/users',
+    name: 'BillingUsers',
+    component: () => import('@/admin/pages/Billing/Index.vue'),
+    meta: { requiresAuth: true, requiresAdmin: true }
+  },
+  {
+    path: '/management/billing/plans',
+    name: 'BillingPlans',
+    component: () => import('@/admin/pages/Billing/Plans.vue'),
+    meta: { requiresAuth: true, requiresAdmin: true }
+  },
+  {
+    path: '/management/billing/overview',
+    redirect: '/management/billing/users'
+  },
+  {
+    path: '/management/billing/settings',
+    name: 'BillingSettings',
+    component: () => import('@/admin/pages/Billing/Settings.vue'),
+    meta: { requiresAuth: true, requiresAdmin: true }
+  },
+  {
+    path: '/management/billing/audit-logs',
+    name: 'BillingAuditLogs',
+    component: () => import('@/admin/pages/Billing/AuditLogs.vue'),
+    meta: { requiresAuth: true, requiresAdmin: true }
+  },
+  {
     path: '/management/data-management',
     redirect: '/management/data-management/conversations'
   },

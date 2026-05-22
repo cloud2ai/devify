@@ -2,11 +2,10 @@ import logging
 from datetime import datetime, timedelta
 
 import stripe
-from django.conf import settings
 from django.contrib.auth.models import User
 from django.db import transaction
 from django.utils import timezone
-from djstripe.models import Customer
+from djstripe.models import Customer, Subscription as DjstripeSubscription
 
 from billing.models import (
     PaymentProvider,
@@ -15,9 +14,20 @@ from billing.models import (
     Subscription,
     UserCredits,
 )
+from billing.constants import (
+    PAYMENT_PROVIDER_NAMES,
+    get_payment_provider_display_name,
+    normalize_payment_provider_name,
+)
+from billing.services.djstripe_service import ensure_djstripe_owner_account
+from billing.services.config_service import get_stripe_secret_key
+from billing.services.customer_identity import resolve_customer_for_user
 from billing.services.credits_service import CreditsService
+from billing.services.stripe_compat import StripePlanMappingError, stripe_value
 
 logger = logging.getLogger(__name__)
+
+SUPPORTED_PAYMENT_PROVIDER_NAMES = set(PAYMENT_PROVIDER_NAMES.values())
 
 
 class SubscriptionService:
@@ -33,6 +43,26 @@ class SubscriptionService:
     All payment operations are handled through Stripe API.
     """
 
+    _stripe_value = staticmethod(stripe_value)
+
+    @staticmethod
+    def get_or_create_payment_provider(provider_name: str):
+        provider_name = normalize_payment_provider_name(provider_name)
+        if provider_name not in SUPPORTED_PAYMENT_PROVIDER_NAMES:
+            raise PaymentProvider.DoesNotExist(
+                f'Unsupported payment provider: {provider_name}'
+            )
+        payment_provider, _ = PaymentProvider.objects.get_or_create(
+            name=provider_name,
+            defaults={
+                'display_name': get_payment_provider_display_name(
+                    provider_name
+                ),
+                'is_active': True,
+            },
+        )
+        return payment_provider
+
     @staticmethod
     @transaction.atomic
     def assign_free_plan_to_user(user):
@@ -40,8 +70,8 @@ class SubscriptionService:
         Assign Free plan to a user
 
         Creates a Free plan subscription with initial credits.
-        This is typically called during user registration when
-        BILLING_ENABLED=True.
+        This is typically called during user registration as part of the
+        default credits bootstrap flow.
 
         Args:
             user: Django User instance
@@ -51,54 +81,97 @@ class SubscriptionService:
 
         Raises:
             BillingPlan.DoesNotExist: If Free plan not found
-            PaymentProvider.DoesNotExist: If Stripe provider not found
+            PaymentProvider.DoesNotExist: If platform provider not found
         """
-        # Check if user already has a subscription
-        existing_subscription = Subscription.objects.filter(
-            user=user
-        ).first()
-        if existing_subscription:
-            logger.warning(
-                f"User {user.id} already has subscription, "
-                f"skipping Free plan assignment"
-            )
-            return existing_subscription
-
-        # Get Free plan and payment provider
         free_plan = Plan.objects.get(slug='free')
-        payment_provider = PaymentProvider.objects.get(name='stripe')
+        return SubscriptionService.switch_plan_for_user(user, free_plan)
 
-        current_time = timezone.now()
-        period_days = free_plan.metadata.get('period_days', 30)
-        period_end = current_time + timedelta(days=period_days)
-        base_credits = free_plan.metadata.get('credits_per_period', 10)
+    @staticmethod
+    @transaction.atomic
+    def switch_plan_for_user(
+        user,
+        plan: Plan,
+        provider_name: str = 'platform',
+    ):
+        """
+        Assign or switch a user to a specific plan.
 
-        # Create Free plan subscription
-        subscription = Subscription.objects.create(
-            user=user,
-            plan=free_plan,
-            provider=payment_provider,
-            status='active',
-            current_period_start=current_time,
-            current_period_end=period_end,
-            auto_renew=True
+        If the user already has an active subscription on the target plan,
+        the subscription is kept and the credits are normalized to the plan.
+        If the user has a different active subscription, the old one is
+        canceled and a new one is created.
+        """
+        payment_provider = SubscriptionService.get_or_create_payment_provider(
+            provider_name
         )
 
-        # Initialize user credits
-        # Use CreditsService to ensure idempotency
+        current_time = timezone.now()
+        period_days = plan.metadata.get('period_days', 30)
+        period_end = current_time + timedelta(days=period_days)
+        base_credits = plan.metadata.get('credits_per_period', 10)
+
+        active_subscriptions = list(
+            Subscription.objects.select_for_update().filter(
+                user=user,
+                status__in=['active', 'past_due', 'trialing'],
+            ).select_related('plan', 'provider').order_by('-created_at')
+        )
+        existing_subscription = (
+            active_subscriptions[0] if active_subscriptions else None
+        )
+        for duplicate_subscription in active_subscriptions[1:]:
+            duplicate_subscription.status = 'canceled'
+            duplicate_subscription.auto_renew = False
+            duplicate_subscription.save(update_fields=['status', 'auto_renew'])
+
+        can_reuse_subscription = (
+            existing_subscription is not None
+            and existing_subscription.plan_id == plan.id
+            and existing_subscription.provider_id == payment_provider.id
+            and existing_subscription.status == 'active'
+        )
+        if can_reuse_subscription:
+            target_subscription = existing_subscription
+        else:
+            if existing_subscription:
+                existing_subscription.status = 'canceled'
+                existing_subscription.auto_renew = False
+                existing_subscription.save(
+                    update_fields=['status', 'auto_renew']
+                )
+
+            target_subscription = Subscription.objects.create(
+                user=user,
+                plan=plan,
+                provider=payment_provider,
+                status='active',
+                current_period_start=current_time,
+                current_period_end=period_end,
+                auto_renew=True,
+            )
+
         user_credits = CreditsService.get_user_credits(user.id)
-        user_credits.subscription = subscription
+        user_credits.subscription = target_subscription
         user_credits.base_credits = base_credits
-        user_credits.period_start = current_time
-        user_credits.period_end = period_end
+        user_credits.consumed_credits = 0
+        user_credits.period_start = (
+            target_subscription.current_period_start
+            if target_subscription
+            else current_time
+        )
+        user_credits.period_end = (
+            target_subscription.current_period_end
+            if target_subscription
+            else period_end
+        )
         user_credits.save()
 
         logger.info(
-            f"Assigned Free plan to user {user.id}: "
+            f"Assigned plan {plan.slug} to user {user.id}: "
             f"{base_credits} credits, {period_days} days period"
         )
 
-        return subscription
+        return target_subscription
 
     @staticmethod
     def get_active_subscription(user_id: int):
@@ -142,7 +215,25 @@ class SubscriptionService:
         """
         user = User.objects.get(id=user_id)
         plan = Plan.objects.get(id=plan_id)
-        payment_provider = PaymentProvider.objects.get(name=provider)
+        payment_provider = SubscriptionService.get_or_create_payment_provider(
+            provider
+        )
+
+        active_subscriptions = list(
+            Subscription.objects.select_for_update().filter(
+                user=user,
+                status__in=['active', 'past_due', 'trialing'],
+            ).select_related('plan')
+        )
+        if active_subscriptions:
+            logger.info(
+                f"Canceling {len(active_subscriptions)} existing "
+                f"subscriptions for user {user_id} before creating a new one"
+            )
+        for existing_subscription in active_subscriptions:
+            existing_subscription.status = 'canceled'
+            existing_subscription.auto_renew = False
+            existing_subscription.save(update_fields=['status', 'auto_renew'])
 
         current_time = timezone.now()
         period_days = plan.metadata.get('period_days', 30)
@@ -214,15 +305,11 @@ class SubscriptionService:
                 plan = plan_price.plan
                 provider = plan_price.provider
 
-        # Fallback to free plan if no matching plan found
         if not plan:
-            plan = Plan.objects.get(slug='free')
-            provider = PaymentProvider.objects.filter(
-                name='stripe'
-            ).first()
+            raise StripePlanMappingError(price_id=price_id)
 
         # Get period dates from subscription items or billing cycle
-        stripe.api_key = settings.STRIPE_TEST_SECRET_KEY
+        stripe.api_key = get_stripe_secret_key()
         stripe_sub = stripe.Subscription.retrieve(
             djstripe_subscription.id
         )
@@ -230,14 +317,19 @@ class SubscriptionService:
         # Try to get period from subscription items
         period_start = None
         period_end = None
-        if stripe_sub.get('items') and stripe_sub['items']['data']:
-            first_item = stripe_sub['items']['data'][0]
-            period_start = first_item.get('current_period_start')
-            period_end = first_item.get('current_period_end')
+        items = stripe_value(stripe_sub, 'items')
+        item_data = stripe_value(items, 'data', []) or []
+        if item_data:
+            first_item = item_data[0]
+            period_start = stripe_value(
+                first_item,
+                'current_period_start',
+            )
+            period_end = stripe_value(first_item, 'current_period_end')
 
         # Fallback to billing cycle anchor if not found
         if not period_start:
-            period_start = stripe_sub.get('billing_cycle_anchor')
+            period_start = stripe_value(stripe_sub, 'billing_cycle_anchor')
 
             # Calculate period end (30 days for monthly)
             if period_start:
@@ -254,6 +346,8 @@ class SubscriptionService:
             period_start_dt = timezone.now()
             period_end_dt = period_start_dt + timedelta(days=30)
 
+        # NOTE: Stripe cancellation state is expressed by cancel_at_period_end /
+        # cancel_at. Do not infer auto_renew from status alone.
         will_cancel = (
             djstripe_subscription.cancel_at_period_end or
             djstripe_subscription.cancel_at is not None
@@ -305,6 +399,128 @@ class SubscriptionService:
 
     @staticmethod
     @transaction.atomic
+    def sync_from_stripe_subscription(stripe_subscription):
+        """
+        Sync a Stripe subscription object to the local database.
+
+        NOTE: This is the shared entry point for both manual admin sync and
+        Payment Check repairs. Keep all Stripe -> dj-stripe -> local conversion
+        logic here so both paths stay identical.
+        """
+        stripe.api_key = get_stripe_secret_key()
+        if not stripe.api_key:
+            raise ValueError('Stripe secret key is not configured')
+
+        ensure_djstripe_owner_account(stripe.api_key)
+        djstripe_subscription = DjstripeSubscription.sync_from_stripe_data(
+            stripe_subscription,
+            api_key=stripe.api_key,
+        )
+        return SubscriptionService.sync_from_djstripe(djstripe_subscription)
+
+    @staticmethod
+    def _pick_recoverable_stripe_subscription(stripe_subscriptions):
+        if not stripe_subscriptions:
+            return None
+
+        preferred_statuses = [
+            'active',
+            'trialing',
+            'past_due',
+            'incomplete',
+            'unpaid',
+        ]
+        for status in preferred_statuses:
+            candidates = [
+                subscription
+                for subscription in stripe_subscriptions
+                if SubscriptionService._stripe_value(
+                    subscription,
+                    'status',
+                ) == status
+            ]
+            if candidates:
+                return max(
+                    candidates,
+                    key=lambda subscription: SubscriptionService._stripe_value(
+                        subscription,
+                        'created',
+                        0,
+                    ) or 0,
+                )
+
+        non_terminal = [
+            subscription
+            for subscription in stripe_subscriptions
+            if SubscriptionService._stripe_value(
+                subscription,
+                'status',
+            ) not in {'canceled', 'incomplete_expired'}
+        ]
+        if non_terminal:
+            return max(
+                non_terminal,
+                key=lambda subscription: SubscriptionService._stripe_value(
+                    subscription,
+                    'created',
+                    0,
+                ) or 0,
+            )
+        return None
+
+    @staticmethod
+    @transaction.atomic
+    def sync_user_subscription_from_stripe(user: User):
+        """
+        Recover local subscription state from the current Stripe state.
+
+        This is intended for manual admin recovery when a webhook failed after
+        a successful Stripe checkout/payment.
+        """
+        stripe.api_key = get_stripe_secret_key()
+        if not stripe.api_key:
+            raise ValueError('Stripe secret key is not configured')
+
+        customer = resolve_customer_for_user(user)
+
+        if not customer:
+            raise ValueError('No Stripe customer found for this user')
+
+        stripe_subscriptions = stripe.Subscription.list(
+            customer=customer.id,
+            status='all',
+            limit=20,
+        )
+        stripe_subscription_items = list(getattr(stripe_subscriptions, 'data', []) or [])
+        stripe_subscription = (
+            SubscriptionService._pick_recoverable_stripe_subscription(
+                stripe_subscription_items
+            )
+            or (
+                max(
+                    stripe_subscription_items,
+                    key=lambda subscription: SubscriptionService._stripe_value(
+                        subscription,
+                        'created',
+                        0,
+                    )
+                    or 0,
+                )
+                if stripe_subscription_items
+                else None
+            )
+        )
+        if not stripe_subscription:
+            raise ValueError('No Stripe subscription found for this user')
+
+        # NOTE: Reuse the shared Stripe sync entry point so manual sync and
+        # Payment Check use the exact same conversion path.
+        return SubscriptionService.sync_from_stripe_subscription(
+            stripe_subscription
+        )
+
+    @staticmethod
+    @transaction.atomic
     def cancel_subscription(subscription_id: int):
         """
         Cancel subscription at period end
@@ -324,11 +540,7 @@ class SubscriptionService:
         subscription = Subscription.objects.get(id=subscription_id)
 
         if subscription.djstripe_subscription:
-            stripe.api_key = (
-                settings.STRIPE_LIVE_SECRET_KEY
-                if settings.STRIPE_LIVE_MODE
-                else settings.STRIPE_TEST_SECRET_KEY
-            )
+            stripe.api_key = get_stripe_secret_key()
 
             stripe.Subscription.modify(
                 subscription.djstripe_subscription.id,
@@ -365,11 +577,7 @@ class SubscriptionService:
         subscription = Subscription.objects.get(id=subscription_id)
 
         if subscription.djstripe_subscription:
-            stripe.api_key = (
-                settings.STRIPE_LIVE_SECRET_KEY
-                if settings.STRIPE_LIVE_MODE
-                else settings.STRIPE_TEST_SECRET_KEY
-            )
+            stripe.api_key = get_stripe_secret_key()
 
             stripe.Subscription.modify(
                 subscription.djstripe_subscription.id,
@@ -431,9 +639,9 @@ class SubscriptionService:
         try:
             customer = Customer.objects.get(id=customer_id)
             subscriptions = Subscription.objects.filter(
-                djstripe_customer__id=customer_id,
+                user_credits__djstripe_customer=customer,
                 status='active'
-            )
+            ).distinct()
 
             for subscription in subscriptions:
                 CreditsService.reset_period_credits(
@@ -447,5 +655,7 @@ class SubscriptionService:
         except Exception as e:
             logger.error(
                 f"Error handling payment success for "
-                f"{customer_id}: {e}"
+                f"{customer_id}: {e}",
+                exc_info=True,
             )
+            raise

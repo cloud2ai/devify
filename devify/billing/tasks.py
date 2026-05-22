@@ -5,6 +5,7 @@ Tasks for automatic credit renewal and subscription management.
 """
 
 import logging
+from uuid import uuid4
 
 from celery import shared_task
 from django.conf import settings
@@ -14,11 +15,67 @@ from django.template.loader import render_to_string
 from django.utils import timezone
 from django.utils import translation
 
-from .models import Subscription, UserCredits
+from .models import BillingAuditLog, Subscription, UserCredits
+from .serializers import SubscriptionSerializer
+from .services.audit_service import queue_billing_audit_event
 from .services.credits_service import CreditsService
+from .services.payment_record_service import backfill_payment_records
+from .services.payment_check.service import PaymentCheckService
 from threadline.utils.task_tracer import TaskTracer
 
 logger = logging.getLogger(__name__)
+
+
+@shared_task(name='billing.tasks.record_billing_audit_event')
+def record_billing_audit_event(payload: dict):
+    """
+    Persist a billing audit event.
+
+    This task is intentionally idempotent via event_key so retries or repeated
+    enqueue attempts do not create duplicate records.
+    """
+    event_key = payload.get('event_key') or str(uuid4())
+    defaults = {
+        'action_type': payload.get('action_type', ''),
+        'source': payload.get('source', 'system'),
+        'actor_name': payload.get('actor_name', ''),
+        'target_username': payload.get('target_username', ''),
+        'resource_type': payload.get('resource_type', ''),
+        'resource_id': str(payload.get('resource_id') or ''),
+        'ip_address': payload.get('ip_address') or None,
+        'user_agent': payload.get('user_agent', '') or '',
+        'before_data': payload.get('before_data') or {},
+        'after_data': payload.get('after_data') or {},
+        'context': payload.get('context') or {},
+    }
+
+    actor_id = payload.get('actor_id')
+    target_user_id = payload.get('target_user_id')
+    if actor_id and User.objects.filter(id=actor_id).exists():
+        defaults['actor_id'] = actor_id
+    if target_user_id and User.objects.filter(id=target_user_id).exists():
+        defaults['target_user_id'] = target_user_id
+
+    audit_log, created = BillingAuditLog.objects.get_or_create(
+        event_key=event_key,
+        defaults=defaults,
+    )
+
+    if not created:
+        logger.info(
+            'Billing audit event already exists event_key=%s action_type=%s',
+            event_key,
+            audit_log.action_type,
+        )
+        return {'created': False, 'id': audit_log.id, 'event_key': event_key}
+
+    logger.info(
+        'Recorded billing audit event action_type=%s source=%s event_key=%s',
+        audit_log.action_type,
+        audit_log.source,
+        event_key,
+    )
+    return {'created': True, 'id': audit_log.id, 'event_key': event_key}
 
 
 @shared_task(name='billing.tasks.renew_expired_credits')
@@ -35,7 +92,6 @@ def renew_expired_credits():
     tracer = TaskTracer(
         "RENEW_EXPIRED_CREDITS",
         module="billing",
-        track_legacy=False,
     )
     started_at = timezone.now().isoformat()
     tracer.create_task({
@@ -71,9 +127,39 @@ def renew_expired_credits():
             try:
                 user_id = credits.user.id
                 plan_name = credits.subscription.plan.name
+                before_data = SubscriptionSerializer(
+                    credits.subscription
+                ).data
 
                 # Reset credits for new period
                 CreditsService.reset_period_credits(user_id)
+                credits.refresh_from_db()
+                after_data = {
+                    'subscription': SubscriptionSerializer(
+                        credits.subscription
+                    ).data if credits.subscription else None,
+                    'credits': {
+                        'base_credits': credits.base_credits,
+                        'bonus_credits': credits.bonus_credits,
+                        'consumed_credits': credits.consumed_credits,
+                        'period_start': credits.period_start.isoformat(),
+                        'period_end': credits.period_end.isoformat(),
+                    },
+                }
+                queue_billing_audit_event(
+                    action_type='system.renew_expired_credits',
+                    source='system_task',
+                    target_user_id=credits.user_id,
+                    target_username=credits.user.username,
+                    resource_type='subscription',
+                    resource_id=credits.subscription_id or '',
+                    before_data=before_data,
+                    after_data=after_data,
+                    context={
+                        'plan_slug': credits.subscription.plan.slug,
+                        'plan_name': plan_name,
+                    },
+                )
 
                 renewed_count += 1
                 logger.info(
@@ -145,12 +231,12 @@ def downgrade_failed_paid_subscriptions():
           they just get downgraded to free tier.
     """
     from datetime import timedelta
-    from billing.models import Plan, PaymentProvider
+    from billing.models import Plan
+    from billing.services.subscription_service import SubscriptionService
 
     tracer = TaskTracer(
         "DOWNGRADE_FAILED_PAID_SUBSCRIPTIONS",
         module="billing",
-        track_legacy=False,
     )
     started_at = timezone.now().isoformat()
     tracer.create_task({
@@ -187,15 +273,27 @@ def downgrade_failed_paid_subscriptions():
             try:
                 user = subscription.user
                 old_plan = subscription.plan.name
+                before_data = SubscriptionSerializer(subscription).data
 
                 # Cancel old subscription
-                subscription.status = 'canceled'
-                subscription.auto_renew = False
-                subscription.save()
+                if subscription.djstripe_subscription:
+                    SubscriptionService.cancel_subscription(subscription.id)
+                    subscription.refresh_from_db()
+                    subscription.status = 'canceled'
+                    subscription.auto_renew = False
+                    subscription.save(update_fields=['status', 'auto_renew'])
+                else:
+                    subscription.status = 'canceled'
+                    subscription.auto_renew = False
+                    subscription.save()
 
                 # Create Free Plan subscription
                 free_plan = Plan.objects.get(slug='free')
-                payment_provider = PaymentProvider.objects.get(name='stripe')
+                payment_provider = (
+                    SubscriptionService.get_or_create_payment_provider(
+                        'platform'
+                    )
+                )
 
                 period_days = free_plan.metadata.get('period_days', 30)
                 period_end = now + timedelta(days=period_days)
@@ -220,6 +318,33 @@ def downgrade_failed_paid_subscriptions():
                 user_credits.period_start = now
                 user_credits.period_end = period_end
                 user_credits.save()
+
+                queue_billing_audit_event(
+                    action_type='system.downgrade_failed_paid_subscription',
+                    source='system_task',
+                    target_user_id=user.id,
+                    target_username=user.username,
+                    resource_type='subscription',
+                    resource_id=new_subscription.id,
+                    before_data=before_data,
+                    after_data={
+                        'subscription': SubscriptionSerializer(
+                            new_subscription
+                        ).data,
+                        'credits': {
+                            'base_credits': user_credits.base_credits,
+                            'bonus_credits': user_credits.bonus_credits,
+                            'consumed_credits': user_credits.consumed_credits,
+                            'period_start': user_credits.period_start.isoformat(),
+                            'period_end': user_credits.period_end.isoformat(),
+                        },
+                    },
+                    context={
+                        'old_plan': old_plan,
+                        'new_plan': free_plan.slug,
+                        'grace_period_days': grace_period_days,
+                    },
+                )
 
                 downgraded_count += 1
                 logger.info(
@@ -273,6 +398,151 @@ def downgrade_failed_paid_subscriptions():
             {"error": str(exc)},
         )
         tracer.fail_task({"error": str(exc)}, str(exc))
+        raise
+
+
+@shared_task(name='billing.tasks.payment_check')
+def payment_check(providers=None, mode='auto_fix_safe'):
+    """
+    Run provider-neutral payment status checks.
+
+    By default this is used by the scheduled beat task and will attempt safe
+    repairs only. Manual admin actions can override the mode to report-only or
+    auto-fix-safe as needed.
+    """
+    tracer = TaskTracer(
+        'PAYMENT_CHECK',
+        module='billing',
+    )
+    started_at = timezone.now().isoformat()
+    tracer.create_task(
+        {
+            'status': 'starting',
+            'started_at': started_at,
+            'mode': mode,
+            'providers': providers or [],
+        }
+    )
+    tracer.append_task(
+        'TASK_START',
+        'Payment check started',
+        {
+            'started_at': started_at,
+            'mode': mode,
+            'providers': providers or [],
+        },
+    )
+
+    try:
+        result = PaymentCheckService.run(
+            providers=providers,
+            mode=mode,
+            actor_context={
+                'source': 'system_task',
+                'actor_name': 'system',
+            },
+        )
+        completed_at = timezone.now().isoformat()
+        tracer.append_task(
+            'TASK_COMPLETE',
+            'Payment check finished',
+            {
+                'completed_at': completed_at,
+                'totals': result.get('totals', {}),
+            },
+        )
+        tracer.complete_task(
+            {
+                'completed_at': completed_at,
+                'totals': result.get('totals', {}),
+            }
+        )
+        return result
+    except Exception as exc:
+        logger.error('Payment check task failed: %s', exc, exc_info=True)
+        tracer.append_task(
+            'TASK_ERROR',
+            f'Payment check failed: {exc}',
+            {'error': str(exc)},
+        )
+        tracer.fail_task({'error': str(exc)}, str(exc))
+        raise
+
+
+@shared_task(name='billing.tasks.payment_record_backfill')
+def payment_record_backfill(
+    lookback_days=None,
+    source='scheduled_task',
+    user_id=None,
+    providers=None,
+):
+    """
+    Backfill missing successful payment invoice records from Stripe invoices.
+
+    This task is intentionally separate from payment_check because it writes
+    historical successful payment ledger entries instead of reconciling
+    subscription state.
+    """
+    tracer = TaskTracer(
+        'PAYMENT_RECORD_BACKFILL',
+        module='billing',
+    )
+    started_at = timezone.now().isoformat()
+    tracer.create_task(
+        {
+            'status': 'starting',
+            'started_at': started_at,
+            'lookback_days': lookback_days,
+            'source': source,
+            'user_id': user_id,
+            'providers': providers,
+        }
+    )
+    tracer.append_task(
+        'TASK_START',
+        'Successful invoice backfill started',
+        {
+            'started_at': started_at,
+            'lookback_days': lookback_days,
+            'source': source,
+            'user_id': user_id,
+            'providers': providers,
+        },
+    )
+
+    try:
+        result = backfill_payment_records(
+            lookback_days=lookback_days,
+            user_id=user_id,
+            providers=providers,
+            source=source,
+        )
+        completed_at = timezone.now().isoformat()
+        tracer.append_task(
+            'TASK_COMPLETE',
+            'Successful invoice backfill finished',
+            {
+                'completed_at': completed_at,
+                'summary': result,
+            },
+        )
+        tracer.complete_task(
+            {
+                'completed_at': completed_at,
+                'summary': result,
+            }
+        )
+        return result
+    except Exception as exc:
+        logger.error(
+            'Successful invoice backfill task failed: %s', exc, exc_info=True
+        )
+        tracer.append_task(
+            'TASK_ERROR',
+            f'Successful invoice backfill failed: {exc}',
+            {'error': str(exc)},
+        )
+        tracer.fail_task({'error': str(exc)}, str(exc))
         raise
 
 

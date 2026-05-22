@@ -83,7 +83,23 @@
 
           <div class="flex-shrink-0 w-full sm:w-auto">
             <button
-              v-if="
+              v-if="!rechargeEnabled && !isCurrentPlan(plan)"
+              disabled
+              :class="getButtonClass('unavailable')"
+            >
+              {{ t('billing.plans.rechargeUnavailable') }}
+            </button>
+
+            <button
+              v-else-if="isCurrentPlan(plan) && plan.slug === 'free'"
+              disabled
+              :class="getButtonClass('current')"
+            >
+              {{ t('billing.plans.currentPlan') }}
+            </button>
+
+            <button
+              v-else-if="
                 isCurrentPlan(plan) &&
                 plan.slug !== 'free' &&
                 currentSubscription?.auto_renew === false
@@ -102,14 +118,6 @@
               :class="getButtonClass('cancel')"
             >
               {{ t('billing.plans.cancelSubscription') }}
-            </button>
-
-            <button
-              v-else-if="isCurrentPlan(plan) && plan.slug === 'free'"
-              disabled
-              :class="getButtonClass('current')"
-            >
-              {{ t('billing.plans.currentPlan') }}
             </button>
 
             <button
@@ -437,6 +445,10 @@ const props = defineProps({
   currentSubscription: {
     type: Object,
     default: null
+  },
+  billingStatus: {
+    type: Object,
+    default: null
   }
 })
 
@@ -467,6 +479,37 @@ const isInternalUser = computed(() => {
     props.currentSubscription?.plan?.is_internal
   )
 })
+
+const hasBillingStatus = computed(() => props.billingStatus != null)
+
+const rechargeEnabled = computed(() => {
+  if (!hasBillingStatus.value) return true
+  if (
+    Object.prototype.hasOwnProperty.call(
+      props.billingStatus,
+      'recharge_enabled'
+    )
+  ) {
+    return props.billingStatus.recharge_enabled === true
+  }
+  return props.billingStatus.stripe_configured === true
+})
+
+function canSelfPurchasePlan(plan) {
+  if (!hasBillingStatus.value) {
+    return true
+  }
+  if (!rechargeEnabled.value) {
+    return false
+  }
+  if (!plan || plan.is_internal) {
+    return false
+  }
+  if (plan.status && plan.status !== 'active') {
+    return false
+  }
+  return plan.allow_self_purchase === true
+}
 
 const formattedPeriodEnd = computed(() => {
   if (!props.currentSubscription?.current_period_end) return ''
@@ -519,6 +562,9 @@ function getButtonClass(type) {
 }
 
 function canUpgrade(plan) {
+  if (!canSelfPurchasePlan(plan)) {
+    return false
+  }
   if (isInternalUser.value) {
     return false
   }
@@ -528,6 +574,9 @@ function canUpgrade(plan) {
 }
 
 function canDowngrade(plan) {
+  if (!canSelfPurchasePlan(plan)) {
+    return false
+  }
   if (isInternalUser.value) {
     return false
   }
@@ -579,7 +628,7 @@ async function handleUpgrade(plan) {
     return
   }
   if (!plan.stripe_price_id) {
-    toast.showWarning(t('billing.plans.stripeNotConfigured'))
+    toast.showWarning(t('billing.plans.rechargeUnavailable'))
     return
   }
 
@@ -592,16 +641,18 @@ async function handleUpgrade(plan) {
     const responseData = response.data.data || response.data
 
     if (responseData.checkout_url) {
+      upgrading.value = false
       window.location.href = responseData.checkout_url
-    } else {
-      console.error('No checkout URL in response:', responseData)
-      emit('operation-error', t('billing.plans.upgradeFailed'))
+      return
     }
+
+    console.error('No checkout URL in response:', responseData)
+    upgrading.value = false
+    emit('operation-error', t('billing.plans.upgradeFailed'))
   } catch (error) {
     console.error('Failed to create checkout session:', error)
-    emit('operation-error', t('billing.plans.upgradeFailed'))
-  } finally {
     upgrading.value = false
+    emit('operation-error', t('billing.plans.upgradeFailed'))
   }
 }
 

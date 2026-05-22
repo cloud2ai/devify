@@ -10,7 +10,11 @@
       <div>
         <div class="flex items-center justify-between mb-1.5">
           <h4 class="text-lg font-semibold text-gray-900">
-            {{ subscription ? subscription.plan_name : 'Free Plan' }}
+            {{
+              subscription
+                ? subscription.plan_name
+                : t('billing.currentSubscription.freePlanTitle')
+            }}
           </h4>
           <span
             v-if="subscription"

@@ -24,14 +24,14 @@ User = get_user_model()
 @pytest.mark.django_db
 class TestPlanViewSetInternalUser:
     """
-    Test PlanViewSet filtering for internal users
+    Test PlanViewSet filtering for the public billing page
     """
 
     def test_internal_user_sees_plans_but_cannot_purchase(
         self, test_user_with_internal_subscription, free_plan, starter_plan, internal_plan
     ):
         """
-        Internal users should see plans (except internal plan) but cannot purchase
+        Public billing page should not expose internal plans
         """
         from billing.viewsets import PlanViewSet
         from rest_framework.test import APIRequestFactory
@@ -73,11 +73,11 @@ class TestPlanViewSetInternalUser:
         assert 'free' in plan_slugs
         assert 'starter' in plan_slugs
 
-    def test_staff_user_sees_all_plans(
+    def test_staff_user_also_excludes_internal_plan(
         self, test_user, internal_plan, free_plan, starter_plan
     ):
         """
-        Staff users should see all plans including internal
+        Public billing page should not expose internal plans even to staff
         """
         from billing.viewsets import PlanViewSet
         from rest_framework.test import APIRequestFactory
@@ -94,7 +94,7 @@ class TestPlanViewSetInternalUser:
         queryset = viewset.get_queryset()
 
         plan_slugs = list(queryset.values_list('slug', flat=True))
-        assert 'internal' in plan_slugs
+        assert 'internal' not in plan_slugs
         assert 'free' in plan_slugs
         assert 'starter' in plan_slugs
 
@@ -193,6 +193,75 @@ class TestSubscriptionViewSetInternalUser:
         except Exception:
             pytest.fail("Regular user should not be blocked")
 
+    def test_create_checkout_session_returns_conflict_for_multiple_customers(
+        self, test_user_with_free_subscription, mocker
+    ):
+        from billing.viewsets import SubscriptionViewSet
+        from rest_framework.test import APIRequestFactory
+
+        factory = APIRequestFactory()
+        request = factory.post('/api/billing/subscriptions/create_checkout_session')
+        request.user = test_user_with_free_subscription
+        request.data = {'price_id': 'price_123'}
+
+        viewset = SubscriptionViewSet()
+        viewset.request = request
+        mocker.patch.object(viewset, '_check_internal_user', return_value=None)
+        mocker.patch(
+            'billing.viewsets.PlanPrice.objects.select_related',
+            return_value=mocker.Mock(filter=lambda **kwargs: mocker.Mock(first=lambda: mocker.Mock(
+                plan=mocker.Mock()
+            ))),
+        )
+        mocker.patch(
+            'billing.viewsets.can_user_purchase',
+            return_value=True,
+        )
+        mocker.patch(
+            'billing.viewsets.get_public_billing_status',
+            return_value={},
+        )
+        mock_gateway = mocker.Mock()
+        mock_gateway.create_checkout_session.return_value = {
+            'error': 'Multiple Stripe customers found for this user'
+        }
+        mocker.patch(
+            'billing.viewsets.get_billing_gateway',
+            return_value=mock_gateway,
+        )
+
+        response = viewset.create_checkout_session(request)
+
+        assert response.status_code == 409
+        assert response.data['error'] == 'Multiple Stripe customers found for this user'
+
+    def test_create_portal_session_returns_conflict_for_multiple_customers(
+        self, test_user_with_free_subscription, mocker
+    ):
+        from billing.viewsets import SubscriptionViewSet
+        from rest_framework.test import APIRequestFactory
+
+        factory = APIRequestFactory()
+        request = factory.post('/api/billing/subscriptions/create_portal_session')
+        request.user = test_user_with_free_subscription
+
+        viewset = SubscriptionViewSet()
+        viewset.request = request
+        mocker.patch.object(viewset, '_check_internal_user', return_value=None)
+        mock_gateway = mocker.Mock()
+        mock_gateway.create_portal_session.return_value = {
+            'error': 'Multiple Stripe customers found for this user'
+        }
+        mocker.patch(
+            'billing.viewsets.get_billing_gateway',
+            return_value=mock_gateway,
+        )
+
+        response = viewset.create_portal_session(request)
+
+        assert response.status_code == 409
+        assert response.data['error'] == 'Multiple Stripe customers found for this user'
+
 
 @pytest.mark.django_db
 class TestInternalPlanAutoRenewal:
@@ -252,7 +321,9 @@ class TestAssignInternalPlanCommand:
     Test assign_internal_plan management command
     """
 
-    def test_create_new_internal_user(self, internal_plan, payment_provider):
+    def test_create_new_internal_user(
+        self, internal_plan, platform_payment_provider
+    ):
         """
         Test creating a new user with internal plan
         """
@@ -276,6 +347,7 @@ class TestAssignInternalPlanCommand:
 
         assert subscription.plan == internal_plan
         assert subscription.plan.is_internal is True
+        assert subscription.provider == platform_payment_provider
         assert credits.base_credits == 10000
 
     def test_upgrade_free_user_to_internal(
@@ -312,6 +384,7 @@ class TestAssignInternalPlanCommand:
             status='active'
         ).first()
         assert new_sub is not None
+        assert new_sub.provider.name == 'platform'
 
         credits = UserCredits.objects.get(user=user, is_active=True)
         assert credits.subscription == new_sub
@@ -352,6 +425,7 @@ class TestAssignInternalPlanCommand:
             status='active'
         ).first()
         assert new_sub is not None
+        assert new_sub.provider.name == 'platform'
 
         credits = UserCredits.objects.get(user=user, is_active=True)
         assert credits.subscription == new_sub
