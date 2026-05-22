@@ -794,9 +794,6 @@
     "menuTitle": "订阅管理",
     "title": "订阅管理",
     "description": "统一管理您的订阅、Credits 和使用情况。",
-    "status": {
-      "stripeMissingHint": "当前尚未配置 Stripe 支付，您仍然可以查看 Credits 和订阅状态，但无法发起充值或订阅变更。"
-    },
     "currentSubscription": {
       "title": "当前订阅",
       "provider": "支付方式",
@@ -899,7 +896,8 @@
       "active": "有效",
       "canceled": "已取消",
       "trialing": "试用中",
-      "pastDue": "逾期"
+      "pastDue": "逾期",
+      "stripeMissingHint": "当前尚未配置 Stripe 支付，您仍然可以查看 Credits 和订阅状态，但无法发起充值或订阅变更。"
     },
     "messages": {
       "paymentSuccess": "支付成功！您的订阅已激活。",

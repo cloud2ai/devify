@@ -785,9 +785,6 @@
     "menuTitle": "Subscription Management",
     "title": "Subscription Management",
     "description": "Manage your subscription, credits, and usage in one place.",
-    "status": {
-      "stripeMissingHint": "Stripe payment is not configured yet. You can still view Credits and subscription status, but cannot start a recharge or subscription change."
-    },
     "currentSubscription": {
       "title": "Current Subscription",
       "provider": "Payment Provider",
@@ -890,7 +887,8 @@
       "active": "Active",
       "canceled": "Canceled",
       "trialing": "Trialing",
-      "pastDue": "Past Due"
+      "pastDue": "Past Due",
+      "stripeMissingHint": "Stripe payment is not configured yet. You can still view Credits and subscription status, but cannot start a recharge or subscription change."
     },
     "messages": {
       "paymentSuccess": "Payment successful! Your subscription is now active.",
