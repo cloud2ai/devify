@@ -22,7 +22,9 @@
       </div>
 
       <section class="rounded-lg border border-gray-200 bg-white shadow-sm">
-        <div class="flex flex-wrap items-center justify-between gap-3 border-b border-gray-200 px-6 py-5">
+        <div
+          class="flex flex-wrap items-center justify-between gap-3 border-b border-gray-200 px-6 py-5"
+        >
           <div class="flex flex-wrap items-center gap-2">
             <BaseButton
               variant="warning"
@@ -66,7 +68,9 @@
           <div
             class="mb-4 flex items-center justify-between gap-3 text-sm text-gray-500"
           >
-            <span>{{ t('billing.plans.totalCount', { count: plans.length }) }}</span>
+            <span>{{
+              t('billing.plans.totalCount', { count: plans.length })
+            }}</span>
           </div>
 
           <BaseLoading v-if="loadingPlans" />
@@ -81,7 +85,10 @@
             </div>
           </div>
 
-          <div v-else class="w-full overflow-x-auto rounded-lg border border-gray-200">
+          <div
+            v-else
+            class="w-full overflow-x-auto rounded-lg border border-gray-200"
+          >
             <table class="w-full min-w-[1200px] divide-y divide-gray-200">
               <thead class="bg-gray-50">
                 <tr>
@@ -138,7 +145,11 @@
                 </tr>
               </thead>
               <tbody class="divide-y divide-gray-100 bg-white">
-                <tr v-for="plan in plans" :key="plan.id" class="hover:bg-gray-50">
+                <tr
+                  v-for="plan in plans"
+                  :key="plan.id"
+                  class="hover:bg-gray-50"
+                >
                   <td class="px-4 py-3">
                     <p class="text-sm font-medium text-gray-900">
                       {{ plan.name }}
@@ -154,7 +165,9 @@
                       {{ getPlanSummary(plan) }}
                     </p>
                   </td>
-                  <td class="whitespace-nowrap px-4 py-3 text-sm text-gray-600">{{ plan.slug }}</td>
+                  <td class="whitespace-nowrap px-4 py-3 text-sm text-gray-600">
+                    {{ plan.slug }}
+                  </td>
                   <td class="whitespace-nowrap px-4 py-3 text-sm text-gray-900">
                     {{ formatMoney(plan.monthly_price_cents) }}
                   </td>
@@ -208,7 +221,7 @@
                       {{
                         plan.allow_self_purchase
                           ? t('billing.plans.selfPurchaseAllowed')
-                        : t('billing.plans.selfPurchaseAdminOnly')
+                          : t('billing.plans.selfPurchaseAdminOnly')
                       }}
                     </span>
                   </td>
@@ -267,10 +280,12 @@
               class="flex flex-col gap-3 rounded-lg border border-gray-200 bg-gray-50 p-4 sm:flex-row sm:items-center sm:justify-between"
             >
               <div class="text-sm text-gray-600">
-                {{ t('billing.planEditor.syncStripeSelectionCount', {
-                  count: selectedSyncPlanIds.length,
-                  total: syncablePlans.length
-                }) }}
+                {{
+                  t('billing.planEditor.syncStripeSelectionCount', {
+                    count: selectedSyncPlanIds.length,
+                    total: syncablePlans.length
+                  })
+                }}
               </div>
               <div class="flex items-center gap-2">
                 <BaseButton
@@ -303,7 +318,9 @@
                   :disabled="syncingStripePlans"
                   type="checkbox"
                   class="mt-1 h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
-                  @change="toggleSyncPlanSelection(plan.id, $event.target.checked)"
+                  @change="
+                    toggleSyncPlanSelection(plan.id, $event.target.checked)
+                  "
                 />
                 <div class="min-w-0 flex-1">
                   <div class="flex flex-wrap items-center gap-2">
@@ -717,7 +734,7 @@ const planForm = reactive({
   storage_quota_unlimited: false,
   retention_days: '',
   retention_days_unlimited: false,
-  metadataBase: {},
+  metadataBase: {}
 })
 
 const defaultMetadata = () => ({
@@ -726,7 +743,7 @@ const defaultMetadata = () => ({
   workflow_cost_credits: 1,
   max_attachment_count: '',
   storage_quota_mb: '',
-  retention_days: '',
+  retention_days: ''
 })
 
 const PLAN_TYPE_MAP = {
@@ -845,26 +862,43 @@ function getPlanSummary(plan) {
   const metadata = plan?.metadata || {}
   const summary = []
 
-  const creditsPerPeriod = metadata.credits_per_period ?? plan?.credits_per_period
-  if (creditsPerPeriod !== undefined && creditsPerPeriod !== null && creditsPerPeriod !== '') {
+  const creditsPerPeriod =
+    metadata.credits_per_period ?? plan?.credits_per_period
+  if (
+    creditsPerPeriod !== undefined &&
+    creditsPerPeriod !== null &&
+    creditsPerPeriod !== ''
+  ) {
     summary.push(
       `${t('billing.creditsInfo.emailLimit')}: ${creditsPerPeriod} ${t('billing.creditsInfo.emails')}`
     )
   }
 
-  if (metadata.max_attachment_count !== undefined && metadata.max_attachment_count !== null && metadata.max_attachment_count !== '') {
+  if (
+    metadata.max_attachment_count !== undefined &&
+    metadata.max_attachment_count !== null &&
+    metadata.max_attachment_count !== ''
+  ) {
     summary.push(
       `${t('billing.creditsInfo.attachmentLimit')}: ${formatAttachmentLimit(metadata.max_attachment_count)}${isUnlimitedValue(metadata.max_attachment_count) ? '' : ` ${t('billing.creditsInfo.attachments')}`}`
     )
   }
 
-  if (metadata.storage_quota_mb !== undefined && metadata.storage_quota_mb !== null && metadata.storage_quota_mb !== '') {
+  if (
+    metadata.storage_quota_mb !== undefined &&
+    metadata.storage_quota_mb !== null &&
+    metadata.storage_quota_mb !== ''
+  ) {
     summary.push(
       `${t('billing.creditsInfo.storageQuota')}: ${formatStorageQuota(metadata.storage_quota_mb)}`
     )
   }
 
-  if (metadata.retention_days !== undefined && metadata.retention_days !== null && metadata.retention_days !== '') {
+  if (
+    metadata.retention_days !== undefined &&
+    metadata.retention_days !== null &&
+    metadata.retention_days !== ''
+  ) {
     summary.push(
       `${t('billing.creditsInfo.retentionPeriod')}: ${formatRetentionDays(metadata.retention_days)}`
     )
@@ -883,10 +917,12 @@ function resetForm(plan = null) {
   planForm.credits_per_period = Number(metadata.credits_per_period ?? 10)
   planForm.period_days = Number(metadata.period_days ?? 30)
   planForm.workflow_cost_credits = Number(metadata.workflow_cost_credits ?? 1)
-  planForm.max_attachment_count_unlimited = isUnlimitedValue(metadata.max_attachment_count)
+  planForm.max_attachment_count_unlimited = isUnlimitedValue(
+    metadata.max_attachment_count
+  )
   planForm.max_attachment_count = planForm.max_attachment_count_unlimited
     ? ''
-    : metadata.max_attachment_count ?? ''
+    : (metadata.max_attachment_count ?? '')
   planForm.storage_quota_unlimited = isUnlimitedValue(metadata.storage_quota_mb)
   planForm.storage_quota_gb = planForm.storage_quota_unlimited
     ? ''
@@ -894,7 +930,7 @@ function resetForm(plan = null) {
   planForm.retention_days_unlimited = isUnlimitedValue(metadata.retention_days)
   planForm.retention_days = planForm.retention_days_unlimited
     ? ''
-    : metadata.retention_days ?? ''
+    : (metadata.retention_days ?? '')
   planForm.metadataBase = { ...metadata }
 }
 
@@ -942,9 +978,7 @@ function openEditPlan(plan) {
 
 function canSyncPlanToStripe(plan) {
   return (
-    plan?.status === 'active' &&
-    !plan?.is_internal &&
-    plan?.allow_self_purchase
+    plan?.status === 'active' && !plan?.is_internal && plan?.allow_self_purchase
   )
 }
 
@@ -1040,10 +1074,11 @@ async function savePlan() {
         : Math.round(Number(planForm.storage_quota_gb || 0) * 1024),
       retention_days: planForm.retention_days_unlimited
         ? -1
-        : Number(planForm.retention_days || 0),
+        : Number(planForm.retention_days || 0)
     }
 
-    const planType = PLAN_TYPE_MAP[planForm.planType] || PLAN_TYPE_MAP.public_paid
+    const planType =
+      PLAN_TYPE_MAP[planForm.planType] || PLAN_TYPE_MAP.public_paid
 
     const payload = {
       name: planForm.name,

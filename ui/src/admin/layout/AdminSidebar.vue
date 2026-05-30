@@ -585,6 +585,32 @@
                 <span>{{ t('llm.usage.title') }}</span>
               </router-link>
               <router-link
+                to="/management/llm/config"
+                class="admin-nav-item admin-nav-item-child"
+                :class="
+                  isActive('/management/llm/config')
+                    ? 'admin-nav-item-active'
+                    : ''
+                "
+                @click="isMobile && $emit('close')"
+                @mouseenter="preloadRoute('/management/llm/config')"
+              >
+                <svg
+                  class="w-4 h-4"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M4 6h16M4 12h16M4 18h16"
+                  />
+                </svg>
+                <span>{{ t('llm.config.title') }}</span>
+              </router-link>
+              <router-link
                 to="/management/llm/data-settings"
                 class="admin-nav-item admin-nav-item-child"
                 :class="

@@ -23,7 +23,9 @@ describe('i18n messages', () => {
 
     expect(enMessages.common.appName).toBe('AImyChats')
     expect(enMessages.common.settings).toBe('Settings')
-    expect(enMessages.billing.creditsInfo.attachmentLimit).toBe('Attachment Limit')
+    expect(enMessages.billing.creditsInfo.attachmentLimit).toBe(
+      'Attachment Limit'
+    )
     expect(zhCNMessages.common.appName).toBe('AImyChats')
     expect(zhCNMessages.common.settings).toBe('设置')
     expect(zhCNMessages.billing.creditsInfo.attachmentLimit).toBe('附件数量')

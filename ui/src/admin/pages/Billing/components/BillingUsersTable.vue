@@ -41,7 +41,9 @@
               />
             </svg>
             <span>{{ t('billing.users.identityConflictChip') }}</span>
-            <span class="rounded-full bg-white/80 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700">
+            <span
+              class="rounded-full bg-white/80 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700"
+            >
               {{ identityConflictCount }}
             </span>
           </button>
@@ -144,7 +146,10 @@
           {{ t('billing.users.noData') }}
         </p>
       </div>
-      <div v-else class="w-full overflow-x-auto rounded-lg border border-gray-200">
+      <div
+        v-else
+        class="w-full overflow-x-auto rounded-lg border border-gray-200"
+      >
         <table class="w-full min-w-[1100px] divide-y divide-gray-200">
           <thead class="bg-gray-50">
             <tr>
@@ -234,7 +239,9 @@
                 </span>
               </td>
               <td class="px-4 py-3 text-sm text-gray-600">
-                {{ formatSubscriptionSource(row.provider_key, row.provider_name) }}
+                {{
+                  formatSubscriptionSource(row.provider_key, row.provider_name)
+                }}
               </td>
               <td class="px-4 py-3 text-sm text-gray-600">
                 <span
@@ -259,7 +266,9 @@
                     variant="primary"
                     size="sm"
                     class="whitespace-nowrap"
-                    :disabled="isStripeSource(row.provider_key, row.provider_name)"
+                    :disabled="
+                      isStripeSource(row.provider_key, row.provider_name)
+                    "
                     :loading="
                       assigningPlan && assigningPlanUserId === row.user_id
                     "
@@ -288,10 +297,7 @@
 <script setup>
 import { useI18n } from 'vue-i18n'
 import BaseButton from '@/components/ui/BaseButton.vue'
-import {
-  formatProviderLabel,
-  isStripeProvider
-} from '../utils/provider'
+import { formatProviderLabel, isStripeProvider } from '../utils/provider'
 import BaseLoading from '@/components/ui/BaseLoading.vue'
 
 const { t, locale } = useI18n()

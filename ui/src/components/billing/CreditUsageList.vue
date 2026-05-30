@@ -87,7 +87,7 @@
                 />
               </svg>
             </div>
-              </div>
+          </div>
 
           <!-- Chat info -->
           <div class="flex-1 min-w-0">

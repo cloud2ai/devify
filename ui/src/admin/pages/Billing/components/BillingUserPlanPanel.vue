@@ -82,7 +82,10 @@
                     {{ t('billing.users.currentPlan') }}
                   </dt>
                   <dd class="mt-1 font-medium text-gray-900">
-                    {{ selectedUser.plan_name || t('billing.users.noSubscription') }}
+                    {{
+                      selectedUser.plan_name ||
+                      t('billing.users.noSubscription')
+                    }}
                   </dd>
                 </div>
                 <div>
@@ -97,7 +100,12 @@
             </div>
 
             <div
-              v-if="isStripeSubscription(selectedUser.provider_key, selectedUser.provider_name)"
+              v-if="
+                isStripeSubscription(
+                  selectedUser.provider_key,
+                  selectedUser.provider_name
+                )
+              "
               class="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900"
             >
               {{ t('billing.users.assignPlanBlockedStripe') }}
@@ -122,32 +130,31 @@
                 <option value="" disabled>
                   {{ t('billing.users.targetPlanPlaceholder') }}
                 </option>
-                <option
-                  v-for="plan in plans"
-                  :key="plan.id"
-                  :value="plan.id"
-                >
+                <option v-for="plan in plans" :key="plan.id" :value="plan.id">
                   {{ formatPlanLabel(plan) }}
                 </option>
               </select>
             </div>
 
-            <div class="rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">
+            <div
+              class="rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900"
+            >
               {{ t('billing.users.assignPlanNote') }}
             </div>
 
             <div class="flex items-center justify-end gap-3">
-              <BaseButton
-                variant="outline"
-                size="sm"
-                @click="$emit('close')"
-              >
+              <BaseButton variant="outline" size="sm" @click="$emit('close')">
                 {{ t('common.close') }}
               </BaseButton>
               <BaseButton
                 variant="primary"
                 size="sm"
-                :disabled="isStripeSubscription(selectedUser.provider_key, selectedUser.provider_name)"
+                :disabled="
+                  isStripeSubscription(
+                    selectedUser.provider_key,
+                    selectedUser.provider_name
+                  )
+                "
                 :loading="switching"
                 @click="$emit('switch-plan')"
               >
@@ -198,11 +205,7 @@ defineProps({
   }
 })
 
-defineEmits([
-  'close',
-  'switch-plan',
-  'update:selectedPlanId'
-])
+defineEmits(['close', 'switch-plan', 'update:selectedPlanId'])
 
 function formatPlanLabel(plan) {
   const parts = [plan.name]

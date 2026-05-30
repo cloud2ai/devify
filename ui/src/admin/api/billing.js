@@ -118,7 +118,9 @@ export const billingAdminApi = {
   },
 
   deletePlan(planId) {
-    return apiClient.delete(`/v1/admin/billing/plans/${planId}`).then(extractData)
+    return apiClient
+      .delete(`/v1/admin/billing/plans/${planId}`)
+      .then(extractData)
   }
 }
 

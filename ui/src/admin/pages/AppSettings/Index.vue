@@ -281,7 +281,6 @@
               </template>
             </div>
           </section>
-
         </div>
 
         <aside class="xl:sticky xl:top-6">

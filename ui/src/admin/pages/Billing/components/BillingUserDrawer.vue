@@ -129,30 +129,52 @@
                 </div>
                 <div class="grid gap-3 md:grid-cols-4">
                   <div class="rounded-lg bg-gray-50 p-3">
-                    <p class="text-xs text-gray-500">{{ t('billing.drawer.currentPlan') }}</p>
+                    <p class="text-xs text-gray-500">
+                      {{ t('billing.drawer.currentPlan') }}
+                    </p>
                     <p class="mt-1 text-lg font-semibold text-gray-900">
-                      {{ selectedUser.plan_name || t('billing.users.noSubscription') }}
+                      {{
+                        selectedUser.plan_name ||
+                        t('billing.users.noSubscription')
+                      }}
                     </p>
                   </div>
                   <div class="rounded-lg bg-gray-50 p-3">
-                    <p class="text-xs text-gray-500">{{ t('billing.drawer.subscriptionStatus') }}</p>
+                    <p class="text-xs text-gray-500">
+                      {{ t('billing.drawer.subscriptionStatus') }}
+                    </p>
                     <p class="mt-1">
                       <span
                         class="inline-flex rounded-full px-2 py-1 text-xs font-medium"
-                        :class="getStatusClass(selectedUser.subscription_status)"
+                        :class="
+                          getStatusClass(selectedUser.subscription_status)
+                        "
                       >
-                        {{ formatSubscriptionStatus(selectedUser.subscription_status) }}
+                        {{
+                          formatSubscriptionStatus(
+                            selectedUser.subscription_status
+                          )
+                        }}
                       </span>
                     </p>
                   </div>
                   <div class="rounded-lg bg-gray-50 p-3">
-                    <p class="text-xs text-gray-500">{{ t('billing.drawer.subscriptionSource') }}</p>
+                    <p class="text-xs text-gray-500">
+                      {{ t('billing.drawer.subscriptionSource') }}
+                    </p>
                     <p class="mt-1 text-sm font-semibold text-gray-900">
-                      {{ formatSubscriptionSource(selectedUser.provider_key, selectedUser.provider_name) }}
+                      {{
+                        formatSubscriptionSource(
+                          selectedUser.provider_key,
+                          selectedUser.provider_name
+                        )
+                      }}
                     </p>
                   </div>
                   <div class="rounded-lg bg-gray-50 p-3">
-                    <p class="text-xs text-gray-500">{{ t('billing.drawer.periodEnd') }}</p>
+                    <p class="text-xs text-gray-500">
+                      {{ t('billing.drawer.periodEnd') }}
+                    </p>
                     <p class="mt-1 text-sm font-semibold text-gray-900">
                       {{ formatDate(selectedUser.period_end) }}
                     </p>
@@ -168,25 +190,33 @@
                 </div>
                 <div class="grid gap-3 md:grid-cols-4">
                   <div class="rounded-lg bg-gray-50 p-3">
-                    <p class="text-xs text-gray-500">{{ t('billing.users.availableCredits') }}</p>
+                    <p class="text-xs text-gray-500">
+                      {{ t('billing.users.availableCredits') }}
+                    </p>
                     <p class="mt-1 text-lg font-semibold text-gray-900">
                       {{ selectedUser.available_credits }}
                     </p>
                   </div>
                   <div class="rounded-lg bg-gray-50 p-3">
-                    <p class="text-xs text-gray-500">{{ t('billing.users.baseCredits') }}</p>
+                    <p class="text-xs text-gray-500">
+                      {{ t('billing.users.baseCredits') }}
+                    </p>
                     <p class="mt-1 text-lg font-semibold text-gray-900">
                       {{ selectedUser.base_credits }}
                     </p>
                   </div>
                   <div class="rounded-lg bg-gray-50 p-3">
-                    <p class="text-xs text-gray-500">{{ t('billing.users.bonusCredits') }}</p>
+                    <p class="text-xs text-gray-500">
+                      {{ t('billing.users.bonusCredits') }}
+                    </p>
                     <p class="mt-1 text-lg font-semibold text-gray-900">
                       {{ selectedUser.bonus_credits }}
                     </p>
                   </div>
                   <div class="rounded-lg bg-gray-50 p-3">
-                    <p class="text-xs text-gray-500">{{ t('billing.users.consumedCredits') }}</p>
+                    <p class="text-xs text-gray-500">
+                      {{ t('billing.users.consumedCredits') }}
+                    </p>
                     <p class="mt-1 text-lg font-semibold text-gray-900">
                       {{ selectedUser.consumed_credits }}
                     </p>
@@ -225,9 +255,16 @@
               </div>
             </section>
 
-            <section v-else-if="selectedDetailTab === 'records'" class="space-y-4">
-              <section class="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
-                <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+            <section
+              v-else-if="selectedDetailTab === 'records'"
+              class="space-y-4"
+            >
+              <section
+                class="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm"
+              >
+                <div
+                  class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between"
+                >
                   <div>
                     <h3 class="text-sm font-semibold text-gray-900">
                       {{ t('billing.drawer.recordsTitle') }}
@@ -242,13 +279,21 @@
                 </div>
 
                 <div class="mt-4 flex flex-wrap gap-2">
-                  <span class="rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-600">
-                    {{ t('billing.drawer.recordsPayments') }} · {{ detailPayments.length }}
+                  <span
+                    class="rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-600"
+                  >
+                    {{ t('billing.drawer.recordsPayments') }} ·
+                    {{ detailPayments.length }}
                   </span>
-                  <span class="rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-600">
-                    {{ t('billing.drawer.recordsSubscriptions') }} · {{ detailSubscriptions.length }}
+                  <span
+                    class="rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-600"
+                  >
+                    {{ t('billing.drawer.recordsSubscriptions') }} ·
+                    {{ detailSubscriptions.length }}
                   </span>
-                  <span class="rounded-full bg-primary-50 px-3 py-1 text-xs font-medium text-primary-700">
+                  <span
+                    class="rounded-full bg-primary-50 px-3 py-1 text-xs font-medium text-primary-700"
+                  >
                     {{ mergedBillingRecords.length }} 条
                   </span>
                 </div>
@@ -276,7 +321,9 @@
                     />
 
                     <div class="min-w-0 flex-1">
-                      <div class="flex flex-wrap items-start justify-between gap-3">
+                      <div
+                        class="flex flex-wrap items-start justify-between gap-3"
+                      >
                         <div class="min-w-0">
                           <div class="flex flex-wrap items-center gap-2">
                             <span
@@ -285,7 +332,9 @@
                             >
                               {{ item.kindLabel }}
                             </span>
-                            <h4 class="truncate text-sm font-semibold text-gray-900">
+                            <h4
+                              class="truncate text-sm font-semibold text-gray-900"
+                            >
                               {{ item.title }}
                             </h4>
                           </div>
@@ -295,7 +344,9 @@
                         </div>
 
                         <div class="text-right">
-                          <p class="text-[11px] uppercase tracking-wide text-gray-400">
+                          <p
+                            class="text-[11px] uppercase tracking-wide text-gray-400"
+                          >
                             {{ formatDate(item.timestamp) }}
                           </p>
                           <span
@@ -307,14 +358,20 @@
                         </div>
                       </div>
 
-                      <div class="mt-4 flex flex-wrap items-center gap-2 text-xs text-gray-500">
+                      <div
+                        class="mt-4 flex flex-wrap items-center gap-2 text-xs text-gray-500"
+                      >
                         <span
                           v-for="meta in item.meta"
                           :key="`${item.key}-${meta.label}`"
                           class="rounded-full bg-gray-50 px-2 py-1"
                         >
-                          <span class="font-medium text-gray-600">{{ meta.label }}:</span>
-                          <span class="ml-1 text-gray-500">{{ meta.value }}</span>
+                          <span class="font-medium text-gray-600"
+                            >{{ meta.label }}:</span
+                          >
+                          <span class="ml-1 text-gray-500">{{
+                            meta.value
+                          }}</span>
                         </span>
                       </div>
                     </div>
@@ -484,7 +541,11 @@ function buildPaymentMeta(item) {
   if (paymentMethodBrand || paymentMethodLast4 || paymentMethodType) {
     meta.push({
       label: t('billing.drawer.paymentMethod'),
-      value: [paymentMethodBrand, paymentMethodLast4 ? `•••• ${paymentMethodLast4}` : '', paymentMethodType]
+      value: [
+        paymentMethodBrand,
+        paymentMethodLast4 ? `•••• ${paymentMethodLast4}` : '',
+        paymentMethodType
+      ]
         .filter(Boolean)
         .join(' · ')
     })

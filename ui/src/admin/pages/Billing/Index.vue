@@ -1,7 +1,9 @@
 <template>
   <AdminLayout>
     <div class="w-full max-w-full p-6">
-      <div class="mb-4 flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+      <div
+        class="mb-4 flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between"
+      >
         <div>
           <h1 class="text-lg font-semibold text-gray-900">
             {{ t('billing.usersPageTitle') }}
@@ -92,7 +94,9 @@
             role="dialog"
             :aria-label="t('billing.users.identityConflictDialogTitle')"
           >
-            <div class="flex items-center justify-between border-b border-gray-200 px-6 py-5">
+            <div
+              class="flex items-center justify-between border-b border-gray-200 px-6 py-5"
+            >
               <div>
                 <h2 class="text-base font-semibold text-gray-900">
                   {{ t('billing.users.identityConflictDialogTitle') }}
@@ -145,7 +149,9 @@
                         {{ item.email || '—' }}
                       </p>
                     </div>
-                    <span class="inline-flex rounded-full bg-amber-100 px-2 py-1 text-xs font-medium text-amber-700">
+                    <span
+                      class="inline-flex rounded-full bg-amber-100 px-2 py-1 text-xs font-medium text-amber-700"
+                    >
                       {{ t('billing.users.identityConflictChip') }}
                     </span>
                   </div>
@@ -155,7 +161,9 @@
                       :key="customer.id"
                       class="rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm text-gray-700"
                     >
-                      <div class="flex flex-wrap items-center justify-between gap-2">
+                      <div
+                        class="flex flex-wrap items-center justify-between gap-2"
+                      >
                         <span class="font-medium text-gray-900">
                           {{ customer.id }}
                         </span>
@@ -177,7 +185,11 @@
               </div>
 
               <div class="flex items-center justify-end">
-                <BaseButton variant="outline" size="sm" @click="closeIdentityConflictDialog">
+                <BaseButton
+                  variant="outline"
+                  size="sm"
+                  @click="closeIdentityConflictDialog"
+                >
                   {{ t('common.close') }}
                 </BaseButton>
               </div>
@@ -255,7 +267,9 @@
             role="dialog"
             :aria-label="t('billing.sections.paymentRecordBackfill')"
           >
-            <div class="flex items-center justify-between border-b border-gray-200 px-6 py-5">
+            <div
+              class="flex items-center justify-between border-b border-gray-200 px-6 py-5"
+            >
               <div>
                 <h2 class="text-base font-semibold text-gray-900">
                   {{ t('billing.sections.paymentRecordBackfill') }}
@@ -327,7 +341,11 @@
               </section>
 
               <div class="flex items-center justify-end gap-3">
-                <BaseButton variant="outline" size="sm" @click="closePaymentRecordBackfillDialog">
+                <BaseButton
+                  variant="outline"
+                  size="sm"
+                  @click="closePaymentRecordBackfillDialog"
+                >
                   {{ t('common.close') }}
                 </BaseButton>
                 <BaseButton
@@ -442,7 +460,10 @@ const paymentCheckProviderOptions = computed(() => {
     billingConfig.value?.payment_check_providers
   )
     ? billingConfig.value.payment_check_providers.filter(
-        (provider) => String(provider || '').trim().toLowerCase() !== 'platform'
+        (provider) =>
+          String(provider || '')
+            .trim()
+            .toLowerCase() !== 'platform'
       )
     : []
   const providers =
@@ -546,7 +567,10 @@ async function loadConfig() {
       billingConfig.value?.payment_record_backfill_providers
     )
       ? billingConfig.value.payment_record_backfill_providers.filter(
-          (provider) => String(provider || '').trim().toLowerCase() !== 'platform'
+          (provider) =>
+            String(provider || '')
+              .trim()
+              .toLowerCase() !== 'platform'
         )
       : []
     paymentRecordBackfillSelectedProviders.value =
@@ -646,7 +670,8 @@ function openAssignPlan(row) {
     return
   }
   selectedPlanUserId.value = row.user_id
-  selectedPlanId.value = row.plan_id || plans.value.find((plan) => plan.slug === 'free')?.id || null
+  selectedPlanId.value =
+    row.plan_id || plans.value.find((plan) => plan.slug === 'free')?.id || null
   planModalOpen.value = true
 }
 
@@ -684,7 +709,9 @@ function closeIdentityConflictDialog() {
 }
 
 function formatProviderLabel(provider) {
-  const normalized = String(provider || '').trim().toLowerCase()
+  const normalized = String(provider || '')
+    .trim()
+    .toLowerCase()
   if (normalized === 'stripe') return t('billing.paymentCheck.providerStripe')
   if (normalized === 'platform') {
     return t('billing.paymentCheck.providerPlatform')
@@ -775,7 +802,7 @@ async function runPaymentRecordBackfill() {
       }`,
       `${t('billing.config.paymentRecordBackfillSkipped')}: ${
         result?.skipped ?? 0
-      }`,
+      }`
     ].join(' · ')
     paymentRecordBackfillSuccess.value = summary
     toast.showSuccess(summary)
@@ -787,7 +814,7 @@ async function runPaymentRecordBackfill() {
   } catch (error) {
     console.error('Failed to backfill payment records:', error)
     paymentRecordBackfillError.value = t(
-      'billing.config.paymentRecordBackfillRunFailed',
+      'billing.config.paymentRecordBackfillRunFailed'
     )
     toast.showError(paymentRecordBackfillError.value)
   } finally {

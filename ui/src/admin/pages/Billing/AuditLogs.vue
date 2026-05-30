@@ -1,7 +1,9 @@
 <template>
   <AdminLayout>
     <div class="w-full max-w-full p-6">
-      <div class="mb-4 flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+      <div
+        class="mb-4 flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between"
+      >
         <div>
           <h1 class="text-lg font-semibold text-gray-900">
             {{ t('billing.auditPageTitle') }}
@@ -27,7 +29,9 @@
 
       <section class="rounded-2xl border border-gray-200 bg-white shadow-sm">
         <div class="border-b border-gray-200 px-6 py-5">
-          <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+          <div
+            class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between"
+          >
             <div>
               <h2 class="text-base font-semibold text-gray-900">
                 {{ t('billing.audit.filterTitle') }}
@@ -43,7 +47,9 @@
 
           <div class="mt-5 grid gap-3 lg:grid-cols-12">
             <label class="space-y-1 lg:col-span-3">
-              <span class="block text-xs font-semibold uppercase tracking-wider text-gray-500">
+              <span
+                class="block text-xs font-semibold uppercase tracking-wider text-gray-500"
+              >
                 {{ t('billing.audit.filters.user') }}
               </span>
               <input
@@ -56,7 +62,9 @@
             </label>
 
             <label class="space-y-1 lg:col-span-3">
-              <span class="block text-xs font-semibold uppercase tracking-wider text-gray-500">
+              <span
+                class="block text-xs font-semibold uppercase tracking-wider text-gray-500"
+              >
                 {{ t('billing.audit.filters.actionType') }}
               </span>
               <select
@@ -64,7 +72,9 @@
                 class="w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
                 @change="applyFilters"
               >
-                <option value="">{{ t('billing.audit.filters.allActions') }}</option>
+                <option value="">
+                  {{ t('billing.audit.filters.allActions') }}
+                </option>
                 <option
                   v-for="option in actionTypeOptions"
                   :key="option.value"
@@ -76,7 +86,9 @@
             </label>
 
             <label class="space-y-1 lg:col-span-3">
-              <span class="block text-xs font-semibold uppercase tracking-wider text-gray-500">
+              <span
+                class="block text-xs font-semibold uppercase tracking-wider text-gray-500"
+              >
                 {{ t('billing.audit.filters.source') }}
               </span>
               <select
@@ -84,7 +96,9 @@
                 class="w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
                 @change="applyFilters"
               >
-                <option value="">{{ t('billing.audit.filters.allSources') }}</option>
+                <option value="">
+                  {{ t('billing.audit.filters.allSources') }}
+                </option>
                 <option
                   v-for="option in sourceOptions"
                   :key="option.value"
@@ -96,7 +110,9 @@
             </label>
 
             <label class="space-y-1 lg:col-span-1">
-              <span class="block text-xs font-semibold uppercase tracking-wider text-gray-500">
+              <span
+                class="block text-xs font-semibold uppercase tracking-wider text-gray-500"
+              >
                 {{ t('billing.audit.filters.startDate') }}
               </span>
               <input
@@ -109,7 +125,9 @@
             </label>
 
             <label class="space-y-1 lg:col-span-1">
-              <span class="block text-xs font-semibold uppercase tracking-wider text-gray-500">
+              <span
+                class="block text-xs font-semibold uppercase tracking-wider text-gray-500"
+              >
                 {{ t('billing.audit.filters.endDate') }}
               </span>
               <input
@@ -142,7 +160,9 @@
         <BaseLoading v-if="loading && logs.length === 0" class="p-6" />
 
         <div v-else-if="logs.length === 0" class="p-6">
-          <div class="rounded-2xl border border-gray-200 bg-gray-50 py-14 text-center">
+          <div
+            class="rounded-2xl border border-gray-200 bg-gray-50 py-14 text-center"
+          >
             <p class="text-sm text-gray-600">
               {{ t('billing.audit.noData') }}
             </p>
@@ -153,25 +173,39 @@
           <table class="min-w-full divide-y divide-gray-200">
             <thead class="bg-gray-50">
               <tr>
-                <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-700">
+                <th
+                  class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-700"
+                >
                   {{ t('billing.audit.time') }}
                 </th>
-                <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-700">
+                <th
+                  class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-700"
+                >
                   {{ t('billing.audit.action') }}
                 </th>
-                <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-700">
+                <th
+                  class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-700"
+                >
                   {{ t('billing.audit.source') }}
                 </th>
-                <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-700">
+                <th
+                  class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-700"
+                >
                   {{ t('billing.audit.actor') }}
                 </th>
-                <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-700">
+                <th
+                  class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-700"
+                >
                   {{ t('billing.audit.targetUser') }}
                 </th>
-                <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-700">
+                <th
+                  class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-700"
+                >
                   {{ t('billing.audit.resource') }}
                 </th>
-                <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-700">
+                <th
+                  class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-700"
+                >
                   {{ t('billing.audit.ipAddress') }}
                 </th>
               </tr>
@@ -195,7 +229,9 @@
                   </span>
                 </td>
                 <td class="px-4 py-3 whitespace-nowrap text-sm">
-                  <span class="inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700">
+                  <span
+                    class="inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700"
+                  >
                     {{ formatSource(log.source) }}
                   </span>
                 </td>
@@ -220,10 +256,7 @@
           </table>
         </div>
 
-        <div
-          v-if="totalCount > 0"
-          class="border-t border-gray-200 px-6 py-4"
-        >
+        <div v-if="totalCount > 0" class="border-t border-gray-200 px-6 py-4">
           <div class="flex flex-wrap items-center justify-between gap-3">
             <p class="text-sm text-gray-600">
               {{ paginationSummary }}
@@ -433,8 +466,7 @@ function actionBadgeClass(value) {
   if (value.startsWith('plan.')) return 'bg-violet-100 text-violet-800'
   if (value.startsWith('webhook.')) return 'bg-amber-100 text-amber-800'
   if (value.startsWith('system.')) return 'bg-slate-100 text-slate-700'
-  if (value === 'billing_config.update')
-    return 'bg-indigo-100 text-indigo-800'
+  if (value === 'billing_config.update') return 'bg-indigo-100 text-indigo-800'
   return 'bg-gray-100 text-gray-700'
 }
 

@@ -368,8 +368,7 @@ export function useRelayEditor({ reloadAll, activeTab }) {
 
   function buildTestPayload() {
     const strategies = {
-      auto_merge_strategy:
-        editorForm.strategies.auto_merge_strategy || 'new',
+      auto_merge_strategy: editorForm.strategies.auto_merge_strategy || 'new',
       manual_merge_strategy:
         editorForm.strategies.manual_merge_strategy || 'linked',
       retry_issue_strategy:

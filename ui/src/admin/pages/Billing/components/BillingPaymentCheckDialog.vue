@@ -32,7 +32,9 @@
         role="dialog"
         :aria-label="t('billing.paymentCheck.title')"
       >
-        <div class="flex items-center justify-between border-b border-gray-200 px-6 py-5">
+        <div
+          class="flex items-center justify-between border-b border-gray-200 px-6 py-5"
+        >
           <div>
             <h2 class="text-base font-semibold text-gray-900">
               {{ t('billing.paymentCheck.title') }}
@@ -68,7 +70,9 @@
             v-if="running"
             class="flex min-h-72 flex-col items-center justify-center gap-4 rounded-2xl border border-gray-200 bg-gradient-to-b from-gray-50 to-white px-6 py-12 text-center"
           >
-            <div class="flex h-12 w-12 items-center justify-center rounded-full bg-primary-50 text-primary-600">
+            <div
+              class="flex h-12 w-12 items-center justify-center rounded-full bg-primary-50 text-primary-600"
+            >
               <svg
                 class="h-6 w-6 animate-spin"
                 viewBox="0 0 24 24"
@@ -106,10 +110,7 @@
           </section>
 
           <template v-else-if="result">
-            <section
-              v-if="providerBlocks.length > 0"
-              class="space-y-4"
-            >
+            <section v-if="providerBlocks.length > 0" class="space-y-4">
               <article
                 v-for="provider in providerBlocks"
                 :key="provider.key"
@@ -152,7 +153,9 @@
                       :key="item.key"
                       class="group flex items-center gap-4 px-5 py-3 transition-colors hover:bg-gray-50/80"
                     >
-                      <div class="flex min-w-0 flex-1 items-center gap-3 overflow-x-auto whitespace-nowrap pr-2 text-sm">
+                      <div
+                        class="flex min-w-0 flex-1 items-center gap-3 overflow-x-auto whitespace-nowrap pr-2 text-sm"
+                      >
                         <span
                           class="inline-flex h-2.5 w-2.5 shrink-0 rounded-full"
                           :class="item.dotClass"
@@ -170,17 +173,27 @@
                         </span>
                         <span class="text-gray-300">•</span>
                         <span class="text-gray-600">
-                          <span class="text-gray-400">{{ t('billing.paymentCheck.resultLocalStatus') }}:</span>
+                          <span class="text-gray-400"
+                            >{{
+                              t('billing.paymentCheck.resultLocalStatus')
+                            }}:</span
+                          >
                           {{ item.localSummary }}
                         </span>
                         <span class="text-gray-300">•</span>
                         <span class="text-gray-600">
-                          <span class="text-gray-400">{{ t('billing.paymentCheck.resultRemoteStatus') }}:</span>
+                          <span class="text-gray-400"
+                            >{{
+                              t('billing.paymentCheck.resultRemoteStatus')
+                            }}:</span
+                          >
                           {{ item.remoteSummary }}
                         </span>
                         <span class="text-gray-300">•</span>
                         <span class="text-gray-500">
-                          <span class="text-gray-400">{{ t('billing.paymentCheck.resultReason') }}:</span>
+                          <span class="text-gray-400"
+                            >{{ t('billing.paymentCheck.resultReason') }}:</span
+                          >
                           {{ item.reasonLabel }}
                         </span>
                       </div>
@@ -191,7 +204,10 @@
                         size="sm"
                         class="shrink-0"
                         :loading="syncingUserId === item.userId"
-                        :disabled="syncingUserId !== null && syncingUserId !== item.userId"
+                        :disabled="
+                          syncingUserId !== null &&
+                          syncingUserId !== item.userId
+                        "
                         @click="$emit('sync-user', item.userId)"
                       >
                         {{
@@ -202,10 +218,7 @@
                       </BaseButton>
                     </div>
                   </template>
-                  <div
-                    v-else
-                    class="px-5 py-8 text-sm text-gray-500"
-                  >
+                  <div v-else class="px-5 py-8 text-sm text-gray-500">
                     {{ provider.emptyText }}
                   </div>
                 </div>
@@ -257,7 +270,9 @@
                     :checked="selectedProviders.includes(provider.value)"
                     type="checkbox"
                     class="mt-0.5 h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
-                    @change="toggleProvider(provider.value, $event.target.checked)"
+                    @change="
+                      toggleProvider(provider.value, $event.target.checked)
+                    "
                   />
                   <div class="min-w-0">
                     <span class="block text-sm font-medium text-gray-900">
@@ -328,15 +343,23 @@ const props = defineProps({
   }
 })
 
-const emit = defineEmits(['close', 'run', 'sync-user', 'update:selectedProviders'])
+const emit = defineEmits([
+  'close',
+  'run',
+  'sync-user',
+  'update:selectedProviders'
+])
 
 function normalizeProviderKey(value) {
-  return String(value || '').trim().toLowerCase()
+  return String(value || '')
+    .trim()
+    .toLowerCase()
 }
 
 function formatProviderLabel(providerKey, fallbackLabel) {
   if (providerKey === 'stripe') return t('billing.paymentCheck.providerStripe')
-  if (providerKey === 'platform') return t('billing.paymentCheck.providerPlatform')
+  if (providerKey === 'platform')
+    return t('billing.paymentCheck.providerPlatform')
   return fallbackLabel || providerKey || '-'
 }
 
@@ -377,7 +400,9 @@ function getDecisionMeta(statusKey) {
 }
 
 function getProviderToneFromIssues(differences) {
-  if (differences.some((item) => normalizeProviderKey(item.decision) === 'error')) {
+  if (
+    differences.some((item) => normalizeProviderKey(item.decision) === 'error')
+  ) {
     return {
       shellClass: 'border-l-4 border-l-rose-500',
       headerClass: 'from-rose-50 via-white to-white'
@@ -394,7 +419,9 @@ function getProviderToneFromIssues(differences) {
       headerClass: 'from-amber-50 via-white to-white'
     }
   }
-  if (differences.some((item) => normalizeProviderKey(item.decision) === 'fixed')) {
+  if (
+    differences.some((item) => normalizeProviderKey(item.decision) === 'fixed')
+  ) {
     return {
       shellClass: 'border-l-4 border-l-emerald-500',
       headerClass: 'from-emerald-50 via-white to-white'
@@ -407,25 +434,35 @@ function getProviderToneFromIssues(differences) {
 }
 
 function getProviderStatusFromIssues(differences) {
-  if (differences.some((item) => normalizeProviderKey(item.decision) === 'error')) {
+  if (
+    differences.some((item) => normalizeProviderKey(item.decision) === 'error')
+  ) {
     return {
       className: 'bg-rose-100 text-rose-700',
       label: t('billing.paymentCheck.resultFailed')
     }
   }
-  if (differences.some((item) => normalizeProviderKey(item.decision) === 'manual')) {
+  if (
+    differences.some((item) => normalizeProviderKey(item.decision) === 'manual')
+  ) {
     return {
       className: 'bg-rose-100 text-rose-700',
       label: t('billing.paymentCheck.resultManual')
     }
   }
-  if (differences.some((item) => normalizeProviderKey(item.decision) === 'would_fix')) {
+  if (
+    differences.some(
+      (item) => normalizeProviderKey(item.decision) === 'would_fix'
+    )
+  ) {
     return {
       className: 'bg-amber-100 text-amber-800',
       label: t('billing.paymentCheck.resultWouldFix')
     }
   }
-  if (differences.some((item) => normalizeProviderKey(item.decision) === 'fixed')) {
+  if (
+    differences.some((item) => normalizeProviderKey(item.decision) === 'fixed')
+  ) {
     return {
       className: 'bg-emerald-100 text-emerald-700',
       label: t('billing.paymentCheck.resultRepaired')
@@ -464,9 +501,10 @@ const providerBlocks = computed(() => {
       statusLabel: status.label,
       shellClass: tone.shellClass,
       headerClass: tone.headerClass,
-      summaryText: issueCount > 0
-        ? t('billing.paymentCheck.resultIssueCount', { count: issueCount })
-        : t('billing.paymentCheck.noDifferences'),
+      summaryText:
+        issueCount > 0
+          ? t('billing.paymentCheck.resultIssueCount', { count: issueCount })
+          : t('billing.paymentCheck.noDifferences'),
       differences: visibleDifferences.map((difference) => {
         const decisionKey = normalizeProviderKey(difference.decision)
         const decision = getDecisionMeta(decisionKey)
@@ -489,7 +527,10 @@ const providerBlocks = computed(() => {
             ? `#${difference.user_id} ${difference.username || '-'}`.trim()
             : difference.username || '-',
           userId: difference.user_id,
-          canSync: providerKey === 'stripe' && decisionKey === 'would_fix' && Boolean(difference.user_id),
+          canSync:
+            providerKey === 'stripe' &&
+            decisionKey === 'would_fix' &&
+            Boolean(difference.user_id),
           badgeClass: decision.badgeClass,
           dotClass: decision.dotClass,
           statusLabel: decision.label,

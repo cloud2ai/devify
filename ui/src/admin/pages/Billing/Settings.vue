@@ -103,8 +103,12 @@
                 </p>
               </div>
               <div class="p-6">
-                <div class="rounded-lg border border-gray-200 divide-y divide-gray-200 overflow-hidden">
-                  <div class="grid grid-cols-1 gap-4 px-4 py-4 lg:grid-cols-3 lg:items-center">
+                <div
+                  class="rounded-lg border border-gray-200 divide-y divide-gray-200 overflow-hidden"
+                >
+                  <div
+                    class="grid grid-cols-1 gap-4 px-4 py-4 lg:grid-cols-3 lg:items-center"
+                  >
                     <div class="lg:col-span-2 min-w-0">
                       <h3 class="text-sm font-semibold text-gray-900">
                         {{ t('billing.config.paymentCheckEnabled') }}
@@ -113,8 +117,12 @@
                         {{ t('billing.sections.paymentCheckDesc') }}
                       </p>
                     </div>
-                    <div class="lg:col-span-1 flex justify-start lg:justify-end">
-                      <label class="relative inline-flex cursor-pointer items-center">
+                    <div
+                      class="lg:col-span-1 flex justify-start lg:justify-end"
+                    >
+                      <label
+                        class="relative inline-flex cursor-pointer items-center"
+                      >
                         <input
                           v-model="configForm.payment_check_enabled"
                           type="checkbox"
@@ -127,7 +135,9 @@
                     </div>
                   </div>
 
-                  <div class="grid grid-cols-1 gap-4 px-4 py-4 lg:grid-cols-3 lg:items-start">
+                  <div
+                    class="grid grid-cols-1 gap-4 px-4 py-4 lg:grid-cols-3 lg:items-start"
+                  >
                     <div class="lg:col-span-2 min-w-0">
                       <h3 class="text-sm font-semibold text-gray-900">
                         {{ t('billing.config.paymentCheckSchedule') }}
@@ -142,12 +152,16 @@
                         type="text"
                         autocomplete="off"
                         class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-mono focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
-                        :placeholder="t('billing.config.paymentCheckSchedulePlaceholder')"
+                        :placeholder="
+                          t('billing.config.paymentCheckSchedulePlaceholder')
+                        "
                       />
                     </div>
                   </div>
 
-                  <div class="grid grid-cols-1 gap-4 px-4 py-4 lg:grid-cols-3 lg:items-start">
+                  <div
+                    class="grid grid-cols-1 gap-4 px-4 py-4 lg:grid-cols-3 lg:items-start"
+                  >
                     <div class="lg:col-span-2 min-w-0">
                       <h3 class="text-sm font-semibold text-gray-900">
                         {{ t('billing.config.paymentCheckProviders') }}
@@ -199,18 +213,30 @@
                 </p>
               </div>
               <div class="p-6">
-                <div class="rounded-lg border border-gray-200 divide-y divide-gray-200 overflow-hidden">
-                  <div class="grid grid-cols-1 gap-4 px-4 py-4 lg:grid-cols-3 lg:items-center">
+                <div
+                  class="rounded-lg border border-gray-200 divide-y divide-gray-200 overflow-hidden"
+                >
+                  <div
+                    class="grid grid-cols-1 gap-4 px-4 py-4 lg:grid-cols-3 lg:items-center"
+                  >
                     <div class="lg:col-span-2 min-w-0">
                       <h3 class="text-sm font-semibold text-gray-900">
                         {{ t('billing.config.paymentRecordBackfillEnabled') }}
                       </h3>
                       <p class="mt-1 text-sm text-gray-600">
-                        {{ t('billing.config.paymentRecordBackfillLookbackDaysHint') }}
+                        {{
+                          t(
+                            'billing.config.paymentRecordBackfillLookbackDaysHint'
+                          )
+                        }}
                       </p>
                     </div>
-                    <div class="lg:col-span-1 flex justify-start lg:justify-end">
-                      <label class="relative inline-flex cursor-pointer items-center">
+                    <div
+                      class="lg:col-span-1 flex justify-start lg:justify-end"
+                    >
+                      <label
+                        class="relative inline-flex cursor-pointer items-center"
+                      >
                         <input
                           v-model="configForm.payment_record_backfill_enabled"
                           type="checkbox"
@@ -223,13 +249,17 @@
                     </div>
                   </div>
 
-                  <div class="grid grid-cols-1 gap-4 px-4 py-4 lg:grid-cols-3 lg:items-start">
+                  <div
+                    class="grid grid-cols-1 gap-4 px-4 py-4 lg:grid-cols-3 lg:items-start"
+                  >
                     <div class="lg:col-span-2 min-w-0">
                       <h3 class="text-sm font-semibold text-gray-900">
                         {{ t('billing.config.paymentRecordBackfillSchedule') }}
                       </h3>
                       <p class="mt-1 text-sm text-gray-600">
-                        {{ t('billing.config.paymentRecordBackfillScheduleHint') }}
+                        {{
+                          t('billing.config.paymentRecordBackfillScheduleHint')
+                        }}
                       </p>
                     </div>
                     <div class="lg:col-span-1">
@@ -238,23 +268,37 @@
                         type="text"
                         autocomplete="off"
                         class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-mono focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
-                        :placeholder="t('billing.config.paymentRecordBackfillSchedulePlaceholder')"
+                        :placeholder="
+                          t(
+                            'billing.config.paymentRecordBackfillSchedulePlaceholder'
+                          )
+                        "
                       />
                     </div>
                   </div>
 
-                  <div class="grid grid-cols-1 gap-4 px-4 py-4 lg:grid-cols-3 lg:items-start">
+                  <div
+                    class="grid grid-cols-1 gap-4 px-4 py-4 lg:grid-cols-3 lg:items-start"
+                  >
                     <div class="lg:col-span-2 min-w-0">
                       <h3 class="text-sm font-semibold text-gray-900">
-                        {{ t('billing.config.paymentRecordBackfillLookbackDays') }}
+                        {{
+                          t('billing.config.paymentRecordBackfillLookbackDays')
+                        }}
                       </h3>
                       <p class="mt-1 text-sm text-gray-600">
-                        {{ t('billing.config.paymentRecordBackfillLookbackDaysHint') }}
+                        {{
+                          t(
+                            'billing.config.paymentRecordBackfillLookbackDaysHint'
+                          )
+                        }}
                       </p>
                     </div>
                     <div class="lg:col-span-1">
                       <input
-                        v-model.number="configForm.payment_record_backfill_lookback_days"
+                        v-model.number="
+                          configForm.payment_record_backfill_lookback_days
+                        "
                         type="number"
                         min="1"
                         class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
@@ -262,13 +306,17 @@
                     </div>
                   </div>
 
-                  <div class="grid grid-cols-1 gap-4 px-4 py-4 lg:grid-cols-3 lg:items-start">
+                  <div
+                    class="grid grid-cols-1 gap-4 px-4 py-4 lg:grid-cols-3 lg:items-start"
+                  >
                     <div class="lg:col-span-2 min-w-0">
                       <h3 class="text-sm font-semibold text-gray-900">
                         {{ t('billing.config.paymentRecordBackfillProviders') }}
                       </h3>
                       <p class="mt-1 text-sm text-gray-600">
-                        {{ t('billing.config.paymentRecordBackfillProvidersHint') }}
+                        {{
+                          t('billing.config.paymentRecordBackfillProvidersHint')
+                        }}
                       </p>
                     </div>
                     <div class="lg:col-span-1 space-y-3">
@@ -338,7 +386,9 @@
                       type="text"
                       autocomplete="off"
                       class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-mono focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
-                      :placeholder="t('billing.config.publishableKeyPlaceholder')"
+                      :placeholder="
+                        t('billing.config.publishableKeyPlaceholder')
+                      "
                     />
                   </label>
 
@@ -390,7 +440,9 @@
                       type="url"
                       autocomplete="off"
                       class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-mono focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
-                      :placeholder="t('billing.config.paymentCallbackUrlPlaceholder')"
+                      :placeholder="
+                        t('billing.config.paymentCallbackUrlPlaceholder')
+                      "
                     />
                     <p class="text-xs text-gray-500">
                       {{ t('billing.config.paymentCallbackUrlHint') }}
@@ -455,7 +507,9 @@
               </div>
             </section>
 
-            <div class="flex items-center justify-end gap-3 border-t border-gray-200 pt-5">
+            <div
+              class="flex items-center justify-end gap-3 border-t border-gray-200 pt-5"
+            >
               <BaseButton
                 variant="secondary"
                 size="sm"
@@ -589,7 +643,7 @@ const sectionItems = [
     label: t('billing.sections.paymentRecordBackfill')
   },
   { id: 'stripe-settings', label: t('billing.sections.stripe') },
-  { id: 'credits-policy', label: t('billing.sections.creditsPolicy') },
+  { id: 'credits-policy', label: t('billing.sections.creditsPolicy') }
 ]
 
 function cloneConfig(source) {
@@ -612,10 +666,11 @@ function cloneConfig(source) {
     payment_record_backfill_schedule:
       source.payment_record_backfill_schedule ||
       DEFAULT_PAYMENT_RECORD_BACKFILL_SCHEDULE,
-    payment_record_backfill_lookback_days: Number(
-      source.payment_record_backfill_lookback_days ||
-        DEFAULT_PAYMENT_RECORD_BACKFILL_LOOKBACK_DAYS
-    ) || DEFAULT_PAYMENT_RECORD_BACKFILL_LOOKBACK_DAYS,
+    payment_record_backfill_lookback_days:
+      Number(
+        source.payment_record_backfill_lookback_days ||
+          DEFAULT_PAYMENT_RECORD_BACKFILL_LOOKBACK_DAYS
+      ) || DEFAULT_PAYMENT_RECORD_BACKFILL_LOOKBACK_DAYS,
     payment_record_backfill_providers: Array.isArray(
       source.payment_record_backfill_providers
     )
@@ -646,8 +701,8 @@ function resetConfig() {
 const providerOptions = [
   {
     value: 'stripe',
-    label: 'Stripe',
-  },
+    label: 'Stripe'
+  }
 ]
 
 function gotoSection(id) {

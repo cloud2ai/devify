@@ -67,7 +67,9 @@
 
         <template v-else-if="log">
           <div class="space-y-6">
-            <section class="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+            <section
+              class="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm"
+            >
               <div class="flex flex-wrap items-center gap-2">
                 <span
                   class="inline-flex rounded-full px-3 py-1 text-xs font-semibold"
@@ -87,7 +89,9 @@
 
               <dl class="mt-5 grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div>
-                  <dt class="text-xs font-semibold uppercase tracking-wider text-gray-500">
+                  <dt
+                    class="text-xs font-semibold uppercase tracking-wider text-gray-500"
+                  >
                     {{ t('billing.audit.actor') }}
                   </dt>
                   <dd class="mt-1 text-sm font-medium text-gray-900">
@@ -95,7 +99,9 @@
                   </dd>
                 </div>
                 <div>
-                  <dt class="text-xs font-semibold uppercase tracking-wider text-gray-500">
+                  <dt
+                    class="text-xs font-semibold uppercase tracking-wider text-gray-500"
+                  >
                     {{ t('billing.audit.targetUser') }}
                   </dt>
                   <dd class="mt-1 text-sm font-medium text-gray-900">
@@ -103,7 +109,9 @@
                   </dd>
                 </div>
                 <div>
-                  <dt class="text-xs font-semibold uppercase tracking-wider text-gray-500">
+                  <dt
+                    class="text-xs font-semibold uppercase tracking-wider text-gray-500"
+                  >
                     {{ t('billing.audit.resource') }}
                   </dt>
                   <dd class="mt-1 text-sm font-medium text-gray-900">
@@ -111,7 +119,9 @@
                   </dd>
                 </div>
                 <div>
-                  <dt class="text-xs font-semibold uppercase tracking-wider text-gray-500">
+                  <dt
+                    class="text-xs font-semibold uppercase tracking-wider text-gray-500"
+                  >
                     {{ t('billing.audit.ipAddress') }}
                   </dt>
                   <dd class="mt-1 text-sm font-medium text-gray-900">
@@ -119,7 +129,9 @@
                   </dd>
                 </div>
                 <div>
-                  <dt class="text-xs font-semibold uppercase tracking-wider text-gray-500">
+                  <dt
+                    class="text-xs font-semibold uppercase tracking-wider text-gray-500"
+                  >
                     {{ t('billing.audit.userAgent') }}
                   </dt>
                   <dd class="mt-1 break-all text-sm font-medium text-gray-900">
@@ -127,7 +139,9 @@
                   </dd>
                 </div>
                 <div>
-                  <dt class="text-xs font-semibold uppercase tracking-wider text-gray-500">
+                  <dt
+                    class="text-xs font-semibold uppercase tracking-wider text-gray-500"
+                  >
                     {{ t('billing.audit.eventKey') }}
                   </dt>
                   <dd class="mt-1 break-all font-mono text-xs text-gray-700">
@@ -157,7 +171,8 @@
                 <pre
                   v-else
                   class="overflow-x-auto rounded-xl border border-gray-200 bg-slate-950 px-4 py-4 text-xs leading-6 text-slate-100 shadow-inner"
-                >{{ formatJson(panel.value) }}</pre>
+                  >{{ formatJson(panel.value) }}</pre
+                >
               </div>
             </section>
           </div>
@@ -286,8 +301,7 @@ function actionBadgeClass(value) {
   if (value.startsWith('plan.')) return 'bg-violet-100 text-violet-800'
   if (value.startsWith('webhook.')) return 'bg-amber-100 text-amber-800'
   if (value.startsWith('system.')) return 'bg-slate-100 text-slate-700'
-  if (value === 'billing_config.update')
-    return 'bg-indigo-100 text-indigo-800'
+  if (value === 'billing_config.update') return 'bg-indigo-100 text-indigo-800'
   return 'bg-gray-100 text-gray-700'
 }
 
