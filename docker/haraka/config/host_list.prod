@@ -1,0 +1,5 @@
+# Production domains for email acceptance
+# Haraka will accept emails sent to these domains
+# Users' virtual emails: user@aimychats.com
+
+aimychats.com

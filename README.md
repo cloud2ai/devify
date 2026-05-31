@@ -207,8 +207,8 @@ This allows you to bind different models for different jobs, such as:
 
 ```bash
 cp env.sample .env
-docker-compose -f docker-compose.dev.yml build
-docker-compose -f docker-compose.dev.yml up -d
+docker compose -f docker-compose.dev.yml build
+docker compose -f docker-compose.dev.yml up -d
 ```
 
 Default local access:
@@ -220,9 +220,50 @@ Default local access:
 
 ```bash
 cp env.sample .env
-docker-compose build
-docker-compose up -d
+docker compose build
+docker compose up -d
 ```
+
+The production compose file includes the full application stack: API, worker,
+scheduler, UI, MySQL, Redis, Nginx, and Haraka.
+
+### Haraka Inbound Email
+
+Devify includes Haraka for auto-assigned inbound email addresses. When enabled,
+users can receive mail at addresses such as:
+
+```text
+{username}@{AUTO_ASSIGN_EMAIL_DOMAIN}
+```
+
+Haraka receives SMTP traffic on port 25, stores raw email files under
+`data/haraka/emails`, and the worker/scheduler processes those files into the
+normal email workflow.
+
+For production, the mail domain must be configured in three places:
+
+- `.env`: `AUTO_ASSIGN_EMAIL_DOMAIN=example.com`
+- `docker/haraka/config/host_list.prod`: add `example.com`
+- DNS: add an MX record for `example.com` pointing to the host that runs Haraka
+
+Recommended DNS records:
+
+```text
+example.com.        MX   10 mail.example.com.
+mail.example.com.   A    <server-public-ip>
+example.com.        TXT  "v=spf1 mx -all"
+_dmarc.example.com. TXT  "v=DMARC1; p=quarantine; rua=mailto:admin@example.com"
+```
+
+Port 25 must be open from the public internet. If STARTTLS is required, create
+Haraka certificates with:
+
+```bash
+HARAKA_DOMAIN=mail.example.com HARAKA_CERT_EMAIL=admin@example.com \
+  ./scripts/manage-haraka-certs.sh apply
+```
+
+More details are documented in `docker/haraka/README.md`.
 
 ## Required Configuration
 

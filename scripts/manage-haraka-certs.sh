@@ -6,7 +6,8 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-CERT_DIR="$PROJECT_ROOT/data/certs/haraka"
+RUNTIME_ROOT="${DEVIFY_RUNTIME_ROOT:-$PROJECT_ROOT}"
+CERT_DIR="$RUNTIME_ROOT/data/certs/haraka"
 LETSENCRYPT_LIVE="/etc/letsencrypt/live"
 
 DOMAIN="${HARAKA_DOMAIN:-mail.example.com}"
@@ -31,6 +32,7 @@ print_usage() {
     echo "Environment Variables:"
     echo "  HARAKA_DOMAIN       - Domain for certificate (default: mail.example.com)"
     echo "  HARAKA_CERT_EMAIL   - Email for Let's Encrypt (default: admin@example.com)"
+    echo "  DEVIFY_RUNTIME_ROOT - Runtime data root (default: project root)"
     echo ""
     echo "Examples:"
     echo "  HARAKA_DOMAIN=mail.devify.com HARAKA_CERT_EMAIL=admin@devify.com $0 apply"
@@ -128,10 +130,21 @@ renew_certificate() {
 restart_haraka() {
     echo -e "${GREEN}Restarting Haraka container...${NC}"
     
-    cd "$PROJECT_ROOT"
-    
-    if [ -f "docker-compose.yml" ]; then
-        docker-compose restart haraka
+    if [ -d "$RUNTIME_ROOT/.devify" ] && [ -f "$RUNTIME_ROOT/docker-compose.yml" ]; then
+        cd "$RUNTIME_ROOT"
+        DEVIFY_RUNTIME_ROOT="$RUNTIME_ROOT" \
+        DEVIFY_ENV_FILE="$RUNTIME_ROOT/.env" \
+        DEVIFY_NGINX_CERTS_DIR="$RUNTIME_ROOT/data/certs/nginx" \
+        DEVIFY_DEPLOY_ROOT="$RUNTIME_ROOT" \
+            docker compose \
+                --project-directory "$RUNTIME_ROOT/.devify" \
+                -f "$RUNTIME_ROOT/.devify/docker-compose.yml" \
+                -f "$RUNTIME_ROOT/docker-compose.yml" \
+                restart haraka
+        echo -e "${GREEN}Haraka restarted successfully${NC}"
+    elif [ -f "$PROJECT_ROOT/docker-compose.yml" ]; then
+        cd "$PROJECT_ROOT"
+        docker compose restart haraka
         echo -e "${GREEN}Haraka restarted successfully${NC}"
     else
         echo -e "${YELLOW}Warning: docker-compose.yml not found, skipping restart${NC}"
