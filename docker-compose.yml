@@ -63,7 +63,7 @@ services:
       mysql:
         condition: service_healthy
       redis:
-        condition: service_started
+        condition: service_healthy
     command: celery
 
   devify-scheduler:
@@ -84,7 +84,7 @@ services:
       mysql:
         condition: service_healthy
       redis:
-        condition: service_started
+        condition: service_healthy
     command: celery-beat
 
   devify-ui:
@@ -173,6 +173,12 @@ services:
       - ${DEVIFY_RUNTIME_ROOT:-.}/data/logs/redis:/var/log/redis
     networks:
       - devify_network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
 
   haraka:
     image: instrumentisto/haraka:latest
