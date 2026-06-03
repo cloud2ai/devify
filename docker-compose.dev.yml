@@ -163,7 +163,7 @@ services:
       - devify_network
 
   devify-ui:
-    image: devify-ui:dev
+    image: devify-ui:latest
     build:
       context: ./ui
       dockerfile: Dockerfile.dev
