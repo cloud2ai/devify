@@ -227,10 +227,7 @@ start_flower() {
 start_development() {
     log "Starting Django development server (runserver)..."
     wait_for_db
-    run_migrations
-    register_periodic_tasks
-    init_services
-    collect_static
+    python manage.py devify_init
     exec python manage.py runserver 0.0.0.0:8000
 }
 
@@ -239,22 +236,17 @@ case "$1" in
     gunicorn)
         generate_ssl_certs_if_missing
         wait_for_db
-        run_migrations
-        register_periodic_tasks
-        init_services
-        collect_static
+        python manage.py devify_init
         start_gunicorn
         ;;
     celery)
         wait_for_db
-        run_migrations
-        register_periodic_tasks
+        python manage.py devify_init --skip-collectstatic --skip-superuser
         start_celery_worker
         ;;
     celery-beat)
         wait_for_db
-        run_migrations
-        register_periodic_tasks
+        python manage.py devify_init --skip-collectstatic --skip-superuser
         start_celery_beat
         ;;
     flower)

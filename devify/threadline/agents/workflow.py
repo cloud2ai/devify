@@ -11,18 +11,8 @@ from functools import lru_cache
 import traceback
 from typing import Dict, Any
 
-from langgraph.graph import StateGraph, START, END
-
 from threadline.models import EmailMessage, EmailStatus
 from threadline.agents.checkpoint_manager import create_checkpointer
-from threadline.agents.nodes.workflow_prepare import WorkflowPrepareNode
-from threadline.agents.nodes.workflow_finalize import WorkflowFinalizeNode
-from threadline.agents.nodes.credits_check_node import CreditsCheckNode
-from threadline.agents.nodes.error_handler_node import ErrorHandlerNode
-from threadline.agents.nodes.image_intent_node import ImageIntentNode
-from threadline.agents.nodes.llm_email_node import LLMEmailNode
-from threadline.agents.nodes.summary_node import SummaryNode
-from threadline.agents.nodes.metadata_node import MetadataNode
 from threadline.agents.email_state import (
     EmailState,
     create_email_state,
@@ -118,6 +108,18 @@ def create_email_processing_graph():
     Returns:
         Compiled LangGraph workflow
     """
+    # Deferred: langgraph (~3.5 s) and node classes (pull litellm/agentcore)
+    # are only needed when the graph is first built.
+    from langgraph.graph import END, START, StateGraph
+    from threadline.agents.nodes.credits_check_node import CreditsCheckNode
+    from threadline.agents.nodes.error_handler_node import ErrorHandlerNode
+    from threadline.agents.nodes.image_intent_node import ImageIntentNode
+    from threadline.agents.nodes.llm_email_node import LLMEmailNode
+    from threadline.agents.nodes.metadata_node import MetadataNode
+    from threadline.agents.nodes.summary_node import SummaryNode
+    from threadline.agents.nodes.workflow_finalize import WorkflowFinalizeNode
+    from threadline.agents.nodes.workflow_prepare import WorkflowPrepareNode
+
     logger.info("Building email processing workflow graph")
 
     workflow = StateGraph(EmailState)

@@ -32,14 +32,14 @@ services:
       - devify_network
     depends_on:
       mysql:
-        condition: service_started
+        condition: service_healthy
     command: gunicorn
     healthcheck:
       test: ["CMD", "curl", "-f", "http://127.0.0.1:8000/health"]
-      interval: 30s
-      timeout: 10s
+      interval: 5s
+      timeout: 5s
       retries: 3
-      start_period: 300s
+      start_period: 60s
 
   devify-worker:
     image: registry.cn-beijing.aliyuncs.com/cloud2ai/devify:latest
@@ -59,9 +59,9 @@ services:
       - devify_network
     depends_on:
       devify-api:
-        condition: service_started
+        condition: service_healthy
       mysql:
-        condition: service_started
+        condition: service_healthy
       redis:
         condition: service_started
     command: celery
@@ -80,9 +80,9 @@ services:
       - devify_network
     depends_on:
       devify-api:
-        condition: service_started
+        condition: service_healthy
       mysql:
-        condition: service_started
+        condition: service_healthy
       redis:
         condition: service_started
     command: celery-beat
@@ -92,6 +92,11 @@ services:
     build:
       context: ./ui
       dockerfile: Dockerfile
+      args:
+        VITE_SENTRY_DSN: ${VITE_SENTRY_DSN:-}
+        VITE_SENTRY_ENVIRONMENT: ${VITE_SENTRY_ENVIRONMENT:-production}
+        VITE_SENTRY_RELEASE: ${VITE_SENTRY_RELEASE:-}
+        VITE_SENTRY_TRACES_SAMPLE_RATE: ${VITE_SENTRY_TRACES_SAMPLE_RATE:-0.1}
     container_name: devify-ui
     restart: unless-stopped
     logging: *default-logging
@@ -150,6 +155,12 @@ services:
       - ${DEVIFY_RUNTIME_ROOT:-.}/data/logs/mysql:/var/log/mysql
     networks:
       - devify_network
+    healthcheck:
+      test: ["CMD", "mariadb-admin", "ping", "-h", "localhost", "--silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
 
   redis:
     image: redis:alpine

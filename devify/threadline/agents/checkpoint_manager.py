@@ -10,8 +10,6 @@ import logging
 from typing import Any, Dict, List, Optional
 
 from django.conf import settings
-from langgraph.checkpoint.redis import RedisSaver
-from langgraph.graph import StateGraph
 
 logger = logging.getLogger(__name__)
 
@@ -57,14 +55,16 @@ class CheckpointManager:
         # Initialize context manager storage
         self._context_manager = None
 
-    def get_checkpointer(self) -> RedisSaver:
+    def get_checkpointer(self):
         """
         Get the Redis checkpointer instance with TTL configuration.
 
         Returns:
             RedisSaver: The Redis checkpointer instance with TTL settings
         """
-        # Create RedisSaver using context manager and return the actual instance
+        # Deferred: langgraph-redis (~2 s) only needed when a workflow runs.
+        from langgraph.checkpoint.redis import RedisSaver
+
         context_manager = RedisSaver.from_conn_string(
             self.redis_url,
             ttl=self.ttl_config
@@ -317,7 +317,7 @@ def setup_checkpoint_manager() -> None:
     manager.setup()
 
 
-def create_checkpointer() -> RedisSaver:
+def create_checkpointer():
     """
     Create Redis checkpointer for LangGraph.
 

@@ -6,9 +6,6 @@ from dataclasses import dataclass
 from collections.abc import Mapping
 from typing import Any, Dict
 
-from relay.services.drivers.feishu_bitable_handler import (
-    FeishuBitableIssueHandler,
-)
 from relay.services.drivers.jira_handler import JiraIssueHandler
 
 from threadline.utils.issues.error_utils import is_missing_issue_error
@@ -142,6 +139,10 @@ def _sync_jira_attachments(
 
 class FeishuBitableRelayAdapter(BaseRelayAdapter):
     def deliver(self, *, event, subscription, delivery) -> RelayAdapterResult:
+        # Deferred: lark_oapi (~3.4 s) only needed when Feishu delivery runs.
+        from relay.services.drivers.feishu_bitable_handler import (
+            FeishuBitableIssueHandler,
+        )
         handler = FeishuBitableIssueHandler(subscription.config or {})
         plan = (
             (delivery.metadata or {}).get("relay_delivery_plan")
