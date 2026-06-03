@@ -113,10 +113,10 @@ jobs:
       - name: Deploy devify-deploy stack
         uses: appleboy/ssh-action@v1.0.3
         with:
-          host: ${{ env.SSH_HOST }}
-          username: ${{ env.SSH_USER }}
-          port: ${{ env.SSH_PORT }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          host: ${{ vars.DEVIFY_DEPLOY_SSH_HOST }}
+          username: ${{ vars.DEVIFY_DEPLOY_SSH_USER }}
+          port: ${{ vars.DEVIFY_DEPLOY_SSH_PORT }}
+          key: ${{ secrets.DEVIFY_DEPLOY_SSH_PRIVATE_KEY }}
           script: |
             cd ~/devify-deploy
             DEVIFY_REF=${{ github.ref_name }} ./scripts/devify-deploy.sh upgrade
