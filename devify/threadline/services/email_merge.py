@@ -61,24 +61,18 @@ class EmailMergeService:
         Find a related target for the given email if mergeable.
         """
         logger.info(
-            "[EmailMerge] decide start email_id=%s uuid=%s subject=%r received_at=%s status=%s merged_into_id=%s",
-            email.id,
-            email.uuid,
-            email.subject,
-            email.received_at,
-            email.status,
-            email.merged_into_id,
+            f"[EmailMerge] decide start email_id={email.id} uuid={email.uuid}"
+            f" subject={email.subject!r} received_at={email.received_at}"
+            f" status={email.status} merged_into_id={email.merged_into_id}"
         )
         if email.merged_into_id:
             # Once a record already has a relation, keep following that
             # relation instead of re-deciding against the candidate set.
             canonical = self.resolve_canonical(email)
             logger.info(
-                "[EmailMerge] decide short-circuit email_id=%s target_id=%s target_uuid=%s reason=%s",
-                email.id,
-                canonical.id,
-                canonical.uuid,
-                email.merge_reason,
+                f"[EmailMerge] decide short-circuit email_id={email.id}"
+                f" target_id={canonical.id} target_uuid={canonical.uuid}"
+                f" reason={email.merge_reason}"
             )
             return MergeDecision(target=canonical, reason=email.merge_reason)
 
@@ -86,31 +80,39 @@ class EmailMergeService:
         # conversation cluster as the current email.
         matched_sources = self._find_merge_sources(email)
         logger.info(
-            "[EmailMerge] decide matched_sources email_id=%s matched_source_ids=%s",
-            email.id,
-            [source.id for source in matched_sources],
+            f"[EmailMerge] decide matched_sources email_id={email.id}"
+            f" matched_source_ids={[s.id for s in matched_sources]}"
         )
         if matched_sources:
             # Pick the earliest matching record as a stable relation anchor.
             target = self._select_merge_target(matched_sources)
+            merge_reason = self._determine_merge_reason(
+                email, matched_sources
+            )
             logger.info(
-                "[EmailMerge] decide target email_id=%s target_id=%s target_uuid=%s reason=%s",
-                email.id,
-                target.id,
-                target.uuid,
-                self._determine_merge_reason(email, matched_sources),
+                f"[EmailMerge] decide target email_id={email.id}"
+                f" target_id={target.id} target_uuid={target.uuid}"
+                f" reason={merge_reason}"
             )
             return MergeDecision(
                 target=target,
-                reason=self._determine_merge_reason(email, matched_sources),
+                reason=merge_reason,
                 sources=tuple(matched_sources),
             )
 
         return MergeDecision(target=None)
 
-    def reconcile(self, email: EmailMessage) -> tuple[EmailMessage, MergeDecision]:
+    def reconcile(
+        self, email: EmailMessage
+    ) -> tuple[EmailMessage, MergeDecision]:
         """
-        Apply the merge decision and return the related record.
+        Apply the merge decision and return the canonical record.
+
+        The newest record in a cluster is kept as the canonical anchor: an
+        arriving email absorbs the older matching records instead of being
+        hidden behind them, so a new email's own content is never lost. Manual
+        merges stay authoritative, so an email matching a manual canonical is
+        linked into it rather than absorbing it.
         """
         with transaction.atomic():
             email = EmailMessage.objects.select_for_update().get(pk=email.pk)
@@ -128,29 +130,56 @@ class EmailMergeService:
                 )
 
             decision = self.decide(email)
+            target_id = getattr(decision.target, "id", None)
+            target_uuid = getattr(decision.target, "uuid", None)
+            source_ids = [s.id for s in decision.sources]
             logger.info(
-                "[EmailMerge] reconcile decision email_id=%s should_merge=%s target_id=%s target_uuid=%s source_ids=%s reason=%s",
-                email.id,
-                decision.should_merge,
-                getattr(decision.target, "id", None),
-                getattr(decision.target, "uuid", None),
-                [source.id for source in decision.sources],
-                decision.reason,
+                f"[EmailMerge] reconcile decision email_id={email.id}"
+                f" should_merge={decision.should_merge}"
+                f" target_id={target_id} target_uuid={target_uuid}"
+                f" source_ids={source_ids} reason={decision.reason}"
             )
 
-            if decision.should_merge and decision.target:
+            if not (decision.should_merge and decision.sources):
+                self._mark_canonical(email)
+                return email, decision
+
+            merged_at = timezone.now()
+            cluster_heads = self._distinct_cluster_heads(
+                email, decision.sources
+            )
+
+            # Manual merges are authoritative: an arriving email that matches a
+            # manual canonical is linked into it instead of absorbing it.
+            manual_head = next(
+                (
+                    head
+                    for head in cluster_heads
+                    if self._is_manual_canonical(head)
+                ),
+                None,
+            )
+            if manual_head is not None:
                 target = EmailMessage.objects.select_for_update().get(
-                    pk=decision.target.pk
+                    pk=manual_head.pk
                 )
                 self._mark_source_as_merged(
-                    email,
-                    target,
-                    decision.reason,
-                    timezone.now(),
+                    email, target, decision.reason, merged_at
                 )
                 return target, decision
 
+            # Otherwise keep the newest record (the arriving email) as the
+            # canonical anchor and absorb the older cluster heads into it.
             self._mark_canonical(email)
+            for head in cluster_heads:
+                locked_head = EmailMessage.objects.select_for_update().get(
+                    pk=head.pk
+                )
+                if locked_head.merged_into_id == email.pk:
+                    continue
+                self._mark_source_as_merged(
+                    locked_head, email, decision.reason, merged_at
+                )
             return email, decision
 
     def resolve_canonical(self, email: EmailMessage) -> EmailMessage:
@@ -165,7 +194,7 @@ class EmailMergeService:
             # forever if the data ever becomes cyclic.
             if current.pk in visited:
                 logger.warning(
-                    "Detected circular merge chain for email %s", current.pk
+                    f"Detected circular merge chain for email {current.pk}"
                 )
                 break
             visited.add(current.pk)
@@ -182,26 +211,23 @@ class EmailMergeService:
             # Candidate scanning stays conservative: we log every record in the
             # time window, but only merge when a matcher explicitly fires.
             logger.debug(
-                "[EmailMerge] candidate scan email_id=%s candidate_id=%s candidate_uuid=%s subject=%r received_at=%s status=%s",
-                email.id,
-                candidate.id,
-                candidate.uuid,
-                candidate.subject,
-                candidate.received_at,
-                candidate.status,
+                f"[EmailMerge] candidate scan email_id={email.id}"
+                f" candidate_id={candidate.id}"
+                f" candidate_uuid={candidate.uuid}"
+                f" subject={candidate.subject!r}"
+                f" received_at={candidate.received_at}"
+                f" status={candidate.status}"
             )
             if self._candidate_matches(email, candidate):
                 matched_sources.append(candidate)
                 logger.debug(
-                    "[EmailMerge] candidate matched email_id=%s candidate_id=%s",
-                    email.id,
-                    candidate.id,
+                    f"[EmailMerge] candidate matched email_id={email.id}"
+                    f" candidate_id={candidate.id}"
                 )
             else:
                 logger.debug(
-                    "[EmailMerge] candidate not matched email_id=%s candidate_id=%s",
-                    email.id,
-                    candidate.id,
+                    f"[EmailMerge] candidate not matched email_id={email.id}"
+                    f" candidate_id={candidate.id}"
                 )
         return matched_sources
 
@@ -212,19 +238,21 @@ class EmailMergeService:
         Choose a deterministic relation anchor within the related cluster.
         """
         candidates = list(sources)
+        candidate_ids = [item.id for item in candidates]
+        candidate_details = [
+            {
+                "id": item.id,
+                "uuid": str(item.uuid),
+                "received_at": item.received_at.isoformat()
+                if item.received_at
+                else None,
+            }
+            for item in candidates
+        ]
         logger.info(
-            "[EmailMerge] select target cluster candidate_ids=%s received_at=%s",
-            [item.id for item in candidates],
-            [
-                {
-                    "id": item.id,
-                    "uuid": str(item.uuid),
-                    "received_at": item.received_at.isoformat()
-                    if item.received_at
-                    else None,
-                }
-                for item in candidates
-            ],
+            f"[EmailMerge] select target cluster"
+            f" candidate_ids={candidate_ids}"
+            f" received_at={candidate_details}"
         )
         return self._pick_earliest_candidate(candidates)
 
@@ -237,36 +265,31 @@ class EmailMergeService:
         # Matchers are ordered from strongest to weakest signal.
         if self._matches_thread_relation(email, candidate):
             logger.debug(
-                "[EmailMerge] matcher hit thread_relation email_id=%s candidate_id=%s",
-                email.id,
-                candidate.id,
+                f"[EmailMerge] matcher hit thread_relation"
+                f" email_id={email.id} candidate_id={candidate.id}"
             )
             return True
         if self._matches_forward_chain(email, candidate):
             logger.debug(
-                "[EmailMerge] matcher hit forward_chain email_id=%s candidate_id=%s",
-                email.id,
-                candidate.id,
+                f"[EmailMerge] matcher hit forward_chain"
+                f" email_id={email.id} candidate_id={candidate.id}"
             )
             return True
         if self._matches_text_similarity(email, candidate):
             logger.debug(
-                "[EmailMerge] matcher hit text_similarity email_id=%s candidate_id=%s",
-                email.id,
-                candidate.id,
+                f"[EmailMerge] matcher hit text_similarity"
+                f" email_id={email.id} candidate_id={candidate.id}"
             )
             return True
         if self._matches_containment(email, candidate):
             logger.debug(
-                "[EmailMerge] matcher hit containment email_id=%s candidate_id=%s",
-                email.id,
-                candidate.id,
+                f"[EmailMerge] matcher hit containment"
+                f" email_id={email.id} candidate_id={candidate.id}"
             )
             return True
         logger.debug(
-            "[EmailMerge] matcher miss email_id=%s candidate_id=%s",
-            email.id,
-            candidate.id,
+            f"[EmailMerge] matcher miss"
+            f" email_id={email.id} candidate_id={candidate.id}"
         )
         return False
 
@@ -330,7 +353,9 @@ class EmailMergeService:
 
         candidate_ids = []
         if email.in_reply_to:
-            candidate_ids.extend(self._extract_message_tokens(email.in_reply_to))
+            candidate_ids.extend(
+                self._extract_message_tokens(email.in_reply_to)
+            )
         candidate_ids.extend(
             self._extract_reference_tokens(email.references)
         )
@@ -391,11 +416,9 @@ class EmailMergeService:
             candidate_text, current_text
         )
         logger.debug(
-            "[EmailMerge] rapidfuzz similarity email_id=%s candidate_id=%s ratio=%.2f partial_ratio=%.2f",
-            email.id,
-            candidate.id,
-            ratio,
-            partial_ratio,
+            f"[EmailMerge] rapidfuzz similarity email_id={email.id}"
+            f" candidate_id={candidate.id}"
+            f" ratio={ratio:.2f} partial_ratio={partial_ratio:.2f}"
         )
         return self._meets_text_similarity_threshold(ratio, partial_ratio)
 
@@ -444,7 +467,9 @@ class EmailMergeService:
         materialized = list(candidates)
         if not materialized:
             return None
-        return sorted(materialized, key=lambda item: (item.received_at, item.id))[0]
+        return sorted(
+            materialized, key=lambda item: (item.received_at, item.id)
+        )[0]
 
     def _pick_text_candidate(
         self, email: EmailMessage, candidates: Iterable[EmailMessage]
@@ -570,12 +595,9 @@ class EmailMergeService:
         Mark an older source record as merged into the canonical record.
         """
         logger.info(
-            "[EmailMerge] mark source merged source_id=%s source_uuid=%s canonical_id=%s canonical_uuid=%s reason=%s",
-            source.id,
-            source.uuid,
-            canonical.id,
-            canonical.uuid,
-            reason,
+            f"[EmailMerge] mark source merged source_id={source.id}"
+            f" source_uuid={source.uuid} canonical_id={canonical.id}"
+            f" canonical_uuid={canonical.uuid} reason={reason}"
         )
 
         source.merged_into = canonical
@@ -604,6 +626,31 @@ class EmailMergeService:
             ]
         )
 
+    def _distinct_cluster_heads(
+        self, email: EmailMessage, sources: Iterable[EmailMessage]
+    ) -> list[EmailMessage]:
+        """
+        Resolve matched records to the head of their existing merge cluster.
+
+        Re-pointing cluster heads instead of individual leaves keeps the merge
+        graph consistent when an email matches a record that was already merged
+        into a canonical anchor.
+        """
+        heads: dict[int, EmailMessage] = {}
+        for source in sources:
+            head = self.resolve_canonical(source)
+            if head.pk == email.pk:
+                continue
+            heads.setdefault(head.pk, head)
+        return list(heads.values())
+
+    def _is_manual_canonical(self, email: EmailMessage) -> bool:
+        """
+        Return True when a record is a manually merged canonical message.
+        """
+        message_id = email.message_id or ""
+        return message_id.startswith("manual-merge-")
+
     def _normalize_subject(self, subject: str) -> str:
         subject = subject or ""
         subject = SUBJECT_PREFIX_PATTERN.sub("", subject)
@@ -631,7 +678,10 @@ class EmailMergeService:
         """
         if not value:
             return []
-        return [match.group(1).strip() for match in THREAD_HEADER_PATTERN.finditer(value)]
+        return [
+            match.group(1).strip()
+            for match in THREAD_HEADER_PATTERN.finditer(value)
+        ]
 
     def _extract_reference_tokens(self, references) -> list[str]:
         """

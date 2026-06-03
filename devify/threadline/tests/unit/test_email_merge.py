@@ -37,7 +37,9 @@ class TestEmailMergeService(TestCase):
         user = user or self.user
         defaults = {
             "user": user,
-            "message_id": kwargs.pop("message_id", f"<{uuid4().hex}@example.com>"),
+            "message_id": kwargs.pop(
+                "message_id", f"<{uuid4().hex}@example.com>"
+            ),
             "subject": kwargs.pop("subject", "Untitled"),
             "sender": kwargs.pop("sender", "sender@example.com"),
             "recipients": kwargs.pop("recipients", "recipient@example.com"),
@@ -97,7 +99,10 @@ class TestEmailMergeService(TestCase):
 
         assert decision.should_merge is True
         assert decision.target == parent
-        assert decision.reason == EmailMessage.MergeReason.TEXT_SIMILARITY.value
+        assert (
+            decision.reason
+            == EmailMessage.MergeReason.TEXT_SIMILARITY.value
+        )
 
     def test_similarity_merges_when_partial_ratio_is_high(self):
         parent = self._create_email(
@@ -106,7 +111,9 @@ class TestEmailMergeService(TestCase):
         )
         source = self._create_email(
             subject="Project review",
-            text_content="beta gamma delta epsilon zeta eta theta plus an appendix",
+            text_content=(
+                "beta gamma delta epsilon zeta eta theta plus an appendix"
+            ),
             received_at=timezone.now(),
         )
 
@@ -121,7 +128,10 @@ class TestEmailMergeService(TestCase):
         assert parent.pk is not None
         assert decision.should_merge is True
         assert decision.target == parent
-        assert decision.reason == EmailMessage.MergeReason.TEXT_SIMILARITY.value
+        assert (
+            decision.reason
+            == EmailMessage.MergeReason.TEXT_SIMILARITY.value
+        )
 
     def test_forward_chain_with_added_content_merges(self):
         parent = self._create_email(
@@ -130,7 +140,10 @@ class TestEmailMergeService(TestCase):
         )
         source = self._create_email(
             subject="Fwd: Project notes",
-            text_content="We should keep the old plan\n\nHere is the updated proposal",
+            text_content=(
+                "We should keep the old plan\n\n"
+                "Here is the updated proposal"
+            ),
             received_at=timezone.now(),
         )
 
@@ -140,7 +153,9 @@ class TestEmailMergeService(TestCase):
         assert decision.target == parent
         assert decision.reason == EmailMessage.MergeReason.FORWARD_CHAIN.value
 
-    def test_does_not_merge_outside_three_day_window_without_thread_relation(self):
+    def test_does_not_merge_outside_three_day_window_without_thread_relation(
+        self,
+    ):
         older = self._create_email(
             subject="Weekly digest",
             text_content="Summary A\nSummary B\nSummary C",
@@ -244,6 +259,106 @@ class TestEmailMergeService(TestCase):
         assert decision.target == parent
         assert parent.text_content == "Base text"
         assert child.merged_into_id == parent.id
+
+    def test_reconcile_keeps_newest_as_canonical_and_absorbs_older(self):
+        older = self._create_email(
+            subject="Status brief",
+            text_content=(
+                "Line 1\n"
+                "Line 2\n"
+                "Line 3\n"
+                "Line 4\n"
+                "Line 5\n"
+                "Line 6\n"
+            ),
+            received_at=timezone.now() - timedelta(days=1),
+        )
+        newer = self._create_email(
+            subject="Status brief",
+            text_content="Line 1\nLine 2\nLine 3",
+            received_at=timezone.now(),
+        )
+
+        canonical, decision = self.service.reconcile(newer)
+
+        older.refresh_from_db()
+        newer.refresh_from_db()
+
+        assert decision.should_merge is True
+        assert canonical.pk == newer.pk
+        assert newer.merged_into_id is None
+        assert older.merged_into_id == newer.pk
+        assert older.last_merged_at is not None
+
+    def test_reconcile_links_into_manual_canonical_without_absorbing_it(self):
+        manual_canonical = self._create_email(
+            message_id="manual-merge-abc123",
+            subject="Status brief",
+            text_content=(
+                "Line 1\n"
+                "Line 2\n"
+                "Line 3\n"
+                "Line 4\n"
+                "Line 5\n"
+                "Line 6\n"
+            ),
+            received_at=timezone.now() - timedelta(days=1),
+        )
+        arriving = self._create_email(
+            subject="Status brief",
+            text_content="Line 1\nLine 2\nLine 3",
+            received_at=timezone.now(),
+        )
+
+        canonical, decision = self.service.reconcile(arriving)
+
+        arriving.refresh_from_db()
+        manual_canonical.refresh_from_db()
+
+        assert decision.should_merge is True
+        assert canonical.pk == manual_canonical.pk
+        assert arriving.merged_into_id == manual_canonical.pk
+        assert manual_canonical.merged_into_id is None
+
+    def test_reconcile_absorbs_existing_cluster_head_for_new_arrival(self):
+        first = self._create_email(
+            subject="Status brief",
+            text_content=(
+                "Line 1\n"
+                "Line 2\n"
+                "Line 3\n"
+                "Line 4\n"
+                "Line 5\n"
+                "Line 6\n"
+            ),
+            received_at=timezone.now() - timedelta(days=2),
+        )
+        second = self._create_email(
+            subject="Status brief",
+            text_content="Line 1\nLine 2\nLine 3\nLine 4",
+            received_at=timezone.now() - timedelta(days=1),
+        )
+        self.service.reconcile(second)
+
+        third = self._create_email(
+            subject="Status brief",
+            text_content="Line 1\nLine 2\nLine 3",
+            received_at=timezone.now(),
+        )
+        canonical, decision = self.service.reconcile(third)
+
+        first.refresh_from_db()
+        second.refresh_from_db()
+        third.refresh_from_db()
+
+        assert decision.should_merge is True
+        assert canonical.pk == third.pk
+        assert third.merged_into_id is None
+        assert second.merged_into_id == third.pk
+        # The original record stays merged and resolves to the newest canonical
+        # through the chain.
+        assert first.merged_into_id is not None
+        assert self.service.resolve_canonical(first).pk == third.pk
 
     def test_resolve_canonical_follows_merge_chain(self):
         parent = self._create_email(
