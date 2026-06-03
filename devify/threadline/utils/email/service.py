@@ -5,14 +5,14 @@ Provides unified email saving functionality for both IMAP and Haraka email
 processing.
 """
 
-import logging
 import hashlib
+import logging
 import os
 import shutil
 from collections import defaultdict
-from django.conf import settings
 from typing import Dict, List, Optional
 
+from django.conf import settings
 from django.contrib.auth.models import User
 
 from threadline.models import (
@@ -82,8 +82,8 @@ class EmailSaveService:
 
             if not created:
                 logger.info(
-                    f"Email already exists: {email_data['message_id']}, "
-                    f"skipping"
+                    "Email already exists: %s, skipping",
+                    email_data["message_id"],
                 )
                 return None
 
@@ -99,7 +99,7 @@ class EmailSaveService:
             return email_msg
 
         except Exception as exc:
-            logger.error(f"Failed to save email to database: {exc}")
+            logger.debug(f"Failed to save email to database: {exc}")
             raise
 
     def process_attachments(
@@ -207,12 +207,12 @@ class EmailSaveService:
 
                 except Exception as exc:
                     logger.error(
-                        f"Failed to process attachment " f"{filename}: {exc}"
+                        f"Failed to process attachment {filename}: {exc}"
                     )
                     continue
 
             logger.info(
-                f"Successfully processed {len(attachments)} " f"attachments"
+                f"Successfully processed {len(attachments)} attachments"
             )
             return created_attachments
 
