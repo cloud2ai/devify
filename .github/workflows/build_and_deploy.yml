@@ -109,3 +109,15 @@ jobs:
             docker-compose -f docker-compose.yml pull
             docker-compose -f docker-compose.yml up -d --force-recreate
             docker system prune -f
+
+      - name: Deploy devify-deploy stack
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ env.SSH_HOST }}
+          username: ${{ env.SSH_USER }}
+          port: ${{ env.SSH_PORT }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            cd ~/devify-deploy
+            DEVIFY_REF=${{ github.ref_name }} ./scripts/devify-deploy.sh upgrade
+            docker system prune -f
