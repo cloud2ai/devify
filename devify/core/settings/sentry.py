@@ -25,11 +25,29 @@ if _DSN:
         2005,  # Unknown MySQL server host (DNS failure)
     }
 
+    # Log message prefixes emitted by Celery internals when the broker is
+    # temporarily unreachable during startup. These are not actionable.
+    _CELERY_BROKER_TRANSIENT_PREFIXES = (
+        "consumer: Cannot connect to redis://",
+        "consumer: Cannot connect to amqp://",
+    )
+
     def _before_send(event, hint):
         """
         Drop transient infrastructure-connectivity errors that are expected
         during container restarts and are already handled in application code.
         """
+        # Drop Celery consumer broker-unreachable log messages. These are
+        # emitted by Celery itself (not our code) when the broker is briefly
+        # unavailable on startup; Celery reconnects automatically.
+        message = (
+            event.get("logentry", {}).get("message", "")
+            or event.get("message", "")
+            or ""
+        )
+        if message.startswith(_CELERY_BROKER_TRANSIENT_PREFIXES):
+            return None
+
         exc_info = hint.get("exc_info")
         if exc_info:
             exc_type, exc_value, _ = exc_info
