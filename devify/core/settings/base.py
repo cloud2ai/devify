@@ -24,6 +24,7 @@ from .billing import *
 from .email_system import *
 
 from .logging_config import configure_logging
+from .sentry import *
 
 # Suppress specific warnings
 warnings.filterwarnings("ignore", category=SyntaxWarning, module="flanker")
