@@ -96,7 +96,6 @@ import re
 import time
 from typing import Any, Dict, List, Optional
 
-from ..llm import call_llm
 from .jira_client import JiraClient
 from .jira_utils import (
     build_summary_field,
@@ -891,11 +890,14 @@ from configuration."""
         # Call LLM for analysis
         # ========================================
         try:
-            llm_response = call_llm(
+            # Deferred: pulls litellm/agentcore chain (~14 s) on first call.
+            from core.tracking import LLMTracker
+            llm_response, _ = LLMTracker.call_and_track(
                 prompt=prompt,
                 content=summary_content,
                 json_mode=True,
                 max_retries=3,
+                node_name="jira_field_mapping",
             )
 
             if not llm_response or not isinstance(llm_response, dict):
