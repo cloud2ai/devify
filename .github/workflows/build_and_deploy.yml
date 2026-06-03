@@ -105,9 +105,10 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
             cd ${{ env.DEPLOY_PATH }}
-            # Pull the specified image tag
+            git fetch --tags origin
+            git checkout ${{ github.ref_name }}
             docker-compose -f docker-compose.yml pull
-            docker-compose -f docker-compose.yml up -d --force-recreate
+            docker-compose -f docker-compose.yml up -d
             docker system prune -f
 
       - name: Deploy devify-deploy stack
