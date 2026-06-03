@@ -74,7 +74,7 @@ class SummaryNode(BaseLangGraphNode):
         llm_content = llm_content_raw.strip() if llm_content_raw else ""
 
         if not force and not llm_content:
-            logger.error(
+            logger.warning(
                 "No email LLM content available for summary generation"
             )
             return False

@@ -65,8 +65,8 @@ class MetadataNode(BaseLangGraphNode):
             return False
 
         force = state.get("force", False)
-        summary_title = state.get("summary_title", "").strip()
-        summary_content = state.get("summary_content", "").strip()
+        summary_title = (state.get("summary_title") or "").strip()
+        summary_content = (state.get("summary_content") or "").strip()
 
         if not force and (not summary_title or not summary_content):
             logger.error(

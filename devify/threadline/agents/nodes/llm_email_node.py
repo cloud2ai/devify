@@ -61,9 +61,11 @@ class LLMEmailNode(BaseLangGraphNode):
         if not super().can_enter_node(state):
             return False
 
-        text_content = state.get("text_content", "").strip()
+        text_content = (state.get("text_content") or "").strip()
         if not text_content:
-            logger.error("No email text content available for LLM processing")
+            logger.warning(
+                "No email text content available for LLM processing"
+            )
             return False
 
         return True
