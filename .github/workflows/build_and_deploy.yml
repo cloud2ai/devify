@@ -96,7 +96,7 @@ jobs:
           known_hosts: ${{ secrets.SSH_KNOWN_HOSTS }}
           if_key_exists: fail
 
-      - name: Deploy to Server
+      - name: Deploy aimychats internal 10.251
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ env.SSH_HOST }}
@@ -112,14 +112,13 @@ jobs:
             docker-compose -f docker-compose.yml exec -T nginx nginx -s reload 2>/dev/null || docker-compose -f docker-compose.yml restart nginx
             docker system prune -f
 
-      - name: Deploy devify-deploy stack
+      - name: Deploy aimychats production
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ vars.DEVIFY_DEPLOY_SSH_HOST }}
           username: ${{ vars.DEVIFY_DEPLOY_SSH_USER }}
           port: ${{ vars.DEVIFY_DEPLOY_SSH_PORT }}
-          key: ${{ secrets.DEVIFY_DEPLOY_SSH_PRIVATE_KEY }}
-          use_insecure_cipher: true
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
             cd ~/devify-deploy
             DEVIFY_REF=${{ github.ref_name }} ./scripts/devify-deploy.sh upgrade
