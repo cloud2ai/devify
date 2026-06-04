@@ -19,4 +19,5 @@ class ThreadlineConfig(AppConfig):
         import threadline.tasks.email_merge  # noqa: F401
         import threadline.tasks.email_fetch  # noqa: F401
         import threadline.tasks.email_workflow  # noqa: F401
+        import threadline.tasks.notifications  # noqa: F401
         import threadline.tasks.scheduler  # noqa: F401
