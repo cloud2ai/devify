@@ -98,68 +98,69 @@ Devify 就是为了填补这个缺口而存在的。
 
 ## 🧩 Devify 工作原理
 
-```text
-企业 / 个人信息
+```mermaid
+flowchart TB
+    subgraph SRC["📥 企业 / 个人信息"]
+        direction LR
+        S1["💬 微信群"]
+        S2["📧 邮件往来"]
+        S3["🖼️ 截图"]
+        S4["📝 个人笔记"]
+        S5["🗓️ 会议记录"]
+    end
 
-  微信群
-  邮件往来
-  截图
-  临时聊天消息
-  个人笔记
-  会议记录
+    subgraph L1["🗂️ 数据层"]
+        D1["统一的原始输入收集"]
+    end
 
-            |
-            v
+    subgraph L2["🧠 数据处理层"]
+        direction LR
+        P1["LLM 理解"]
+        P2["多模态意图识别"]
+        P3["图片理解"]
+        P4["摘要与元数据提取"]
+    end
 
-  +-------------------+
-  |      数据层        |
-  |-------------------|
-  | 统一的原始输入     |
-  | 收集层             |
-  +-------------------+
+    subgraph L3["🚀 数据应用层"]
+        direction LR
+        A1["JIRA"]
+        A2["知识库"]
+        A3["报表"]
+        A4["工作流自动化"]
+        A5["未来的应用中心"]
+    end
 
-            |
-            v
+    SRC --> L1 --> L2 --> L3
 
-  +-----------------------------+
-  |        数据处理层            |
-  |-----------------------------|
-  | LLM 理解                    |
-  | 多模态意图识别               |
-  | 图片理解                    |
-  | 摘要 + 元数据提取            |
-  +-----------------------------+
+    classDef srcStyle fill:#fff7ed,stroke:#fb923c,color:#7c2d12
+    classDef dataStyle fill:#eff6ff,stroke:#60a5fa,color:#1e3a8a
+    classDef procStyle fill:#f0fdf4,stroke:#4ade80,color:#14532d
+    classDef appStyle fill:#faf5ff,stroke:#c084fc,color:#581c87
+    classDef nodeStyle fill:#ffffff,stroke:#9ca3af,color:#1f2937
 
-            |
-            v
-
-  +-----------------------------+
-  |        数据应用层            |
-  |-----------------------------|
-  | JIRA                        |
-  | 知识库                      |
-  | 报表                        |
-  | 工作流自动化                 |
-  | 未来的应用中心能力           |
-  +-----------------------------+
+    class SRC srcStyle
+    class L1 dataStyle
+    class L2 procStyle
+    class L3 appStyle
+    class S1,S2,S3,S4,S5,D1,P1,P2,P3,P4,A1,A2,A3,A4,A5 nodeStyle
 ```
 
-```text
-当前的实际路径
+**当前的实际路径：**
 
-  聊天记录 / 截图 / 相关材料
-            |
-            v
-        邮件转发
-            |
-            v
-     AI 理解与信息提取
-            |
-            v
-     结构化摘要与数据
-            |
-            v
-  JIRA / 知识库 / 工作流数据
+```mermaid
+flowchart LR
+    A["💬 聊天记录<br/>截图与相关材料"]
+    B["📧 邮件转发"]
+    C["🤖 AI 理解<br/>与信息提取"]
+    D["📋 结构化摘要<br/>与数据"]
+    E["🚀 JIRA / 知识库<br/>工作流数据"]
+
+    A --> B --> C --> D --> E
+
+    classDef step fill:#eff6ff,stroke:#60a5fa,color:#1e3a8a
+    classDef result fill:#f0fdf4,stroke:#4ade80,color:#14532d
+    class A,B,C,D step
+    class E result
 ```
 
 ## 🧵 Threadline 核心功能
@@ -225,6 +226,7 @@ Devify 不绑定任何单一 LLM 厂商。
   <tr>
     <td width="180" align="center">
       <a href="https://agione.pro">
+        <img src="docs/images/llm-providers/agione-logo.png" alt="AGIone" width="72"><br/>
         <b>AGIone</b>
       </a>
     </td>
@@ -236,13 +238,13 @@ Devify 不绑定任何单一 LLM 厂商。
 
 | 平台 | 适用场景 | 多模态 | 在 Devify 中的配置方式 |
 |------|----------|:------:|------------------------|
-| [AGIone](https://agione.pro) | 一个 API Key 绑定所有模型任务（推荐快速上手） | ✅ | `OpenAI 兼容` 供应商，`api_base` → agione.pro |
-| [OpenAI](https://platform.openai.com) | 图片理解、意图识别、摘要 | ✅ | 内置 `OpenAI` 供应商 |
-| [Anthropic](https://www.anthropic.com) | 高质量摘要和元数据提取 | ✅ | 内置 `Anthropic` 供应商 |
-| [Google Gemini](https://ai.google.dev) | 高性价比的多模态理解 | ✅ | 内置 `Google Gemini` 供应商 |
-| [DeepSeek](https://www.deepseek.com) | 大规模低成本文本摘要 | — | 内置 `DeepSeek` 供应商 |
-| [灵积 DashScope（通义千问）](https://dashscope.aliyun.com) | 中文内容处理和 Qwen-VL 图片理解 | ✅ | 内置 `DashScope` 供应商 |
-| [OpenRouter](https://openrouter.ai) | 通过一个端点尝试多种模型 | ✅ | 内置 `OpenRouter` 供应商 |
+| <img src="docs/images/llm-providers/agione.png" width="16"> [AGIone](https://agione.pro) | 一个 API Key 绑定所有模型任务（推荐快速上手） | ✅ | `OpenAI 兼容` 供应商，`api_base` → agione.pro |
+| <img src="docs/images/llm-providers/openai.png" width="16"> [OpenAI](https://platform.openai.com) | 图片理解、意图识别、摘要 | ✅ | 内置 `OpenAI` 供应商 |
+| <img src="docs/images/llm-providers/anthropic.png" width="16"> [Anthropic](https://www.anthropic.com) | 高质量摘要和元数据提取 | ✅ | 内置 `Anthropic` 供应商 |
+| <img src="docs/images/llm-providers/gemini.png" width="16"> [Google Gemini](https://ai.google.dev) | 高性价比的多模态理解 | ✅ | 内置 `Google Gemini` 供应商 |
+| <img src="docs/images/llm-providers/deepseek.png" width="16"> [DeepSeek](https://www.deepseek.com) | 大规模低成本文本摘要 | — | 内置 `DeepSeek` 供应商 |
+| <img src="docs/images/llm-providers/qwen.png" width="16"> [灵积 DashScope（通义千问）](https://dashscope.aliyun.com) | 中文内容处理和 Qwen-VL 图片理解 | ✅ | 内置 `DashScope` 供应商 |
+| <img src="docs/images/llm-providers/openrouter.png" width="16"> [OpenRouter](https://openrouter.ai) | 通过一个端点尝试多种模型 | ✅ | 内置 `OpenRouter` 供应商 |
 
 > 💡 Devify 至少需要一个**多模态**模型用于图片理解和意图识别。最简单的起步方案是使用一个聚合平台账号（如 AGIone 或 OpenRouter）绑定所有 Threadline 任务。
 

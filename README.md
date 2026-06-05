@@ -98,68 +98,69 @@ In the future, Devify can expand to unify more inputs such as:
 
 ## 🧩 How Devify Works
 
-```text
-Enterprise / Personal Information
+```mermaid
+flowchart TB
+    subgraph SRC["📥 Enterprise / Personal Information"]
+        direction LR
+        S1["💬 WeChat groups"]
+        S2["📧 Email threads"]
+        S3["🖼️ Screenshots"]
+        S4["📝 Personal notes"]
+        S5["🗓️ Meeting records"]
+    end
 
-  WeChat groups
-  Email threads
-  Screenshots
-  Temporary chat messages
-  Personal notes
-  Meeting records
+    subgraph L1["🗂️ Data Layer"]
+        D1["Unified raw input collection"]
+    end
 
-            |
-            v
+    subgraph L2["🧠 Data Processing Layer"]
+        direction LR
+        P1["LLM understanding"]
+        P2["Multimodal intent detection"]
+        P3["Image understanding"]
+        P4["Summary & metadata extraction"]
+    end
 
-  +-------------------+
-  |    Data Layer     |
-  |-------------------|
-  | Unified raw input |
-  | collection layer  |
-  +-------------------+
+    subgraph L3["🚀 Data Application Layer"]
+        direction LR
+        A1["JIRA"]
+        A2["Knowledge base"]
+        A3["Reports"]
+        A4["Workflow automation"]
+        A5["Future app center"]
+    end
 
-            |
-            v
+    SRC --> L1 --> L2 --> L3
 
-  +-----------------------------+
-  |  Data Processing Layer      |
-  |-----------------------------|
-  | LLM understanding           |
-  | Multimodal intent detection |
-  | Image understanding         |
-  | Summary + metadata extract  |
-  +-----------------------------+
+    classDef srcStyle fill:#fff7ed,stroke:#fb923c,color:#7c2d12
+    classDef dataStyle fill:#eff6ff,stroke:#60a5fa,color:#1e3a8a
+    classDef procStyle fill:#f0fdf4,stroke:#4ade80,color:#14532d
+    classDef appStyle fill:#faf5ff,stroke:#c084fc,color:#581c87
+    classDef nodeStyle fill:#ffffff,stroke:#9ca3af,color:#1f2937
 
-            |
-            v
-
-  +-----------------------------+
-  |   Data Application Layer    |
-  |-----------------------------|
-  | JIRA                        |
-  | Knowledge base              |
-  | Reports                     |
-  | Workflow automation         |
-  | Future app center features  |
-  +-----------------------------+
+    class SRC srcStyle
+    class L1 dataStyle
+    class L2 procStyle
+    class L3 appStyle
+    class S1,S2,S3,S4,S5,D1,P1,P2,P3,P4,A1,A2,A3,A4,A5 nodeStyle
 ```
 
-```text
-Current practical path
+**Current practical path:**
 
-  Chat records / screenshots / related materials
-                    |
-                    v
-           Forward by email
-                    |
-                    v
-        AI understanding and extraction
-                    |
-                    v
-        Structured summary and data
-                    |
-                    v
-   JIRA / Knowledge Base / Workflow Data
+```mermaid
+flowchart LR
+    A["💬 Chat records<br/>screenshots & materials"]
+    B["📧 Forward<br/>by email"]
+    C["🤖 AI understanding<br/>& extraction"]
+    D["📋 Structured summary<br/>& data"]
+    E["🚀 JIRA / Knowledge base<br/>Workflow data"]
+
+    A --> B --> C --> D --> E
+
+    classDef step fill:#eff6ff,stroke:#60a5fa,color:#1e3a8a
+    classDef result fill:#f0fdf4,stroke:#4ade80,color:#14532d
+    class A,B,C,D step
+    class E result
 ```
 
 ## 🧵 Threadline Core Feature
@@ -225,6 +226,7 @@ If you don't know where to start, the providers below have been validated with D
   <tr>
     <td width="180" align="center">
       <a href="https://agione.pro">
+        <img src="docs/images/llm-providers/agione-logo.png" alt="AGIone" width="72"><br/>
         <b>AGIone</b>
       </a>
     </td>
@@ -236,13 +238,13 @@ If you don't know where to start, the providers below have been validated with D
 
 | Provider | Best for | Multimodal | How to configure in Devify |
 |----------|----------|:----------:|----------------------------|
-| [AGIone](https://agione.pro) | One API key for all model bindings (recommended for quick start) | ✅ | `OpenAI-compatible` provider, `api_base` → agione.pro |
-| [OpenAI](https://platform.openai.com) | Image understanding, intent detection, summarization | ✅ | Built-in `OpenAI` provider |
-| [Anthropic](https://www.anthropic.com) | High-quality summarization and metadata extraction | ✅ | Built-in `Anthropic` provider |
-| [Google Gemini](https://ai.google.dev) | Cost-effective multimodal understanding | ✅ | Built-in `Google Gemini` provider |
-| [DeepSeek](https://www.deepseek.com) | Low-cost text summarization at scale | — | Built-in `DeepSeek` provider |
-| [DashScope (Qwen)](https://dashscope.aliyun.com) | Chinese-language content and Qwen-VL image understanding | ✅ | Built-in `DashScope` provider |
-| [OpenRouter](https://openrouter.ai) | Trying many models behind one endpoint | ✅ | Built-in `OpenRouter` provider |
+| <img src="docs/images/llm-providers/agione.png" width="16"> [AGIone](https://agione.pro) | One API key for all model bindings (recommended for quick start) | ✅ | `OpenAI-compatible` provider, `api_base` → agione.pro |
+| <img src="docs/images/llm-providers/openai.png" width="16"> [OpenAI](https://platform.openai.com) | Image understanding, intent detection, summarization | ✅ | Built-in `OpenAI` provider |
+| <img src="docs/images/llm-providers/anthropic.png" width="16"> [Anthropic](https://www.anthropic.com) | High-quality summarization and metadata extraction | ✅ | Built-in `Anthropic` provider |
+| <img src="docs/images/llm-providers/gemini.png" width="16"> [Google Gemini](https://ai.google.dev) | Cost-effective multimodal understanding | ✅ | Built-in `Google Gemini` provider |
+| <img src="docs/images/llm-providers/deepseek.png" width="16"> [DeepSeek](https://www.deepseek.com) | Low-cost text summarization at scale | — | Built-in `DeepSeek` provider |
+| <img src="docs/images/llm-providers/qwen.png" width="16"> [DashScope (Qwen)](https://dashscope.aliyun.com) | Chinese-language content and Qwen-VL image understanding | ✅ | Built-in `DashScope` provider |
+| <img src="docs/images/llm-providers/openrouter.png" width="16"> [OpenRouter](https://openrouter.ai) | Trying many models behind one endpoint | ✅ | Built-in `OpenRouter` provider |
 
 > 💡 Devify requires at least one **multimodal** model for image understanding and intent detection. A common minimal setup is a single aggregator account (e.g. AGIone or OpenRouter) bound to all Threadline jobs.
 
