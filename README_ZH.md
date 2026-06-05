@@ -99,69 +99,45 @@ Devify 就是为了填补这个缺口而存在的。
 ## 🧩 Devify 工作原理
 
 ```mermaid
-flowchart TB
-    subgraph SRC["📥 企业 / 个人信息"]
-        direction LR
-        S1["💬 微信群"]
+flowchart LR
+    subgraph SRC["📥 信息源"]
+        direction TB
+        S1["💬 聊天记录"]
         S2["📧 邮件往来"]
         S3["🖼️ 截图"]
-        S4["📝 个人笔记"]
-        S5["🗓️ 会议记录"]
+        S4["📝 笔记与会议"]
     end
 
-    subgraph L1["🗂️ 数据层"]
-        D1["统一的原始输入收集"]
+    subgraph LLM["🧠 LLM 处理"]
+        direction TB
+        P1["🎯 图像与意图识别"]
+        P2["✍️ 文本理解"]
+        P3["📋 结构化总结"]
     end
 
-    subgraph L2["🧠 数据处理层"]
-        direction LR
-        P1["LLM 理解"]
-        P2["多模态意图识别"]
-        P3["图片理解"]
-        P4["摘要与元数据提取"]
+    subgraph APP["🚀 数据应用"]
+        direction TB
+        A1["✅ TODO 管理"]
+        A2["📨 投递中心<br/>JIRA · 知识库 · Webhook"]
+        A3["✨ 更多应用<br/>持续扩展中"]
     end
 
-    subgraph L3["🚀 数据应用层"]
-        direction LR
-        A1["JIRA"]
-        A2["知识库"]
-        A3["报表"]
-        A4["工作流自动化"]
-        A5["未来的应用中心"]
-    end
-
-    SRC --> L1 --> L2 --> L3
+    SRC ==> LLM ==> APP
 
     classDef srcStyle fill:#fff7ed,stroke:#fb923c,color:#7c2d12
-    classDef dataStyle fill:#eff6ff,stroke:#60a5fa,color:#1e3a8a
-    classDef procStyle fill:#f0fdf4,stroke:#4ade80,color:#14532d
-    classDef appStyle fill:#faf5ff,stroke:#c084fc,color:#581c87
+    classDef llmStyle fill:#eff6ff,stroke:#60a5fa,color:#1e3a8a
+    classDef appStyle fill:#f0fdf4,stroke:#4ade80,color:#14532d
     classDef nodeStyle fill:#ffffff,stroke:#9ca3af,color:#1f2937
+    classDef futureStyle fill:#ffffff,stroke:#9ca3af,color:#6b7280,stroke-dasharray:6 4
 
     class SRC srcStyle
-    class L1 dataStyle
-    class L2 procStyle
-    class L3 appStyle
-    class S1,S2,S3,S4,S5,D1,P1,P2,P3,P4,A1,A2,A3,A4,A5 nodeStyle
+    class LLM llmStyle
+    class APP appStyle
+    class S1,S2,S3,S4,P1,P2,P3,A1,A2 nodeStyle
+    class A3 futureStyle
 ```
 
-**当前的实际路径：**
-
-```mermaid
-flowchart LR
-    A["💬 聊天记录<br/>截图与相关材料"]
-    B["📧 邮件转发"]
-    C["🤖 AI 理解<br/>与信息提取"]
-    D["📋 结构化摘要<br/>与数据"]
-    E["🚀 JIRA / 知识库<br/>工作流数据"]
-
-    A --> B --> C --> D --> E
-
-    classDef step fill:#eff6ff,stroke:#60a5fa,color:#1e3a8a
-    classDef result fill:#f0fdf4,stroke:#4ade80,color:#14532d
-    class A,B,C,D step
-    class E result
-```
+一条管道贯穿始终：碎片化信息流入，LLM 将其转化为结构化数据，数据驱动不断增长的应用生态——今天是 TODO 管理和投递中心，数据应用层的设计让新应用可以持续接入。
 
 ## 🧵 Threadline 核心功能
 
@@ -198,27 +174,15 @@ Threadline 专注于：
 
 Django Admin 仍可用于底层检查和遗留操作，但它已不再是日常配置的唯一途径。
 
-## 🤖 支持的 LLM 平台
+## ⭐ 推荐 LLM 平台
 
-Devify 不绑定任何单一 LLM 厂商。
-
-管理控制台当前内置的供应商目录包括：
-
-| | | | |
-|---|---|---|---|
-| OpenAI | OpenAI 兼容端点 | Azure OpenAI | Google Gemini |
-| Anthropic | Mistral | 灵积 DashScope（通义千问） | DeepSeek |
-| xAI | MiniMax | 月之暗面 Moonshot | 智谱 ZAI |
-| 火山引擎 Volcengine | Meta Llama | Amazon Nova | NVIDIA NIM |
-| OpenRouter | | | |
+Devify 不绑定任何单一 LLM 厂商。管理控制台内置 **17+ 供应商**——OpenAI、Azure OpenAI、Anthropic、Google Gemini、DeepSeek、灵积 DashScope（通义千问）、Mistral、xAI、MiniMax、月之暗面、智谱、火山引擎、Meta Llama、Amazon Nova、NVIDIA NIM、OpenRouter，以及任意 OpenAI 兼容端点。
 
 这让你可以为不同任务绑定不同模型，例如：
 
 - 一个多模态模型负责图片理解和意图识别
 - 一个文本模型负责摘要和元数据提取
 - 一个专用模型负责智能交付渠道
-
-## ⭐ 推荐 LLM 平台
 
 如果你不知道从哪里开始，下面这些平台已经过 Devify 工作流验证。任何一家都可以在 `/management/llm/config` 中几分钟内完成配置——使用 OpenAI 兼容供应商类型或对应的内置供应商即可。
 

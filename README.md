@@ -99,69 +99,45 @@ In the future, Devify can expand to unify more inputs such as:
 ## 🧩 How Devify Works
 
 ```mermaid
-flowchart TB
-    subgraph SRC["📥 Enterprise / Personal Information"]
-        direction LR
-        S1["💬 WeChat groups"]
+flowchart LR
+    subgraph SRC["📥 Information Sources"]
+        direction TB
+        S1["💬 Chat records"]
         S2["📧 Email threads"]
         S3["🖼️ Screenshots"]
-        S4["📝 Personal notes"]
-        S5["🗓️ Meeting records"]
+        S4["📝 Notes & meetings"]
     end
 
-    subgraph L1["🗂️ Data Layer"]
-        D1["Unified raw input collection"]
+    subgraph LLM["🧠 LLM Processing"]
+        direction TB
+        P1["🎯 Image & intent recognition"]
+        P2["✍️ Text understanding"]
+        P3["📋 Structured summarization"]
     end
 
-    subgraph L2["🧠 Data Processing Layer"]
-        direction LR
-        P1["LLM understanding"]
-        P2["Multimodal intent detection"]
-        P3["Image understanding"]
-        P4["Summary & metadata extraction"]
+    subgraph APP["🚀 Data Applications"]
+        direction TB
+        A1["✅ TODO management"]
+        A2["📨 Delivery hub<br/>JIRA · Knowledge base · Webhooks"]
+        A3["✨ More apps coming<br/>extensible by design"]
     end
 
-    subgraph L3["🚀 Data Application Layer"]
-        direction LR
-        A1["JIRA"]
-        A2["Knowledge base"]
-        A3["Reports"]
-        A4["Workflow automation"]
-        A5["Future app center"]
-    end
-
-    SRC --> L1 --> L2 --> L3
+    SRC ==> LLM ==> APP
 
     classDef srcStyle fill:#fff7ed,stroke:#fb923c,color:#7c2d12
-    classDef dataStyle fill:#eff6ff,stroke:#60a5fa,color:#1e3a8a
-    classDef procStyle fill:#f0fdf4,stroke:#4ade80,color:#14532d
-    classDef appStyle fill:#faf5ff,stroke:#c084fc,color:#581c87
+    classDef llmStyle fill:#eff6ff,stroke:#60a5fa,color:#1e3a8a
+    classDef appStyle fill:#f0fdf4,stroke:#4ade80,color:#14532d
     classDef nodeStyle fill:#ffffff,stroke:#9ca3af,color:#1f2937
+    classDef futureStyle fill:#ffffff,stroke:#9ca3af,color:#6b7280,stroke-dasharray:6 4
 
     class SRC srcStyle
-    class L1 dataStyle
-    class L2 procStyle
-    class L3 appStyle
-    class S1,S2,S3,S4,S5,D1,P1,P2,P3,P4,A1,A2,A3,A4,A5 nodeStyle
+    class LLM llmStyle
+    class APP appStyle
+    class S1,S2,S3,S4,P1,P2,P3,A1,A2 nodeStyle
+    class A3 futureStyle
 ```
 
-**Current practical path:**
-
-```mermaid
-flowchart LR
-    A["💬 Chat records<br/>screenshots & materials"]
-    B["📧 Forward<br/>by email"]
-    C["🤖 AI understanding<br/>& extraction"]
-    D["📋 Structured summary<br/>& data"]
-    E["🚀 JIRA / Knowledge base<br/>Workflow data"]
-
-    A --> B --> C --> D --> E
-
-    classDef step fill:#eff6ff,stroke:#60a5fa,color:#1e3a8a
-    classDef result fill:#f0fdf4,stroke:#4ade80,color:#14532d
-    class A,B,C,D step
-    class E result
-```
+One pipeline: fragmented information flows in, LLMs turn it into structured data, and that data powers a growing set of applications — TODO management and the delivery hub today, with the data application layer designed to keep absorbing new apps.
 
 ## 🧵 Threadline Core Feature
 
@@ -198,27 +174,15 @@ Many core settings can now be configured in the management UI:
 
 Django Admin is still available for low-level inspection and legacy operations, but it is no longer the only day-to-day configuration path.
 
-## 🤖 Supported LLM Platforms
+## ⭐ Recommended LLM Providers
 
-Devify is not tied to a single LLM vendor.
-
-The current built-in provider catalog in the management console includes:
-
-| | | | |
-|---|---|---|---|
-| OpenAI | OpenAI-compatible endpoints | Azure OpenAI | Google Gemini |
-| Anthropic | Mistral | DashScope (Qwen) | DeepSeek |
-| xAI | MiniMax | Moonshot | ZAI |
-| Volcengine | Meta Llama | Amazon Nova | NVIDIA NIM |
-| OpenRouter | | | |
+Devify is not tied to a single LLM vendor. The management console ships with **17+ built-in providers** — OpenAI, Azure OpenAI, Anthropic, Google Gemini, DeepSeek, DashScope (Qwen), Mistral, xAI, MiniMax, Moonshot, ZAI, Volcengine, Meta Llama, Amazon Nova, NVIDIA NIM, OpenRouter, plus any OpenAI-compatible endpoint.
 
 This allows you to bind different models for different jobs, such as:
 
 - one multimodal model for image understanding and intent detection
 - one text model for summarization and metadata extraction
 - one dedicated model for smart delivery channels
-
-## ⭐ Recommended LLM Providers
 
 If you don't know where to start, the providers below have been validated with Devify workflows. Any of them can be configured in minutes via `/management/llm/config` using the OpenAI-compatible provider type or the dedicated built-in provider.
 
