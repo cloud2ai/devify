@@ -1,6 +1,27 @@
-# About Devify
+<div align="center">
 
-## What is Devify?
+# Devify
+
+[![License](https://img.shields.io/badge/license-Apache--2.0-green.svg)](LICENSE)
+[![Python](https://img.shields.io/badge/python-3.11%2B-blue.svg)](pyproject.toml)
+[![Django](https://img.shields.io/badge/backend-Django-092E20.svg?logo=django)](devify/)
+[![Vue 3](https://img.shields.io/badge/frontend-Vue%203-4FC08D.svg?logo=vuedotjs&logoColor=white)](ui/)
+[![Docker](https://img.shields.io/badge/deploy-Docker%20Compose-2496ED.svg?logo=docker&logoColor=white)](docker-compose.yml)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/cloud2ai/devify/pulls)
+
+**Enterprise-grade AI-powered conversation intelligence and data application platform**
+
+Turn fragmented conversations — chat records, email threads, screenshots — into structured summaries and reusable data, then deliver them to JIRA, knowledge bases, and workflow automation.
+
+[Quick Start](#-quick-start) · [How It Works](#-how-devify-works) · [Recommended Providers](#-recommended-llm-providers) · [Self-Hosting](#-self-hosting-requirements) · [SaaS Edition](https://aimychats.com)
+
+English | [中文](README_ZH.md)
+
+</div>
+
+---
+
+## 📖 About
 
 Devify is an **enterprise-grade AI-powered conversation intelligence and data application platform**.
 
@@ -19,7 +40,7 @@ What matters most is not only collection or summarization, but the abstraction b
 
 This layered design is the real long-term value of the project, because it makes horizontal expansion much easier as new sources and new applications are added.
 
-## Why We Built It
+## 💡 Why We Built It
 
 Devify did not start from an abstract product idea. It grew out of real enterprise collaboration problems.
 
@@ -45,7 +66,17 @@ This creates recurring enterprise pain points:
 
 Devify exists to solve that gap.
 
-## Purpose and Scenarios
+## ✨ Key Features
+
+- 🧵 **Threadline workflow** — forward chat records and screenshots by email, get structured summaries delivered to JIRA
+- 🖼️ **Multimodal understanding** — AI analysis of both text and images, including intent detection
+- 🔌 **17+ LLM providers** — bind different models to different jobs through a unified management console
+- 📬 **Built-in inbound email** — Haraka SMTP server with auto-assigned per-user addresses
+- 🖥️ **Management console** — configure providers, models, notifications, and scheduled tasks from the UI
+- 🐳 **One-command deployment** — full stack (API, worker, scheduler, UI, MySQL, Redis, Nginx, Haraka) via Docker Compose
+- 🔓 **Open core** — Apache-2.0 licensed platform with a separately licensed billing module
+
+## 🎯 Purpose and Scenarios
 
 At the current stage, the clearest and most practical workflow is:
 
@@ -65,7 +96,7 @@ In the future, Devify can expand to unify more inputs such as:
 - forwarded records from more platforms
 - other multimodal work artifacts
 
-## How Devify Works
+## 🧩 How Devify Works
 
 ```text
 Enterprise / Personal Information
@@ -131,7 +162,7 @@ Current practical path
    JIRA / Knowledge Base / Workflow Data
 ```
 
-## Threadline Core Feature
+## 🧵 Threadline Core Feature
 
 Threadline is the current flagship workflow inside Devify.
 
@@ -148,52 +179,37 @@ This approach is not limited to WeChat chat records. It can be extended to many 
 
 More importantly, Threadline is not just a single feature. It is an example of how the platform turns fragmented communication into reusable data products through the three-layer model.
 
-## Management Console
+## 🖥️ Management Console
 
 Runtime configuration is no longer limited to Django Admin.
 
 Many core settings can now be configured in the management UI:
 
-- `/management/llm/config`
-  Configure provider credentials, models, defaults, and connection testing
-- `/management/app-settings`
-  Configure global app settings, Threadline model bindings, notification channels, and Relay smart-channel model bindings
-- `/management/threadline/config`
-  Configure Threadline workflow model settings
-- `/management/threadline/periodic-tasks`
-  Configure scheduled tasks
-- `/management/notifier/channels`
-  Configure webhook and notification channels
-- `/management/notifier/settings`
-  Configure notification-related settings
-- `/management/billing/settings`
-  Configure billing-related runtime settings
+| Path | Purpose |
+|------|---------|
+| `/management/llm/config` | Provider credentials, models, defaults, and connection testing |
+| `/management/app-settings` | Global app settings, Threadline model bindings, notification channels, Relay smart-channel model bindings |
+| `/management/threadline/config` | Threadline workflow model settings |
+| `/management/threadline/periodic-tasks` | Scheduled tasks |
+| `/management/notifier/channels` | Webhook and notification channels |
+| `/management/notifier/settings` | Notification-related settings |
+| `/management/billing/settings` | Billing-related runtime settings |
 
 Django Admin is still available for low-level inspection and legacy operations, but it is no longer the only day-to-day configuration path.
 
-## Supported LLM Platforms
+## 🤖 Supported LLM Platforms
 
 Devify is not tied to a single LLM vendor.
 
 The current built-in provider catalog in the management console includes:
 
-- OpenAI
-- OpenAI-compatible endpoints
-- Azure OpenAI
-- Google Gemini
-- Anthropic
-- Mistral
-- DashScope (Qwen)
-- DeepSeek
-- xAI
-- MiniMax
-- Moonshot
-- ZAI
-- Volcengine
-- Meta Llama
-- Amazon Nova
-- NVIDIA NIM
-- OpenRouter
+| | | | |
+|---|---|---|---|
+| OpenAI | OpenAI-compatible endpoints | Azure OpenAI | Google Gemini |
+| Anthropic | Mistral | DashScope (Qwen) | DeepSeek |
+| xAI | MiniMax | Moonshot | ZAI |
+| Volcengine | Meta Llama | Amazon Nova | NVIDIA NIM |
+| OpenRouter | | | |
 
 This allows you to bind different models for different jobs, such as:
 
@@ -201,7 +217,36 @@ This allows you to bind different models for different jobs, such as:
 - one text model for summarization and metadata extraction
 - one dedicated model for smart delivery channels
 
-## Quick Start
+## ⭐ Recommended LLM Providers
+
+If you don't know where to start, the providers below have been validated with Devify workflows. Any of them can be configured in minutes via `/management/llm/config` using the OpenAI-compatible provider type or the dedicated built-in provider.
+
+<table>
+  <tr>
+    <td width="180" align="center">
+      <a href="https://agione.pro">
+        <b>AGIone</b>
+      </a>
+    </td>
+    <td>
+      <a href="https://agione.pro"><b>AGIone</b></a> is a one-stop LLM API gateway that provides unified, OpenAI-compatible access to mainstream models (GPT, Claude, Gemini, DeepSeek, Qwen, and more) through a single API key. It is a convenient choice for Devify self-hosting: one account covers both the multimodal model for image understanding and the text model for summarization, without juggling multiple vendor accounts. Configure it in Devify as an <code>OpenAI-compatible</code> provider with <code>api_base</code> pointing to <a href="https://agione.pro">agione.pro</a>.
+    </td>
+  </tr>
+</table>
+
+| Provider | Best for | Multimodal | How to configure in Devify |
+|----------|----------|:----------:|----------------------------|
+| [AGIone](https://agione.pro) | One API key for all model bindings (recommended for quick start) | ✅ | `OpenAI-compatible` provider, `api_base` → agione.pro |
+| [OpenAI](https://platform.openai.com) | Image understanding, intent detection, summarization | ✅ | Built-in `OpenAI` provider |
+| [Anthropic](https://www.anthropic.com) | High-quality summarization and metadata extraction | ✅ | Built-in `Anthropic` provider |
+| [Google Gemini](https://ai.google.dev) | Cost-effective multimodal understanding | ✅ | Built-in `Google Gemini` provider |
+| [DeepSeek](https://www.deepseek.com) | Low-cost text summarization at scale | — | Built-in `DeepSeek` provider |
+| [DashScope (Qwen)](https://dashscope.aliyun.com) | Chinese-language content and Qwen-VL image understanding | ✅ | Built-in `DashScope` provider |
+| [OpenRouter](https://openrouter.ai) | Trying many models behind one endpoint | ✅ | Built-in `OpenRouter` provider |
+
+> 💡 Devify requires at least one **multimodal** model for image understanding and intent detection. A common minimal setup is a single aggregator account (e.g. AGIone or OpenRouter) bound to all Threadline jobs.
+
+## 🚀 Quick Start
 
 ### Development
 
@@ -265,7 +310,7 @@ HARAKA_DOMAIN=mail.example.com HARAKA_CERT_EMAIL=admin@example.com \
 
 More details are documented in `docker/haraka/README.md`.
 
-## Required Configuration
+## ⚙️ Required Configuration
 
 Before first run, review at least these settings in `.env`:
 
@@ -307,7 +352,7 @@ Recommended path after startup:
 
 In other words, `.env` is mainly for base runtime setup, while actual model provider configuration is managed in the application.
 
-## Self-Hosting Requirements
+## 📦 Self-Hosting Requirements
 
 Minimum recommendation:
 
@@ -324,7 +369,48 @@ External services:
 
 For HTTPS, use a reverse proxy such as Nginx Proxy Manager, Traefik, or Caddy.
 
-## Open Source & Commercial Editions
+## 🛠️ Development
+
+### Project Structure
+
+```text
+devify/              # Django backend, split by domain
+├── accounts/        # Authentication and user profiles
+├── billing/         # Billing module (commercial license)
+├── threadline/      # Threadline conversation workflow
+└── ...
+ui/                  # Vue 3 frontend (Vite)
+docker/              # Service images (Haraka, Nginx, ...)
+docker-compose.yml   # Production stack
+docker-compose.dev.yml  # Development stack
+```
+
+### Commands
+
+```bash
+# Backend tests
+pytest
+pytest devify/threadline/tests -v   # Focused run
+
+# Frontend
+cd ui && npm install                # Install dependencies
+cd ui && npm run dev                # Vite dev server
+cd ui && npm run build              # Production bundle
+cd ui && npm run lint               # Lint and auto-fix
+```
+
+## 🤝 Contributing
+
+Contributions are welcome! Before submitting a PR:
+
+- Keep each commit focused on one change set, with a short imperative subject
+- Include tests for behavior changes (`pytest` markers: `unit`, `integration`, `api`)
+- Run `cd ui && npm run lint` for frontend changes
+- Summarize the change and validation steps in the PR description; include screenshots for UI updates and migration notes for schema changes
+
+See [CLAUDE.md](CLAUDE.md) for the full repository guidelines.
+
+## 🏢 Open Source & Commercial Editions
 
 This repository contains the **self-hosted Devify platform** with an Apache-2.0 open core and a separately licensed billing module.
 
@@ -332,10 +418,13 @@ Commercial SaaS version: [aimychats.com](https://aimychats.com)
 
 Core difference at a glance:
 
-- self-hosted platform: open core, self-managed deployment, IMAP-based email collection
-- commercial SaaS edition: managed hosting, dedicated email, real-time SMTP, and additional operational features
+| | Self-hosted platform | Commercial SaaS edition |
+|---|---|---|
+| Hosting | Self-managed deployment | Managed hosting |
+| Email collection | IMAP-based | Dedicated email, real-time SMTP |
+| Extras | Open core | Additional operational features |
 
-## Licensing
+## 📜 Licensing
 
 Devify uses a mixed licensing structure:
 
@@ -347,4 +436,4 @@ Billing follows one simple rule:
 - internal company use is allowed
 - external operation is prohibited without separate authorization
 
-See `LICENSE`, `LICENSES.md`, `TRADEMARKS.md`, and `devify/billing/COMMERCIAL-LICENSE.md`.
+See [LICENSE](LICENSE), [LICENSES.md](LICENSES.md), [TRADEMARKS.md](TRADEMARKS.md), and [devify/billing/COMMERCIAL-LICENSE.md](devify/billing/COMMERCIAL-LICENSE.md).
