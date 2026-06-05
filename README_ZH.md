@@ -98,44 +98,9 @@ Devify 就是为了填补这个缺口而存在的。
 
 ## 🧩 Devify 工作原理
 
-```mermaid
-flowchart LR
-    subgraph SRC["📥 信息源"]
-        direction TB
-        S1["💬 聊天记录"]
-        S2["📧 邮件往来"]
-        S3["🖼️ 截图"]
-        S4["📝 笔记与会议"]
-    end
-
-    subgraph LLM["🧠 LLM 处理"]
-        direction TB
-        P1["🎯 图像与意图识别"]
-        P2["✍️ 文本理解"]
-        P3["📋 结构化总结"]
-    end
-
-    subgraph APP["🚀 数据应用"]
-        direction TB
-        A1["✅ TODO 管理"]
-        A2["📨 投递中心<br/>JIRA · 知识库 · Webhook"]
-        A3["✨ 更多应用<br/>持续扩展中"]
-    end
-
-    SRC ==> LLM ==> APP
-
-    classDef srcStyle fill:#fff7ed,stroke:#fb923c,color:#7c2d12
-    classDef llmStyle fill:#eff6ff,stroke:#60a5fa,color:#1e3a8a
-    classDef appStyle fill:#f0fdf4,stroke:#4ade80,color:#14532d
-    classDef nodeStyle fill:#ffffff,stroke:#9ca3af,color:#1f2937
-    classDef futureStyle fill:#ffffff,stroke:#9ca3af,color:#6b7280,stroke-dasharray:6 4
-
-    class SRC srcStyle
-    class LLM llmStyle
-    class APP appStyle
-    class S1,S2,S3,S4,P1,P2,P3,A1,A2 nodeStyle
-    class A3 futureStyle
-```
+<div align="center">
+  <img src="docs/images/how-devify-works-zh.svg" alt="Devify 工作原理：信息源经 LLM 处理后流入数据应用" width="100%">
+</div>
 
 一条管道贯穿始终：碎片化信息流入，LLM 将其转化为结构化数据，数据驱动不断增长的应用生态——今天是 TODO 管理和投递中心，数据应用层的设计让新应用可以持续接入。
 

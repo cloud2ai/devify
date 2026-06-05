@@ -98,44 +98,9 @@ In the future, Devify can expand to unify more inputs such as:
 
 ## 🧩 How Devify Works
 
-```mermaid
-flowchart LR
-    subgraph SRC["📥 Information Sources"]
-        direction TB
-        S1["💬 Chat records"]
-        S2["📧 Email threads"]
-        S3["🖼️ Screenshots"]
-        S4["📝 Notes & meetings"]
-    end
-
-    subgraph LLM["🧠 LLM Processing"]
-        direction TB
-        P1["🎯 Image & intent recognition"]
-        P2["✍️ Text understanding"]
-        P3["📋 Structured summarization"]
-    end
-
-    subgraph APP["🚀 Data Applications"]
-        direction TB
-        A1["✅ TODO management"]
-        A2["📨 Delivery hub<br/>JIRA · Knowledge base · Webhooks"]
-        A3["✨ More apps coming<br/>extensible by design"]
-    end
-
-    SRC ==> LLM ==> APP
-
-    classDef srcStyle fill:#fff7ed,stroke:#fb923c,color:#7c2d12
-    classDef llmStyle fill:#eff6ff,stroke:#60a5fa,color:#1e3a8a
-    classDef appStyle fill:#f0fdf4,stroke:#4ade80,color:#14532d
-    classDef nodeStyle fill:#ffffff,stroke:#9ca3af,color:#1f2937
-    classDef futureStyle fill:#ffffff,stroke:#9ca3af,color:#6b7280,stroke-dasharray:6 4
-
-    class SRC srcStyle
-    class LLM llmStyle
-    class APP appStyle
-    class S1,S2,S3,S4,P1,P2,P3,A1,A2 nodeStyle
-    class A3 futureStyle
-```
+<div align="center">
+  <img src="docs/images/how-devify-works.svg" alt="How Devify Works: information sources flow through LLM processing into data applications" width="100%">
+</div>
 
 One pipeline: fragmented information flows in, LLMs turn it into structured data, and that data powers a growing set of applications — TODO management and the delivery hub today, with the data application layer designed to keep absorbing new apps.
 
