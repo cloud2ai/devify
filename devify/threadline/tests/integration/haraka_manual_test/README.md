@@ -364,7 +364,6 @@ print(f'Error: {email.error_message}')
 ## Related Documentation
 
 - Haraka Configuration: `docker/haraka/README.md`
-- Email Processing Design: `specs/haraka-email/design.md`
 - State Machine: `threadline/state_machine.py`
 - Workflow: `threadline/agents/workflow.py`
 
