@@ -120,6 +120,7 @@ jobs:
           port: ${{ vars.DEVIFY_DEPLOY_SSH_PORT }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
+            set -e
             cd ~/devify-deploy
             DEVIFY_REF=${{ github.ref_name }} ./scripts/devify-deploy.sh upgrade
             docker system prune -f
