@@ -337,6 +337,10 @@ class BillingAdminConfigAPIView(APIView):
             serializer.validated_data,
         )
         after_config = serialize_billing_config(config)
+        # Refresh in-memory Django settings so the new Stripe keys and webhook
+        # secret take effect immediately without a server restart.
+        from billing.apps import _inject_stripe_settings
+        _inject_stripe_settings()
         sync_payment_check_periodic_task(config)
         sync_payment_record_backfill_periodic_task(config)
         queue_billing_audit_event(

@@ -40,7 +40,16 @@ class Command(BaseCommand):
         for webhook in local_webhooks:
             self.stdout.write(f'  - UUID: {webhook.djstripe_uuid}')
             self.stdout.write(f'    URL: {webhook.url}')
-            self.stdout.write(f'    Secret: {webhook.secret[:15]}...')
+            secret_preview = (webhook.secret or '')[:15]
+            self.stdout.write(f'    Secret: {secret_preview}...')
+            if webhook.url.startswith('http://'):
+                self.stdout.write(
+                    self.style.ERROR(
+                        '    ✗ WARNING: URL uses HTTP - Stripe will not '
+                        'deliver to HTTP URLs in production. '
+                        'Run with --fix to update.'
+                    )
+                )
             self.stdout.write('')
 
         try:

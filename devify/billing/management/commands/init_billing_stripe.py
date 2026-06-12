@@ -227,12 +227,14 @@ class Command(BaseCommand):
         Create or update webhook endpoint with idempotency.
         """
         domain = os.getenv('SITE_DOMAIN', 'localhost:8000')
-        # Determine protocol based on domain
-        is_https = (
-            ':443' in domain or
-            domain.startswith('192.168')
+        # Default to HTTPS for all non-localhost domains.
+        # Stripe requires HTTPS for webhooks and does not follow redirects.
+        _is_localhost = (
+            domain.startswith('localhost')
+            or domain.startswith('127.0.0.1')
+            or domain.startswith('0.0.0.0')
         )
-        protocol = 'https' if is_https else 'http'
+        protocol = 'http' if _is_localhost else 'https'
 
         existing_local = WebhookEndpoint.objects.filter(
             url__contains=domain
@@ -248,6 +250,15 @@ class Command(BaseCommand):
             self.stdout.write(
                 f'    UUID: {existing_local.djstripe_uuid}'
             )
+            if not existing_local.url.startswith('https://') and not _is_localhost:
+                self.stdout.write(
+                    self.style.ERROR(
+                        '  ✗ WARNING: Existing webhook uses HTTP instead of HTTPS.\n'
+                        '    Stripe will not deliver to HTTP URLs in production.\n'
+                        '    Run: python manage.py verify_webhook --fix\n'
+                        '    Or delete the WebhookEndpoint record and re-run this command.'
+                    )
+                )
             return
 
         webhook_uuid = str(uuid.uuid4())
@@ -283,17 +294,14 @@ class Command(BaseCommand):
                 livemode=billing_config.stripe_live_mode,
             )
 
+            # Save the webhook secret to BillingConfig so it is available
+            # through the admin UI and settings injection.
+            billing_config.stripe_webhook_secret = webhook.secret
+            billing_config.save(update_fields=['stripe_webhook_secret'])
+
             self.stdout.write(
                 self.style.SUCCESS(f'  ✓ Webhook created: {webhook_url}')
             )
-            self.stdout.write('')
-            self.stdout.write(
-                self.style.WARNING(
-                    '  ⚠ IMPORTANT: Add webhook secret to .env:'
-                )
-            )
-            self.stdout.write(f'    STRIPE_WEBHOOK_SECRET={webhook.secret}')
-            self.stdout.write('')
 
         except stripe.error.InvalidRequestError as e:
             if 'already exists' in str(e).lower():
