@@ -176,22 +176,45 @@ class Command(BaseCommand):
             )
             return
 
-        api_key, created = APIKey.objects.get_or_create(
-            type='secret',
-            livemode=is_live_mode,
-            defaults={
-                'name': key_name,
-                'secret': secret_key
-            }
+        existing_keys = list(
+            APIKey.objects.filter(type='secret', livemode=is_live_mode)
         )
+
+        if len(existing_keys) > 1:
+            # Keep the most recently created key and remove duplicates
+            existing_keys.sort(key=lambda k: k.pk, reverse=True)
+            api_key = existing_keys[0]
+            duplicates = existing_keys[1:]
+            APIKey.objects.filter(
+                pk__in=[k.pk for k in duplicates]
+            ).delete()
+            self.stdout.write(
+                self.style.WARNING(
+                    f'  ⚠ Removed {len(duplicates)} duplicate API key(s)'
+                )
+            )
+            api_key.secret = secret_key
+            api_key.save()
+            created = False
+        elif existing_keys:
+            api_key = existing_keys[0]
+            api_key.secret = secret_key
+            api_key.save()
+            created = False
+        else:
+            api_key = APIKey.objects.create(
+                type='secret',
+                livemode=is_live_mode,
+                name=key_name,
+                secret=secret_key,
+            )
+            created = True
 
         if created:
             self.stdout.write(
                 self.style.SUCCESS(f'  ✓ Created Stripe API Key: {key_name}')
             )
         else:
-            api_key.secret = secret_key
-            api_key.save()
             self.stdout.write(
                 self.style.SUCCESS(f'  ✓ Updated Stripe API Key: {key_name}')
             )
