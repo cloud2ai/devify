@@ -203,6 +203,9 @@ def haraka_email_fetch():
     """
     tracer = TaskTracer("HARAKA_EMAIL_FETCH")
     context = tracer.context_summary()
+    processed_count = 0
+    error_count = 0
+    email_ids = []
 
     try:
         task_id = getattr(haraka_email_fetch.request, "id", "") or ""
@@ -219,10 +222,6 @@ def haraka_email_fetch():
 
         # Use existing EmailProcessor to process Haraka emails
         processor = EmailProcessor(source="file", parser_type="flanker")
-
-        processed_count = 0
-        error_count = 0
-        email_ids = []
 
         for email_data in processor.process_emails():
             try:

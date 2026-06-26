@@ -305,7 +305,10 @@ class IMAPClient:
         """
         try:
             logger.info(f"Search email from folder: {self.folder}")
-            self.imap_client.select(self.folder)
+            status, data = self.imap_client.select(self.folder)
+            if status != 'OK':
+                logger.error(f"Failed to select folder '{self.folder}': {data}")
+                return
 
             logger.info(f"Search criteria: {self.search_criteria}")
             status, message_numbers = self.imap_client.search(
