@@ -316,8 +316,18 @@ class IMAPClient:
             )
 
             if status != 'OK':
-                logger.error(f"Failed to search emails: {status}")
-                return
+                if self.search_criteria != self.SEARCH_CRITERIA_ALL:
+                    logger.warning(
+                        f"[{self.user_context}] Search with criteria "
+                        f"'{self.search_criteria}' returned {status}, "
+                        f"falling back to ALL search"
+                    )
+                    status, message_numbers = self.imap_client.search(
+                        None, self.SEARCH_CRITERIA_ALL
+                    )
+                if status != 'OK':
+                    logger.error(f"Failed to search emails: {status}")
+                    return
 
             message_number_list = message_numbers[0].split()
             logger.info(

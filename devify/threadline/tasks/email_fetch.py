@@ -340,8 +340,10 @@ def fetch_user_imap_emails(
 
         imap_config = email_config.get("imap_config", {})
         imap_host = imap_config.get("imap_host", "unknown")
-        imap_port = imap_config.get("imap_port", "unknown")
         use_ssl = imap_config.get("use_ssl", True)
+        imap_port = imap_config.get(
+            "imap_ssl_port", imap_config.get("imap_port", 993 if use_ssl else 143)
+        )
         folder = imap_config.get("folder", "INBOX")
 
         logger.info(
