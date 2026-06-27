@@ -103,6 +103,7 @@ jobs:
           username: ${{ env.SSH_USER }}
           port: ${{ env.SSH_PORT }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
+          command_timeout: 20m
           script: |
             cd ${{ env.DEPLOY_PATH }}
             git fetch --tags origin
