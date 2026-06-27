@@ -119,7 +119,8 @@ jobs:
           host: ${{ vars.DEVIFY_DEPLOY_SSH_HOST }}
           username: ${{ vars.DEVIFY_DEPLOY_SSH_USER }}
           port: ${{ vars.DEVIFY_DEPLOY_SSH_PORT }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          key: ${{ secrets.DEVIFY_DEPLOY_SSH_PRIVATE_KEY }}
+          command_timeout: 20m
           script: |
             set -e
             cd ~/devify-deploy
