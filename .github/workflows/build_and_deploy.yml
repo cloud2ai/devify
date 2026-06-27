@@ -9,9 +9,9 @@ env:
   REGISTRY: ${{ vars.REGISTRY }}
   IMAGE_NAME: ${{ vars.IMAGE_NAME }}
   UI_IMAGE_NAME: devify-ui
-  SSH_HOST: ${{ vars.SSH_HOST }}
-  SSH_USER: ${{ vars.SSH_USER }}
-  SSH_PORT: ${{ vars.SSH_PORT }}
+  INTERNAL_HOST: ${{ vars.SSH_HOST }}
+  INTERNAL_USER: ${{ vars.SSH_USER }}
+  INTERNAL_PORT: ${{ vars.SSH_PORT }}
   DEPLOY_PATH: ${{ vars.DEPLOY_PATH }}
   VITE_API_BASE_URL: ${{ vars.VITE_API_BASE_URL }}
   VITE_EMAIL_DOMAIN: ${{ vars.VITE_EMAIL_DOMAIN }}
@@ -99,9 +99,9 @@ jobs:
       - name: Deploy aimychats internal 10.251
         uses: appleboy/ssh-action@v1.0.3
         with:
-          host: ${{ env.SSH_HOST }}
-          username: ${{ env.SSH_USER }}
-          port: ${{ env.SSH_PORT }}
+          host: ${{ env.INTERNAL_HOST }}
+          username: ${{ env.INTERNAL_USER }}
+          port: ${{ env.INTERNAL_PORT }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           command_timeout: 20m
           script: |
