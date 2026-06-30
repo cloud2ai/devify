@@ -30,11 +30,6 @@ export const useUserStore = defineStore('user', () => {
       if (preferences.language || preferences.scene) {
         preferencesStore.loadFromBackend(preferences)
       }
-
-      const profileTimezone = user.value?.profile?.timezone
-      if (profileTimezone) {
-        preferencesStore.setTimezone(profileTimezone)
-      }
     } catch (err) {
       console.error('Failed to load user preferences:', err)
     }
