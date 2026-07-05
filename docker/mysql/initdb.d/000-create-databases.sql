@@ -1,7 +1,19 @@
--- Use environment variables to avoid hardcoding database credentials
-CREATE DATABASE IF NOT EXISTS ${MYSQL_DATABASE}
-    CHARACTER SET utf8mb4
-    COLLATE utf8mb4_unicode_ci;
-CREATE USER '${MYSQL_USER}'@'%' IDENTIFIED BY '${MYSQL_PASSWORD}';
-GRANT ALL PRIVILEGES ON ${MYSQL_DATABASE}.* TO '${MYSQL_USER}'@'%';
-FLUSH PRIVILEGES;
+-- NOTE: docker-entrypoint-initdb.d only shell-expands *.sh scripts; *.sql
+-- files are piped into the mysql client as-is, so ${MYSQL_DATABASE} etc.
+-- below are NOT substituted and previously caused a SQL syntax error on
+-- every fresh data volume (container exits 1, then restart: unless-stopped
+-- retries and succeeds because the data dir is no longer empty and initdb.d
+-- is skipped on retry - masking the failure instead of fixing it).
+--
+-- The database, user, and grants are already created by the official
+-- mariadb image itself from the MYSQL_DATABASE/MYSQL_USER/MYSQL_PASSWORD
+-- env vars (see docker-entrypoint.sh's "Creating database"/"Creating user"
+-- log lines), so this file is intentionally a no-op. Add real one-off SQL
+-- here only if it doesn't rely on env var substitution.
+--
+-- CREATE DATABASE IF NOT EXISTS devify
+--     CHARACTER SET utf8mb4
+--     COLLATE utf8mb4_unicode_ci;
+-- CREATE USER 'devify'@'%' IDENTIFIED BY 'password';
+-- GRANT ALL PRIVILEGES ON devify.* TO 'devify'@'%';
+-- FLUSH PRIVILEGES;
