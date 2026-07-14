@@ -656,7 +656,9 @@ export function useRelayEditor({ reloadAll, activeTab }) {
   async function runEditorTest() {
     try {
       await runTest(editorForm.id || testSubscriptionId.value)
-      editorMode.value = 'edit'
+      // Do not switch to 'edit' mode here: testing is not saving. In the
+      // create flow the add panel is shown by `editorMode === 'create'`,
+      // so flipping to 'edit' would close it before the user saves.
       activeTab.value = 'channels'
     } catch (error) {
       // runTest and persistEditor already surface the error message
