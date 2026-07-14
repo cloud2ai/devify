@@ -9,10 +9,6 @@ env:
   REGISTRY: ${{ vars.REGISTRY }}
   IMAGE_NAME: ${{ vars.IMAGE_NAME }}
   UI_IMAGE_NAME: devify-ui
-  INTERNAL_HOST: ${{ vars.SSH_HOST }}
-  INTERNAL_USER: ${{ vars.SSH_USER }}
-  INTERNAL_PORT: ${{ vars.SSH_PORT }}
-  DEPLOY_PATH: ${{ vars.DEPLOY_PATH }}
   VITE_API_BASE_URL: ${{ vars.VITE_API_BASE_URL }}
   VITE_EMAIL_DOMAIN: ${{ vars.VITE_EMAIL_DOMAIN }}
   VITE_SENTRY_DSN: ${{ vars.VITE_SENTRY_DSN }}
@@ -95,23 +91,6 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           known_hosts: ${{ secrets.SSH_KNOWN_HOSTS }}
           if_key_exists: fail
-
-      - name: Deploy aimychats internal 10.251
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ env.INTERNAL_HOST }}
-          username: ${{ env.INTERNAL_USER }}
-          port: ${{ env.INTERNAL_PORT }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          command_timeout: 20m
-          script: |
-            cd ${{ env.DEPLOY_PATH }}
-            git fetch --tags origin
-            git checkout ${{ github.ref_name }}
-            docker-compose -f docker-compose.yml pull
-            docker-compose -f docker-compose.yml up -d
-            docker-compose -f docker-compose.yml exec -T nginx nginx -s reload 2>/dev/null || docker-compose -f docker-compose.yml restart nginx
-            docker system prune -f
 
       - name: Deploy aimychats production
         uses: appleboy/ssh-action@v1.0.3
