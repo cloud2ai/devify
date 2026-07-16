@@ -417,6 +417,12 @@
       "label": "Delivery",
       "openInNewWindow": "Open in new window"
     },
+    "files": {
+      "title": "Files",
+      "download": "Download",
+      "previewError": "Failed to load preview",
+      "file": "File"
+    },
     "errorLoading": "Error loading threadline",
     "errorLoadingDesc": "Failed to load conversation details"
   },

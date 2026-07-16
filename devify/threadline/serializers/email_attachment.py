@@ -13,10 +13,44 @@ from rest_framework import serializers
 from ..models import EmailAttachment
 
 
+def build_attachment_url(attachment):
+    """
+    Build the public download/preview URL for an attachment.
+
+    Extracts the relative path from ``file_path`` (supports both legacy
+    ``email_<id>/file`` and uuid-based ``<uuid>/file`` layouts) and prefixes
+    it with ``ATTACHMENT_BASE_URL`` when configured. Files are served by nginx
+    at ``/attachments/<rel_path>``.
+
+    Args:
+        attachment: EmailAttachment instance
+
+    Returns:
+        str: Public URL, or empty string when no file_path is set
+    """
+    if not attachment.file_path:
+        return ""
+
+    # Anchor the strip to the storage-dir prefix so a file_path that is not
+    # under EMAIL_ATTACHMENT_DIR (legacy/misconfigured import) does not leak
+    # an absolute filesystem path into the URL via an unanchored replace.
+    prefix = settings.EMAIL_ATTACHMENT_DIR.rstrip("/") + "/"
+    if attachment.file_path.startswith(prefix):
+        rel_path = attachment.file_path[len(prefix):]
+    else:
+        rel_path = attachment.file_path.lstrip("/")
+
+    if settings.ATTACHMENT_BASE_URL:
+        return f"{settings.ATTACHMENT_BASE_URL}/attachments/{rel_path}"
+    return f"/attachments/{rel_path}"
+
+
 class EmailAttachmentNestedSerializer(serializers.ModelSerializer):
     """
     Nested serializer for EmailAttachment - used within EmailMessage
     """
+
+    url = serializers.SerializerMethodField()
 
     class Meta:
         model = EmailAttachment
@@ -26,6 +60,7 @@ class EmailAttachmentNestedSerializer(serializers.ModelSerializer):
             "content_type",
             "file_size",
             "file_path",
+            "url",
             "content_md5",
             "ocr_content",
             "llm_content",
@@ -35,6 +70,24 @@ class EmailAttachmentNestedSerializer(serializers.ModelSerializer):
             "updated_at",
         ]
         read_only_fields = ["id", "created_at", "updated_at"]
+
+    def get_url(self, obj) -> str:
+        """Return the public download/preview URL for this attachment."""
+        return build_attachment_url(obj)
+
+    def to_representation(self, instance):
+        """
+        Drop download pointers in the public share context.
+
+        Public (unauthenticated) share links must not hand out downloadable
+        URLs for original attachments, so remove ``url`` and ``file_path``
+        when the serializer is invoked with ``public_share`` in its context.
+        """
+        data = super().to_representation(instance)
+        if self.context.get("public_share"):
+            data.pop("url", None)
+            data.pop("file_path", None)
+        return data
 
 
 class EmailAttachmentMinimalSerializer(serializers.ModelSerializer):

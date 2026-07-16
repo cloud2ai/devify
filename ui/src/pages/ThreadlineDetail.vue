@@ -2033,6 +2033,9 @@
           <p class="text-sm mt-2">{{ t('chats.processedContentDesc') }}</p>
         </div>
       </BaseCard>
+
+      <!-- Attachments / Files -->
+      <ThreadlineAttachments :attachments="threadline.attachments || []" />
     </div>
     <MetadataFieldEditor
       :show="showEditor"
@@ -2347,6 +2350,7 @@ import BaseButton from '@/components/ui/BaseButton.vue'
 import BaseModal from '@/components/ui/BaseModal.vue'
 import MergeStateBadge from '@/components/ui/MergeStateBadge.vue'
 import MarkdownRenderer from '@/components/ui/MarkdownRenderer.vue'
+import ThreadlineAttachments from '@/components/threadline/ThreadlineAttachments.vue'
 import { useThreadline } from '@/composables/useThreadline'
 import { useThreadlinePolling } from '@/composables/useThreadlinePolling'
 import { useThreadlineShare } from '@/composables/useThreadlineShare'
