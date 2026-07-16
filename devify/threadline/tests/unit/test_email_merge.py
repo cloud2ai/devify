@@ -10,14 +10,35 @@ from django.contrib.auth.models import User
 from datetime import timedelta
 from unittest.mock import patch
 
-from threadline.models import EmailMessage
+from threadline.models import EmailAttachment, EmailMessage
 from threadline.services.email_merge import EmailMergeService
 
 
 class TestEmailMergeService(TestCase):
+    # >=120 chars so text_similarity uses fuzzy matching; short bodies now
+    # require exact equality (see MIN_TEXT_SIMILARITY_LENGTH).
+    LONG_TEXT = (
+        "Please review the deployment runbook and the rollback plan before "
+        "the Friday release window and confirm the on-call rotation is "
+        "staffed for the weekend shift."
+    )
+
     def setUp(self):
         self.service = EmailMergeService()
         self.user = self._create_user()
+
+    def _attach_image(self, email, content_md5):
+        return EmailAttachment.objects.create(
+            user=email.user,
+            email_message=email,
+            filename=f"{content_md5[:8]}.png",
+            safe_filename=f"{content_md5[:8]}.png",
+            content_type="image/png",
+            file_size=1024,
+            file_path=f"/tmp/{content_md5[:8]}.png",
+            content_md5=content_md5,
+            is_image=True,
+        )
 
     def _create_user(self, username: str | None = None) -> User:
         username = username or f"tester_{uuid4().hex[:8]}"
@@ -58,13 +79,24 @@ class TestEmailMergeService(TestCase):
         return EmailMessage.objects.create(**defaults)
 
     def test_similarity_does_not_merge_when_both_scores_are_low(self):
+        # Bodies are long enough (>= 120 chars) to bypass the exact-equality
+        # floor, so this exercises the RapidFuzz low-score rejection path:
+        # same subject but genuinely different content must not merge.
         parent = self._create_email(
             subject="Project review",
-            text_content="Alpha beta gamma delta epsilon zeta eta theta",
+            text_content=(
+                "The quarterly budget review meeting is scheduled for next "
+                "Tuesday afternoon in the main conference room; please bring "
+                "your department figures and the latest forecast."
+            ),
         )
         source = self._create_email(
             subject="Project review",
-            text_content="theta and appendix with unrelated notes",
+            text_content=(
+                "Reminder that the office will be closed on Friday for the "
+                "public holiday and all deliveries should be rescheduled to "
+                "the following business week without exception."
+            ),
             received_at=timezone.now(),
         )
 
@@ -107,12 +139,12 @@ class TestEmailMergeService(TestCase):
     def test_similarity_merges_when_partial_ratio_is_high(self):
         parent = self._create_email(
             subject="Project review",
-            text_content="Alpha beta gamma delta epsilon zeta eta theta",
+            text_content=self.LONG_TEXT,
         )
         source = self._create_email(
             subject="Project review",
             text_content=(
-                "beta gamma delta epsilon zeta eta theta plus an appendix"
+                self.LONG_TEXT + " with an appendix section appended."
             ),
             received_at=timezone.now(),
         )
@@ -134,6 +166,9 @@ class TestEmailMergeService(TestCase):
         )
 
     def test_forward_chain_with_added_content_merges(self):
+        # A short forward (original body < 120 chars) with an added note must
+        # still merge: forward_chain is a strong signal and is not subject to
+        # the text_similarity short-text length floor.
         parent = self._create_email(
             subject="Project notes",
             text_content="We should keep the old plan",
@@ -175,19 +210,12 @@ class TestEmailMergeService(TestCase):
     def test_prefers_earliest_record_within_window(self):
         older = self._create_email(
             subject="Status brief",
-            text_content=(
-                "Line 1\n"
-                "Line 2\n"
-                "Line 3\n"
-                "Line 4\n"
-                "Line 5\n"
-                "Line 6\n"
-            ),
+            text_content=self.LONG_TEXT + " An older extra line for length.",
             received_at=timezone.now() - timedelta(days=1),
         )
         newer = self._create_email(
             subject="Status brief",
-            text_content="Line 1\nLine 2\nLine 3",
+            text_content=self.LONG_TEXT,
             received_at=timezone.now(),
         )
 
@@ -263,19 +291,12 @@ class TestEmailMergeService(TestCase):
     def test_reconcile_keeps_newest_as_canonical_and_absorbs_older(self):
         older = self._create_email(
             subject="Status brief",
-            text_content=(
-                "Line 1\n"
-                "Line 2\n"
-                "Line 3\n"
-                "Line 4\n"
-                "Line 5\n"
-                "Line 6\n"
-            ),
+            text_content=self.LONG_TEXT + " An older extra line for length.",
             received_at=timezone.now() - timedelta(days=1),
         )
         newer = self._create_email(
             subject="Status brief",
-            text_content="Line 1\nLine 2\nLine 3",
+            text_content=self.LONG_TEXT,
             received_at=timezone.now(),
         )
 
@@ -294,19 +315,12 @@ class TestEmailMergeService(TestCase):
         manual_canonical = self._create_email(
             message_id="manual-merge-abc123",
             subject="Status brief",
-            text_content=(
-                "Line 1\n"
-                "Line 2\n"
-                "Line 3\n"
-                "Line 4\n"
-                "Line 5\n"
-                "Line 6\n"
-            ),
+            text_content=self.LONG_TEXT + " A manual canonical extra line.",
             received_at=timezone.now() - timedelta(days=1),
         )
         arriving = self._create_email(
             subject="Status brief",
-            text_content="Line 1\nLine 2\nLine 3",
+            text_content=self.LONG_TEXT,
             received_at=timezone.now(),
         )
 
@@ -323,26 +337,19 @@ class TestEmailMergeService(TestCase):
     def test_reconcile_absorbs_existing_cluster_head_for_new_arrival(self):
         first = self._create_email(
             subject="Status brief",
-            text_content=(
-                "Line 1\n"
-                "Line 2\n"
-                "Line 3\n"
-                "Line 4\n"
-                "Line 5\n"
-                "Line 6\n"
-            ),
+            text_content=self.LONG_TEXT + " First variant note.",
             received_at=timezone.now() - timedelta(days=2),
         )
         second = self._create_email(
             subject="Status brief",
-            text_content="Line 1\nLine 2\nLine 3\nLine 4",
+            text_content=self.LONG_TEXT + " Second variant note.",
             received_at=timezone.now() - timedelta(days=1),
         )
         self.service.reconcile(second)
 
         third = self._create_email(
             subject="Status brief",
-            text_content="Line 1\nLine 2\nLine 3",
+            text_content=self.LONG_TEXT,
             received_at=timezone.now(),
         )
         canonical, decision = self.service.reconcile(third)
@@ -500,3 +507,106 @@ class TestEmailMergeService(TestCase):
         assert evidence is not None
         assert evidence["reason"] == head_b.merge_reason
         assert evidence.get("signal")
+
+    def test_short_similar_text_below_floor_does_not_merge(self):
+        # Same subject, short bodies that are similar but not identical (the
+        # image-note / boilerplate false-merge case) must not merge.
+        parent = self._create_email(
+            subject="Ping",
+            text_content="Please see the attached screenshot.",
+            received_at=timezone.now() - timedelta(minutes=5),
+        )
+        source = self._create_email(
+            subject="Ping",
+            text_content="Please check the attached screenshot.",
+            received_at=timezone.now(),
+        )
+
+        decision = self.service.decide(source)
+
+        assert parent.pk is not None
+        assert decision.should_merge is False
+
+    def test_short_identical_text_still_merges(self):
+        # Exact short duplicates are still allowed to merge.
+        parent = self._create_email(
+            subject="Ping",
+            text_content="Please see the attached screenshot.",
+            received_at=timezone.now() - timedelta(minutes=5),
+        )
+        source = self._create_email(
+            subject="Ping",
+            text_content="Please see the attached screenshot.",
+            received_at=timezone.now(),
+        )
+
+        decision = self.service.decide(source)
+
+        assert decision.should_merge is True
+        assert decision.target == parent
+
+    def test_disjoint_images_block_content_merge(self):
+        # Long, near-identical text would merge on its own, but completely
+        # different images mean the content-based signal is untrustworthy.
+        parent = self._create_email(
+            subject="Report",
+            text_content=self.LONG_TEXT,
+            received_at=timezone.now() - timedelta(minutes=5),
+        )
+        self._attach_image(parent, "a" * 32)
+        source = self._create_email(
+            subject="Report",
+            text_content=self.LONG_TEXT,
+            received_at=timezone.now(),
+        )
+        self._attach_image(source, "b" * 32)
+
+        decision = self.service.decide(source)
+
+        assert decision.should_merge is False
+
+    def test_shared_image_allows_content_merge(self):
+        # Same text and an overlapping image still merges.
+        parent = self._create_email(
+            subject="Report",
+            text_content=self.LONG_TEXT,
+            received_at=timezone.now() - timedelta(minutes=5),
+        )
+        self._attach_image(parent, "c" * 32)
+        source = self._create_email(
+            subject="Report",
+            text_content=self.LONG_TEXT,
+            received_at=timezone.now(),
+        )
+        self._attach_image(source, "c" * 32)
+
+        decision = self.service.decide(source)
+
+        assert decision.should_merge is True
+        assert decision.target == parent
+
+    def test_thread_relation_merges_despite_disjoint_images(self):
+        # Header-based threading is authoritative and wins over the image
+        # guard even when the images are completely different.
+        parent = self._create_email(
+            subject="Report",
+            text_content="short note",
+            raw_message_id="root@example.com",
+            received_at=timezone.now() - timedelta(minutes=5),
+        )
+        self._attach_image(parent, "a" * 32)
+        source = self._create_email(
+            subject="Re: Report",
+            text_content="different short note",
+            in_reply_to="<root@example.com>",
+            received_at=timezone.now(),
+        )
+        self._attach_image(source, "b" * 32)
+
+        decision = self.service.decide(source)
+
+        assert decision.should_merge is True
+        assert (
+            decision.reason
+            == EmailMessage.MergeReason.THREAD_RELATION.value
+        )

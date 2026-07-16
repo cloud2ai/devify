@@ -56,6 +56,10 @@ class EmailMergeService:
     RAPIDFUZZ_PARTIAL_RATIO_THRESHOLD = 80.0
     MIN_TEXT_EXTENSION = 40
     MIN_TEXT_EXTENSION_RATIO = 0.30
+    # Below this normalized-text length, fuzzy similarity is unreliable
+    # (image-heavy emails with a one-line note over-trigger the thresholds),
+    # so require exact equality instead of trusting RapidFuzz.
+    MIN_TEXT_SIMILARITY_LENGTH = 120
 
     def decide(self, email: EmailMessage) -> MergeDecision:
         """
@@ -282,6 +286,20 @@ class EmailMergeService:
                 f" email_id={email.id} candidate_id={candidate.id}"
             )
             return True
+        # The matchers only compare text; for image-heavy emails the real
+        # content lives in the images. When both records carry images and the
+        # image sets are completely different, the content-based signals below
+        # are not trustworthy, so block the merge. This is intentional: a
+        # recurring series with the same boilerplate text but a fresh image
+        # each time is kept as separate conversations rather than fused.
+        # Thread-header matches above stay authoritative (a genuine reply with
+        # a new screenshot still merges via In-Reply-To/References).
+        if self._has_disjoint_images(email, candidate):
+            logger.debug(
+                f"[EmailMerge] blocked by disjoint images"
+                f" email_id={email.id} candidate_id={candidate.id}"
+            )
+            return False
         if self._matches_forward_chain(email, candidate):
             logger.debug(
                 f"[EmailMerge] matcher hit forward_chain"
@@ -400,7 +418,13 @@ class EmailMergeService:
         if candidate_subject != normalized_subject:
             return False
 
-        return self._matches_text_similarity(email, candidate)
+        # A forward is already a strong signal (Fwd prefix + identical
+        # subject), so do not apply the short-text length floor here; the
+        # floor exists only to keep the weaker text_similarity path from
+        # over-matching on tiny bodies.
+        return self._text_bodies_match(
+            email, candidate, apply_length_floor=False
+        )
 
     def _matches_text_similarity(
         self, email: EmailMessage, candidate: EmailMessage
@@ -417,13 +441,37 @@ class EmailMergeService:
         if self._normalize_subject(candidate.subject) != normalized_subject:
             return False
 
-        # Keep the merge heuristic simple and predictable: only compare raw
-        # extracted text. If a record has no text_content, skip it instead of
-        # trying to infer from HTML.
+        return self._text_bodies_match(
+            email, candidate, apply_length_floor=True
+        )
+
+    def _text_bodies_match(
+        self,
+        email: EmailMessage,
+        candidate: EmailMessage,
+        apply_length_floor: bool,
+    ) -> bool:
+        """
+        Compare the two records' extracted text bodies.
+
+        Keep the heuristic simple and predictable: only compare raw extracted
+        text; if a record has no text_content, skip it instead of inferring
+        from HTML. When ``apply_length_floor`` is set, short bodies (e.g. an
+        image plus a one-line note or a shared signature/footer) make RapidFuzz
+        unreliable, so require exact normalized-text equality below the length
+        floor instead of a fuzzy score.
+        """
         current_text = self._normalize_text(email.text_content)
         candidate_text = self._normalize_text(candidate.text_content)
         if not current_text or not candidate_text:
             return False
+
+        if (
+            apply_length_floor
+            and min(len(current_text), len(candidate_text))
+            < self.MIN_TEXT_SIMILARITY_LENGTH
+        ):
+            return current_text == candidate_text
 
         ratio, partial_ratio = self._text_similarity_scores(
             candidate_text, current_text
@@ -448,6 +496,44 @@ class EmailMergeService:
         if not current_text or not candidate_text:
             return False
         return self._is_strong_containment(candidate_text, current_text)
+
+    def _image_md5_set(self, email: EmailMessage) -> set:
+        """
+        Content MD5s of this record's image attachments (empty if none).
+
+        Queried lazily and cached on the model instance so the arriving email
+        is fetched at most once and each candidate at most once. Only reached
+        when the arriving email itself has images (see _has_disjoint_images),
+        so mailboxes without image attachments never hit this query.
+        """
+        cached = getattr(email, "_merge_image_md5s", None)
+        if cached is not None:
+            return cached
+        result = {
+            att.content_md5
+            for att in email.attachments.all()
+            if att.is_image and att.content_md5
+        }
+        email._merge_image_md5s = result
+        return result
+
+    def _has_disjoint_images(
+        self, email: EmailMessage, candidate: EmailMessage
+    ) -> bool:
+        """
+        True when both records have image attachments and their content MD5
+        sets do not overlap at all.
+
+        Returns False (do not block) when either side has no comparable image
+        MD5s, so records without images fall through to normal matching.
+        """
+        email_images = self._image_md5_set(email)
+        if not email_images:
+            return False
+        candidate_images = self._image_md5_set(candidate)
+        if not candidate_images:
+            return False
+        return email_images.isdisjoint(candidate_images)
 
     def _candidate_queryset(self, email: EmailMessage):
         """
