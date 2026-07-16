@@ -159,9 +159,12 @@ class PublicShareLinkAPIView(APIView):
         """
         Return serialized email message data for public consumption.
         """
+        # public_share=True strips download pointers (url/file_path) from
+        # attachments so unauthenticated share links do not expose original
+        # files for direct download.
         message_serializer = EmailMessageSerializer(
             share_link.email_message,
-            context={'request': request}
+            context={'request': request, 'public_share': True}
         )
         share_link.mark_viewed()
         return Response({

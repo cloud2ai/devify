@@ -6,7 +6,6 @@ Serializers for EmailMessage model CRUD operations.
 
 import re
 
-from django.conf import settings
 from django.contrib.auth.models import User
 from django.utils.translation import gettext_lazy as _
 from rest_framework import serializers
@@ -16,6 +15,7 @@ from .base import UserSerializer
 from .email_attachment import (
     EmailAttachmentMinimalSerializer,
     EmailAttachmentNestedSerializer,
+    build_attachment_url,
 )
 from .email_todo import EmailTodoListSerializer
 from .share_link import ThreadlineShareLinkSerializer
@@ -491,21 +491,9 @@ class EmailMessageSerializer(serializers.ModelSerializer):
         attachment_url_map = {}
         for att in instance.attachments.all():
             if att.is_image and att.file_path:
-                rel_path = att.file_path.replace(
-                    settings.EMAIL_ATTACHMENT_DIR + "/",
-                    "",
-                ).lstrip("/")
-
-                # Generate URL
-                if settings.ATTACHMENT_BASE_URL:
-                    url = (
-                        f"{settings.ATTACHMENT_BASE_URL}/attachments/"
-                        f"{rel_path}"
-                    )
-                else:
-                    url = f"/attachments/{rel_path}"
-
-                attachment_url_map[att.safe_filename] = url
+                attachment_url_map[att.safe_filename] = build_attachment_url(
+                    att
+                )
 
         # Replace placeholders in all content fields
         for field in ["llm_content", "summary_content"]:

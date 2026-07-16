@@ -908,7 +908,7 @@
 
 <script setup>
 import { useI18n } from 'vue-i18n'
-import { formatDuration } from '@/utils/formatting'
+import { formatBytes, formatDuration } from '@/utils/formatting'
 import BaseButton from '@/components/ui/BaseButton.vue'
 import BaseLoading from '@/components/ui/BaseLoading.vue'
 import MarkdownRenderer from '@/components/ui/MarkdownRenderer.vue'
@@ -1030,16 +1030,6 @@ function formatDateTime(value) {
   } catch {
     return String(value)
   }
-}
-
-function formatBytes(value) {
-  const size = Number(value)
-  if (!Number.isFinite(size) || size < 0) return '-'
-  if (size < 1024) return `${size} B`
-  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`
-  if (size < 1024 * 1024 * 1024)
-    return `${(size / (1024 * 1024)).toFixed(1)} MB`
-  return `${(size / (1024 * 1024 * 1024)).toFixed(1)} GB`
 }
 
 function formatStepTime(value) {

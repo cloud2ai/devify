@@ -427,6 +427,12 @@
       "label": "投递",
       "openInNewWindow": "在新窗口打开"
     },
+    "files": {
+      "title": "文件",
+      "download": "下载",
+      "previewError": "预览加载失败",
+      "file": "文件"
+    },
     "errorLoading": "加载对话详情失败",
     "errorLoadingDesc": "无法加载对话详情"
   },

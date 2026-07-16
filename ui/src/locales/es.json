@@ -216,6 +216,12 @@
       "openInNewWindow": "Abrir en una nueva ventana",
       "reference": "Problema"
     },
+    "files": {
+      "title": "Archivos",
+      "download": "Descargar",
+      "previewError": "No se pudo cargar la vista previa",
+      "file": "Archivo"
+    },
     "errorLoading": "Error al cargar el hilo de conversación",
     "errorLoadingDesc": "No se pudieron cargar los detalles de la conversación"
   },
