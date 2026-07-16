@@ -29,6 +29,7 @@ class MergeDecision:
     target: Optional[EmailMessage]
     reason: str = ""
     sources: tuple[EmailMessage, ...] = ()
+    evidence: Optional[dict] = None
 
     @property
     def should_merge(self) -> bool:
@@ -89,15 +90,25 @@ class EmailMergeService:
             merge_reason = self._determine_merge_reason(
                 email, matched_sources
             )
+            # Collect evidence once, against the source that actually drove the
+            # chosen reason, so it can never disagree with merge_reason and is
+            # never empty for a genuine merge.
+            primary_source = self._primary_source(
+                email, matched_sources, merge_reason
+            )
+            evidence = self._collect_evidence(
+                email, primary_source, merge_reason
+            )
             logger.info(
                 f"[EmailMerge] decide target email_id={email.id}"
                 f" target_id={target.id} target_uuid={target.uuid}"
-                f" reason={merge_reason}"
+                f" reason={merge_reason} evidence={evidence}"
             )
             return MergeDecision(
                 target=target,
                 reason=merge_reason,
                 sources=tuple(matched_sources),
+                evidence=evidence,
             )
 
         return MergeDecision(target=None)
@@ -164,7 +175,8 @@ class EmailMergeService:
                     pk=manual_head.pk
                 )
                 self._mark_source_as_merged(
-                    email, target, decision.reason, merged_at
+                    email, target, decision.reason, merged_at,
+                    decision.evidence,
                 )
                 return target, decision
 
@@ -178,7 +190,8 @@ class EmailMergeService:
                 if locked_head.merged_into_id == email.pk:
                     continue
                 self._mark_source_as_merged(
-                    locked_head, email, decision.reason, merged_at
+                    locked_head, email, decision.reason, merged_at,
+                    decision.evidence,
                 )
             return email, decision
 
@@ -584,12 +597,118 @@ class EmailMergeService:
             return 0.0
         return len(candidate_text) / len(current_text)
 
+    def _primary_source(
+        self,
+        email: EmailMessage,
+        sources: list[EmailMessage],
+        reason: str,
+    ) -> Optional[EmailMessage]:
+        """
+        Pick the matched source whose own match reason equals the cluster's
+        chosen (strongest) reason.
+
+        This ties the persisted evidence to the exact source/signal that
+        produced ``merge_reason``, so the two can never disagree. Falls back to
+        the first source if none matches (should not happen, since the reason
+        is derived from the same source set).
+        """
+        for source in sources:
+            if self._candidate_match_reason(email, source) == reason:
+                return source
+        return sources[0] if sources else None
+
+    def _collect_evidence(
+        self,
+        email: EmailMessage,
+        candidate: Optional[EmailMessage],
+        reason: str,
+    ) -> dict:
+        """
+        Build the discriminating evidence for the pair that drove the merge.
+
+        ``email`` is the arriving record and ``candidate`` is the primary
+        matched source. ``reason`` is the persisted merge_reason (the cluster's
+        strongest category); it is always echoed as ``evidence["reason"]`` so
+        the audit record can never contradict merge_reason. ``signal`` names
+        the exact matcher that fired for this pair (e.g. "containment", which
+        the enum folds into the text_similarity reason) as a finer detail.
+
+        Returns a small JSON-serializable dict persisted on merged records so a
+        merge can be explained after the fact without DEBUG logs.
+        """
+        evidence: dict = {"reason": reason}
+        if candidate is None:
+            return evidence
+
+        if self._matches_thread_relation(email, candidate):
+            tokens = []
+            if email.in_reply_to:
+                tokens.extend(self._extract_message_tokens(email.in_reply_to))
+            tokens.extend(self._extract_reference_tokens(email.references))
+            matched = next(
+                (
+                    token
+                    for token in tokens
+                    if token
+                    in (candidate.raw_message_id, candidate.message_id)
+                ),
+                None,
+            )
+            evidence.update(
+                signal="thread_relation", matched_message_id=matched
+            )
+            return evidence
+
+        candidate_text = self._normalize_text(candidate.text_content)
+        email_text = self._normalize_text(email.text_content)
+
+        if self._matches_forward_chain(email, candidate):
+            ratio, partial_ratio = self._text_similarity_scores(
+                candidate_text, email_text
+            )
+            evidence.update(
+                signal="forward_chain",
+                ratio=round(ratio, 1),
+                partial_ratio=round(partial_ratio, 1),
+            )
+            return evidence
+
+        if self._matches_text_similarity(email, candidate):
+            ratio, partial_ratio = self._text_similarity_scores(
+                candidate_text, email_text
+            )
+            evidence.update(
+                signal="text_similarity",
+                ratio=round(ratio, 1),
+                partial_ratio=round(partial_ratio, 1),
+                candidate_text_len=len(candidate_text),
+                email_text_len=len(email_text),
+            )
+            return evidence
+
+        if self._matches_containment(email, candidate):
+            evidence.update(
+                signal="containment",
+                candidate_text_len=len(candidate_text),
+                email_text_len=len(email_text),
+                containment_score=round(
+                    self._containment_score(candidate_text, email_text), 3
+                ),
+            )
+            return evidence
+
+        # The primary source matched under a signal that no longer fires for
+        # this exact pair (rare); keep the reason so the record is never empty.
+        evidence["signal"] = reason
+        return evidence
+
     def _mark_source_as_merged(
         self,
         source: EmailMessage,
         canonical: EmailMessage,
         reason: str,
         merged_at,
+        evidence: Optional[dict] = None,
     ) -> None:
         """
         Mark an older source record as merged into the canonical record.
@@ -598,15 +717,18 @@ class EmailMergeService:
             f"[EmailMerge] mark source merged source_id={source.id}"
             f" source_uuid={source.uuid} canonical_id={canonical.id}"
             f" canonical_uuid={canonical.uuid} reason={reason}"
+            f" evidence={evidence}"
         )
 
         source.merged_into = canonical
         source.merge_reason = reason
+        source.merge_evidence = evidence or None
         source.last_merged_at = merged_at
         source.save(
             update_fields=[
                 "merged_into",
                 "merge_reason",
+                "merge_evidence",
                 "last_merged_at",
                 "updated_at",
             ]

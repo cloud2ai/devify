@@ -215,6 +215,7 @@ class EmailMessageMergeChildSerializer(serializers.ModelSerializer):
             "summary_title",
             "received_at",
             "merge_reason",
+            "merge_evidence",
             "merged_into",
             "merged_into_uuid",
             "status",

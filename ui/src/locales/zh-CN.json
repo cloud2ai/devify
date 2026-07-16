@@ -392,6 +392,14 @@
       "sources": "合并来源",
       "sourceCount": "{count} 条",
       "sourceDate": "接收时间",
+      "reasonLabel": "合并依据",
+      "reason": {
+        "thread_relation": "邮件线程头",
+        "forward_chain": "转发线程",
+        "text_similarity": "文本相似",
+        "manual": "手动",
+        "unknown": "未知"
+      },
       "state": {
         "original": "原始",
         "canonical": "合并"

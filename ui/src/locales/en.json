@@ -382,6 +382,14 @@
       "sources": "Merge sources",
       "sourceCount": "{count} items",
       "sourceDate": "Received",
+      "reasonLabel": "Merged by",
+      "reason": {
+        "thread_relation": "Thread headers",
+        "forward_chain": "Forwarded thread",
+        "text_similarity": "Text similarity",
+        "manual": "Manual",
+        "unknown": "Unknown"
+      },
       "state": {
         "original": "Original",
         "canonical": "Merged"

@@ -370,6 +370,15 @@ class EmailMessage(models.Model):
         verbose_name=_("Merge Reason"),
         help_text=_("Why this record was merged into another record"),
     )
+    merge_evidence = models.JSONField(
+        null=True,
+        blank=True,
+        verbose_name=_("Merge Evidence"),
+        help_text=_(
+            "Discriminating evidence for the merge decision (matcher, "
+            "similarity scores, matched message-id/fields), for auditing."
+        ),
+    )
     last_merged_at = models.DateTimeField(
         null=True,
         blank=True,
