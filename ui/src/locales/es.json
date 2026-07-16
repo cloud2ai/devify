@@ -209,7 +209,15 @@
       "viewMainRecord": "Ver registro principal",
       "sources": "Orígenes de fusión",
       "sourceCount": "{count} elementos",
-      "sourceDate": "Recibido"
+      "sourceDate": "Recibido",
+      "reasonLabel": "Fusionado por",
+      "reason": {
+        "thread_relation": "Cabeceras de hilo",
+        "forward_chain": "Hilo reenviado",
+        "text_similarity": "Similitud de texto",
+        "manual": "Manual",
+        "unknown": "Desconocido"
+      }
     },
     "issue": {
       "label": "Enlace del problema",

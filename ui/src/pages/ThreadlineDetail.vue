@@ -1428,6 +1428,18 @@
                           {{ t('chats.merge.sourceDate') }}:
                           {{ formatDate(child.received_at) }}
                         </div>
+                        <div
+                          v-if="child.merge_reason"
+                          class="mt-1 flex items-center gap-1 text-xs text-slate-500"
+                          :title="mergeEvidenceHint(child)"
+                        >
+                          <span>{{ t('chats.merge.reasonLabel') }}:</span>
+                          <span
+                            class="inline-flex items-center rounded bg-slate-200 px-1.5 py-0.5 font-medium text-slate-700"
+                          >
+                            {{ mergeReasonLabel(child.merge_reason) }}
+                          </span>
+                        </div>
                       </div>
                       <MergeStateBadge state="original" />
                     </router-link>
@@ -2392,6 +2404,35 @@ const {
   goBack,
   handleClickOutside
 } = useThreadline(route, polling.startPolling, threadline)
+
+// Merge provenance helpers for the merged-source list
+const MERGE_REASONS = [
+  'thread_relation',
+  'forward_chain',
+  'text_similarity',
+  'manual'
+]
+
+function mergeReasonLabel(reason) {
+  const key = MERGE_REASONS.includes(reason) ? reason : 'unknown'
+  return t(`chats.merge.reason.${key}`)
+}
+
+function mergeEvidenceHint(child) {
+  const ev = child.merge_evidence
+  if (!ev) return ''
+  const parts = []
+  if (ev.signal && ev.signal !== child.merge_reason) {
+    parts.push(`via ${ev.signal}`)
+  }
+  if (ev.ratio != null) parts.push(`ratio ${ev.ratio}`)
+  if (ev.partial_ratio != null) parts.push(`partial ${ev.partial_ratio}`)
+  if (ev.matched_message_id) parts.push(`message-id ${ev.matched_message_id}`)
+  if (ev.containment_score != null) {
+    parts.push(`containment ${ev.containment_score}`)
+  }
+  return parts.join(' · ')
+}
 
 // Initialize share composable
 const share = useThreadlineShare(threadline, route)

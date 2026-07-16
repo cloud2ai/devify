@@ -375,3 +375,128 @@ class TestEmailMergeService(TestCase):
         resolved = self.service.resolve_canonical(child)
 
         assert resolved.pk == parent.pk
+
+    def test_reconcile_persists_merge_evidence_for_text_similarity(self):
+        parent = self._create_email(
+            subject="Project review",
+            text_content=(
+                "Please review the deployment plan.\n"
+                "The checklist is ready.\n"
+                "We should keep the release window on Friday.\n"
+                "Contact support if there is a blocker."
+            ),
+            received_at=timezone.now() - timedelta(minutes=5),
+        )
+        arriving = self._create_email(
+            subject="Project review",
+            text_content=(
+                "Please review the deployment plan.\n"
+                "The checklist is ready.\n"
+                "The release window stays on Friday.\n"
+                "Contact support if there is any blocker."
+            ),
+            received_at=timezone.now(),
+        )
+
+        canonical, decision = self.service.reconcile(arriving)
+
+        assert decision.should_merge is True
+        assert canonical.pk == arriving.pk
+
+        parent.refresh_from_db()
+        assert parent.merged_into_id == arriving.pk
+        assert (
+            parent.merge_reason
+            == EmailMessage.MergeReason.TEXT_SIMILARITY.value
+        )
+        # Evidence is persisted so the merge can be explained after the fact,
+        # and its reason always agrees with the stored merge_reason.
+        evidence = parent.merge_evidence
+        assert evidence is not None
+        assert evidence["reason"] == parent.merge_reason
+        assert evidence["signal"] == "text_similarity"
+        assert "ratio" in evidence and "partial_ratio" in evidence
+        assert evidence["email_text_len"] > 0
+
+    def test_merge_evidence_reason_agrees_with_containment_signal(self):
+        # Different subjects, so only containment fires. merge_reason folds
+        # containment into text_similarity; evidence must echo that reason and
+        # not contradict it, while naming the real signal.
+        base = (
+            "Please review the attached deployment runbook and the rollback "
+            "plan before the Friday release window and confirm on-call."
+        )
+        parent = self._create_email(
+            subject="Runbook",
+            text_content=base,
+            received_at=timezone.now() - timedelta(minutes=5),
+        )
+        arriving = self._create_email(
+            subject="Appendix update",
+            text_content=(
+                base + " Also note the extra appendix with escalation "
+                "contact details for the weekend rotation."
+            ),
+            received_at=timezone.now(),
+        )
+
+        canonical, decision = self.service.reconcile(arriving)
+
+        assert decision.should_merge is True
+        assert canonical.pk == arriving.pk
+
+        parent.refresh_from_db()
+        assert (
+            parent.merge_reason
+            == EmailMessage.MergeReason.TEXT_SIMILARITY.value
+        )
+        evidence = parent.merge_evidence
+        assert evidence is not None
+        # reason never contradicts merge_reason; signal names the real matcher.
+        assert evidence["reason"] == parent.merge_reason
+        assert evidence["signal"] == "containment"
+        assert "containment_score" in evidence
+
+    def test_merge_evidence_not_empty_for_repointing_merge(self):
+        # A is merged into B, but B's own text does NOT match C. When C arrives
+        # and matches only A, the cluster head B is re-pointed into C. Evidence
+        # must describe the source that actually matched (A), not the head (B),
+        # so it is never empty for a genuine new merge.
+        shared = (
+            "Please review the deployment plan. The checklist is ready. "
+            "Keep the release window on Friday. Ping support on any blocker."
+        )
+        head_b = self._create_email(
+            subject="Project review",
+            text_content=(
+                "Unrelated quarterly marketing newsletter about social "
+                "campaign metrics and audience growth for the region."
+            ),
+            received_at=timezone.now() - timedelta(minutes=10),
+        )
+        leaf_a = self._create_email(
+            subject="Project review",
+            text_content=shared,
+            merged_into=head_b,
+            merge_reason=EmailMessage.MergeReason.TEXT_SIMILARITY.value,
+            received_at=timezone.now() - timedelta(minutes=5),
+        )
+        arriving_c = self._create_email(
+            subject="Project review",
+            text_content=shared,
+            received_at=timezone.now(),
+        )
+
+        canonical, decision = self.service.reconcile(arriving_c)
+
+        assert decision.should_merge is True
+        assert canonical.pk == arriving_c.pk
+        # A only matched; its head B gets re-pointed into C.
+        assert leaf_a.pk is not None
+        head_b.refresh_from_db()
+        assert head_b.merged_into_id == arriving_c.pk
+        # Evidence describes the matching source (A), so it is not empty.
+        evidence = head_b.merge_evidence
+        assert evidence is not None
+        assert evidence["reason"] == head_b.merge_reason
+        assert evidence.get("signal")
