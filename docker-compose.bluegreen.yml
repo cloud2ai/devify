@@ -23,6 +23,9 @@
 #   hardcoded :latest) so the idle color pulls the new version while the old
 #   color keeps its image for a fast rollback.
 
+# Same project as the base stack it overlays (devify-deploy also pins -p devify).
+name: devify
+
 services:
   devify-api:
     profiles: ["single"]

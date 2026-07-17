@@ -1,3 +1,8 @@
+# Explicit project name so this prod stack never shares a project namespace
+# with docker-compose.dev.yml (which would otherwise both default to the
+# directory name "devify" and recreate each other's containers).
+name: devify
+
 x-logging: &default-logging
   driver: json-file
   options:
