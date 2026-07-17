@@ -5,6 +5,12 @@ on:
     tags:
       - 'v*'
 
+# Serialize deploys: a queued release waits for a running one instead of
+# racing it on the host (complements the deploy script's single-flight lock).
+concurrency:
+  group: devify-deploy
+  cancel-in-progress: false
+
 env:
   REGISTRY: ${{ vars.REGISTRY }}
   IMAGE_NAME: ${{ vars.IMAGE_NAME }}
@@ -85,7 +91,16 @@ jobs:
           cache-to: type=gha,mode=max
           platforms: linux/amd64
 
+      # Auto-deploy gate: the image build/push above always runs on a tag, but
+      # deploying to the host runs ONLY when the repo/environment variable
+      # DEVIFY_AUTO_DEPLOY is "true". Leave it unset (or "false") to build the
+      # release without touching production — e.g. during the blue/green
+      # cutover, deploy manually in a maintenance window
+      # (DEVIFY_REF=<tag> ./scripts/devify-deploy.sh upgrade) — then set it to
+      # "true" for hands-off zero-downtime releases. Toggling it needs no
+      # workflow edit, just a GitHub Variables change.
       - name: Install SSH Key
+        if: ${{ vars.DEVIFY_AUTO_DEPLOY == 'true' }}
         uses: shimataro/ssh-key-action@v2
         with:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
@@ -93,6 +108,7 @@ jobs:
           if_key_exists: fail
 
       - name: Deploy aimychats production
+        if: ${{ vars.DEVIFY_AUTO_DEPLOY == 'true' }}
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ vars.DEVIFY_DEPLOY_SSH_HOST }}
