@@ -1,0 +1,101 @@
+# Blue/green overlay for single-node zero-downtime deploys (issue #17).
+#
+# This file is layered ON TOP of docker-compose.yml; it never edits it.
+# Only devify-api / devify-ui are colored — worker, scheduler, mysql, redis,
+# haraka and (in the deploy overlay) devify-home stay single.
+#
+# Usage is driven by devify-deploy's scripts, not `docker compose up` directly:
+#   docker compose -f docker-compose.yml -f docker-compose.bluegreen.yml \
+#       --profile blue up -d devify-api-blue devify-ui-blue
+# The orchestrator health-gates the idle color, flips nginx's upstream.conf,
+# then retires the old color. See devify-deploy/scripts/devify-deploy.sh.
+#
+# Notes:
+# - The colored services `extends` the base services so their config never
+#   drifts; only image tag, container_name, profiles and depends_on differ.
+# - Base devify-api / devify-ui are parked on an unused "single" profile so a
+#   plain `up` never starts them (blue/green is the only production path).
+# - Base couples worker/scheduler/nginx to devify-api via depends_on; once the
+#   single service is profiled out that reference is "undefined" and breaks
+#   every compose command, so those dependencies are dropped here (!reset /
+#   !override) and the deploy script owns start ordering imperatively.
+# - Images are pinned to ${DEVIFY_IMAGE_TAG} on the colored services (base is
+#   hardcoded :latest) so the idle color pulls the new version while the old
+#   color keeps its image for a fast rollback.
+
+# Same project as the base stack it overlays (devify-deploy also pins -p devify).
+name: devify
+
+services:
+  devify-api:
+    profiles: ["single"]
+
+  devify-ui:
+    profiles: ["single"]
+
+  devify-api-blue:
+    extends:
+      file: docker-compose.yml
+      service: devify-api
+    image: registry.cn-beijing.aliyuncs.com/cloud2ai/devify:${DEVIFY_IMAGE_TAG:-latest}
+    container_name: devify-api-blue
+    profiles: ["blue"]
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+  devify-api-green:
+    extends:
+      file: docker-compose.yml
+      service: devify-api
+    image: registry.cn-beijing.aliyuncs.com/cloud2ai/devify:${DEVIFY_IMAGE_TAG:-latest}
+    container_name: devify-api-green
+    profiles: ["green"]
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+  devify-ui-blue:
+    extends:
+      file: docker-compose.yml
+      service: devify-ui
+    image: registry.cn-beijing.aliyuncs.com/cloud2ai/devify-ui:${DEVIFY_IMAGE_TAG:-latest}
+    container_name: devify-ui-blue
+    profiles: ["blue"]
+
+  devify-ui-green:
+    extends:
+      file: docker-compose.yml
+      service: devify-ui
+    image: registry.cn-beijing.aliyuncs.com/cloud2ai/devify-ui:${DEVIFY_IMAGE_TAG:-latest}
+    container_name: devify-ui-green
+    profiles: ["green"]
+
+  devify-worker:
+    depends_on: !override
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  devify-scheduler:
+    depends_on: !override
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  nginx:
+    depends_on: !reset []
+    # Mount a writable conf.d directory (not single files) so the deploy
+    # script's atomic sed/mv rewrite of upstream.conf is visible inside the
+    # container. The directory is populated by devify-deploy before start:
+    # default.conf (blue/green aware), upstream.conf (runtime state) and
+    # aimychats.com.conf. A single-file bind mount pins the original inode and
+    # never sees an atomic replacement, causing sustained 502s after a switch.
+    volumes: !override
+      - ${DEVIFY_RUNTIME_ROOT:-.}/data/nginx/conf.d:/etc/nginx/conf.d
+      - ${DEVIFY_NGINX_CERTS_DIR:-./docker/nginx/certs}:/etc/nginx/certs:ro
+      - ${DEVIFY_RUNTIME_ROOT:-.}/data/django/staticfiles:/staticfiles:ro
+      - ${DEVIFY_RUNTIME_ROOT:-.}/data/email_attachments:/opt/email_attachments:ro
+      - ${DEVIFY_RUNTIME_ROOT:-.}/data/logs/nginx:/var/log/nginx

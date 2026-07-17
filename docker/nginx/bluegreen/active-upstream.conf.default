@@ -1,0 +1,16 @@
+# =============================================================================
+# Blue/green runtime state (issue #17) — which color serves app.aimychats.com.
+#
+# Copied to conf.d/active-upstream.conf on first install, then rewritten IN
+# PLACE by devify-deploy's switch_traffic (sed on the `default` hosts below,
+# followed by `nginx -s reload`). Never edit by hand after install.
+#
+# The file name sorts before default.conf so these map variables are defined
+# before default.conf references them.
+# =============================================================================
+map $host $devify_active_api {
+    default http://devify-api-blue:8000;
+}
+map $host $devify_active_ui {
+    default http://devify-ui-blue:80;
+}

@@ -1,3 +1,8 @@
+# Distinct project name so the dev stack is isolated from the production
+# stacks (which use project "devify"); without this both default to the
+# directory name and bringing one up recreates the other's containers.
+name: devify-dev
+
 x-logging: &default-logging
   driver: json-file
   options:
