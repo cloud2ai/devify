@@ -179,10 +179,11 @@ Devify 不绑定任何单一 LLM 厂商。管理控制台内置 **17+ 供应商*
 
 ## 📚 文档
 
-完整文档见 [Devify 官网](https://aimychats.com/zh/self-hosting/installation.html)：
+完整文档见 [Devify 官网](https://aimychats.com/zh/self-hosting/deployment/overview.html)：
 
-- **[安装指南](https://aimychats.com/zh/self-hosting/installation.html)**（[English](https://aimychats.com/en/self-hosting/installation.html)）—— 从克隆到运行：前置条件、环境配置、开发与生产部署、Haraka 邮件、首次运行与故障排查。
-- **[使用手册](https://aimychats.com/zh/self-hosting/user-guide.html)**（[English](https://aimychats.com/en/self-hosting/user-guide.html)）—— 控制台使用、端到端 Threadline 流程、向 Jira/飞书的智能投递，以及账户/计费基础。
+- **[私有化部署：部署](https://aimychats.com/zh/self-hosting/deployment/overview.html)**（[English](https://aimychats.com/en/self-hosting/deployment/overview.html)）—— 从克隆到运行：前置条件、开发与生产部署、Haraka 邮件、首次运行与故障排查。
+- **[私有化部署：配置](https://aimychats.com/zh/self-hosting/configuration/environment.html)**（[English](https://aimychats.com/en/self-hosting/configuration/environment.html)）—— 环境变量、数据库、模型提供商、邮件/通知、OAuth 与模型绑定。
+- **[使用手册](https://aimychats.com/zh/guide/console.html)**（[English](https://aimychats.com/en/guide/console.html)）—— 控制台使用、端到端 Threadline 流程、向 Jira/飞书的智能投递，以及账户/计费基础。
 
 下面的"快速开始"是精简摘要，完整细节见上述文档。
 
@@ -196,7 +197,7 @@ docker compose -f docker-compose.dev.yml build
 docker compose -f docker-compose.dev.yml up -d
 ```
 
-> 完整且实测可用的开发部署步骤（开发环境用 `.env.dev`、需要 `--env-file .env.dev`、MySQL 变量、以及宿主机侧 `npm install`）见[安装指南](https://aimychats.com/zh/self-hosting/installation.html#3-开发环境)。
+> 完整且实测可用的开发部署步骤（开发环境用 `.env.dev`、需要 `--env-file .env.dev`、MySQL 变量、以及宿主机侧 `npm install`）见[开发环境部署](https://aimychats.com/zh/self-hosting/deployment/development.html)。
 
 默认本地访问地址：
 

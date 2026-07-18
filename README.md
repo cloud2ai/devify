@@ -179,10 +179,11 @@ If you don't know where to start, the providers below have been validated with D
 
 ## 📚 Documentation
 
-Full documentation lives on the [Devify site](https://aimychats.com/en/self-hosting/installation.html):
+Full documentation lives on the [Devify site](https://aimychats.com/en/self-hosting/deployment/overview.html):
 
-- **[Installation Guide](https://aimychats.com/en/self-hosting/installation.html)** ([中文](https://aimychats.com/zh/self-hosting/installation.html)) — clone to running stack: prerequisites, environment configuration, development and production deployment, Haraka email, first run, and troubleshooting.
-- **[User Guide](https://aimychats.com/en/self-hosting/user-guide.html)** ([中文](https://aimychats.com/zh/self-hosting/user-guide.html)) — using the console, the end-to-end Threadline workflow, smart delivery to Jira/Feishu, and account/billing basics.
+- **[Self-Hosting: Deployment](https://aimychats.com/en/self-hosting/deployment/overview.html)** ([中文](https://aimychats.com/zh/self-hosting/deployment/overview.html)) — clone to running stack: prerequisites, development and production deployment, Haraka email, first run, and troubleshooting.
+- **[Self-Hosting: Configuration](https://aimychats.com/en/self-hosting/configuration/environment.html)** ([中文](https://aimychats.com/zh/self-hosting/configuration/environment.html)) — environment variables, database, LLM providers, email/notifications, OAuth, and model binding.
+- **[User Guide](https://aimychats.com/en/guide/console.html)** ([中文](https://aimychats.com/zh/guide/console.html)) — using the console, the end-to-end Threadline workflow, smart delivery to Jira/Feishu, and account/billing basics.
 
 The Quick Start below is a condensed summary; see the guides above for full detail.
 
@@ -198,7 +199,7 @@ docker compose -f docker-compose.dev.yml up -d
 
 > For the full, verified development setup (dev uses `.env.dev`, requires
 > `--env-file .env.dev`, MySQL variables, and a host-side `npm install`), follow
-> the [Installation Guide](https://aimychats.com/en/self-hosting/installation.html#3-development-stack).
+> the [Development guide](https://aimychats.com/en/self-hosting/deployment/development.html).
 
 Default local access:
 
