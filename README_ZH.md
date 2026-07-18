@@ -13,7 +13,7 @@
 
 将碎片化的沟通内容——聊天记录、邮件往来、截图——转化为结构化摘要和可复用数据，并自动交付到 JIRA、知识库和工作流自动化系统。
 
-[快速开始](#-快速开始) · [工作原理](#-devify-工作原理) · [推荐模型平台](#-推荐-llm-平台) · [自托管要求](#-自托管要求) · [SaaS 版本](https://aimychats.com)
+[快速开始](#-快速开始) · [文档](#-文档) · [工作原理](#-devify-工作原理) · [推荐模型平台](#-推荐-llm-平台) · [自托管要求](#-自托管要求) · [SaaS 版本](https://aimychats.com)
 
 [English](README.md) | 中文
 
@@ -177,6 +177,15 @@ Devify 不绑定任何单一 LLM 厂商。管理控制台内置 **17+ 供应商*
 
 > 💡 Devify 至少需要一个**多模态**模型用于图片理解和意图识别。最简单的起步方案是使用一个聚合平台账号（如 AGIone 或 OpenRouter）绑定所有 Threadline 任务。
 
+## 📚 文档
+
+完整文档见 [Devify 官网](https://aimychats.com/zh/self-hosting/installation.html)：
+
+- **[安装指南](https://aimychats.com/zh/self-hosting/installation.html)**（[English](https://aimychats.com/en/self-hosting/installation.html)）—— 从克隆到运行：前置条件、环境配置、开发与生产部署、Haraka 邮件、首次运行与故障排查。
+- **[使用手册](https://aimychats.com/zh/self-hosting/user-guide.html)**（[English](https://aimychats.com/en/self-hosting/user-guide.html)）—— 控制台使用、端到端 Threadline 流程、向 Jira/飞书的智能投递，以及账户/计费基础。
+
+下面的"快速开始"是精简摘要，完整细节见上述文档。
+
 ## 🚀 快速开始
 
 ### 开发环境
@@ -186,6 +195,8 @@ cp env.sample .env
 docker compose -f docker-compose.dev.yml build
 docker compose -f docker-compose.dev.yml up -d
 ```
+
+> 完整且实测可用的开发部署步骤（开发环境用 `.env.dev`、需要 `--env-file .env.dev`、MySQL 变量、以及宿主机侧 `npm install`）见[安装指南](https://aimychats.com/zh/self-hosting/installation.html#3-开发环境)。
 
 默认本地访问地址：
 

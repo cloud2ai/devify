@@ -13,7 +13,7 @@
 
 Turn fragmented conversations — chat records, email threads, screenshots — into structured summaries and reusable data, then deliver them to JIRA, knowledge bases, and workflow automation.
 
-[Quick Start](#-quick-start) · [How It Works](#-how-devify-works) · [Recommended Providers](#-recommended-llm-providers) · [Self-Hosting](#-self-hosting-requirements) · [SaaS Edition](https://aimychats.com)
+[Quick Start](#-quick-start) · [Documentation](#-documentation) · [How It Works](#-how-devify-works) · [Recommended Providers](#-recommended-llm-providers) · [Self-Hosting](#-self-hosting-requirements) · [SaaS Edition](https://aimychats.com)
 
 English | [中文](README_ZH.md)
 
@@ -177,6 +177,15 @@ If you don't know where to start, the providers below have been validated with D
 
 > 💡 Devify requires at least one **multimodal** model for image understanding and intent detection. A common minimal setup is a single aggregator account (e.g. AGIone or OpenRouter) bound to all Threadline jobs.
 
+## 📚 Documentation
+
+Full documentation lives on the [Devify site](https://aimychats.com/en/self-hosting/installation.html):
+
+- **[Installation Guide](https://aimychats.com/en/self-hosting/installation.html)** ([中文](https://aimychats.com/zh/self-hosting/installation.html)) — clone to running stack: prerequisites, environment configuration, development and production deployment, Haraka email, first run, and troubleshooting.
+- **[User Guide](https://aimychats.com/en/self-hosting/user-guide.html)** ([中文](https://aimychats.com/zh/self-hosting/user-guide.html)) — using the console, the end-to-end Threadline workflow, smart delivery to Jira/Feishu, and account/billing basics.
+
+The Quick Start below is a condensed summary; see the guides above for full detail.
+
 ## 🚀 Quick Start
 
 ### Development
@@ -186,6 +195,10 @@ cp env.sample .env
 docker compose -f docker-compose.dev.yml build
 docker compose -f docker-compose.dev.yml up -d
 ```
+
+> For the full, verified development setup (dev uses `.env.dev`, requires
+> `--env-file .env.dev`, MySQL variables, and a host-side `npm install`), follow
+> the [Installation Guide](https://aimychats.com/en/self-hosting/installation.html#3-development-stack).
 
 Default local access:
 
