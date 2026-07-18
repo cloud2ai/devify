@@ -553,7 +553,6 @@
     "maxAgeDays": "Fetch only the last N days",
     "maxAgeDaysPlaceholder": "7",
     "useSsl": "Use SSL",
-    "useStarttls": "Use STARTTLS",
     "deleteAfterFetch": "Delete server mail after fetch",
     "imapFilters": "Filter rules",
     "imapFiltersPlaceholder": "One per line, e.g. unread, from:someone[at]example.com",

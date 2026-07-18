@@ -630,15 +630,6 @@
 
                 <label class="flex items-center gap-2 text-sm text-gray-700">
                   <input
-                    v-model="emailForm.useStarttls"
-                    type="checkbox"
-                    class="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
-                  />
-                  {{ t('settings.useStarttls') }}
-                </label>
-
-                <label class="flex items-center gap-2 text-sm text-gray-700">
-                  <input
                     v-model="emailForm.deleteAfterFetch"
                     type="checkbox"
                     class="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
@@ -866,7 +857,6 @@ const emailForm = reactive({
   password: '',
   imapSslPort: 993,
   useSsl: true,
-  useStarttls: false,
   deleteAfterFetch: false,
   folder: 'INBOX',
   filtersText: '',
@@ -1006,7 +996,6 @@ function normalizeEmailConfig(value) {
   emailForm.imapSslPort = imapConfig.imap_ssl_port || 993
   emailForm.useSsl =
     imapConfig.use_ssl !== undefined ? Boolean(imapConfig.use_ssl) : true
-  emailForm.useStarttls = Boolean(imapConfig.use_starttls)
   emailForm.deleteAfterFetch = Boolean(imapConfig.delete_after_fetch)
   emailForm.folder = filterConfig.folder || 'INBOX'
   emailForm.filtersText = formatListValue(filterConfig.filters)
@@ -1024,7 +1013,6 @@ function buildEmailConfig() {
       password: emailForm.password,
       imap_ssl_port: Number(emailForm.imapSslPort) || 993,
       use_ssl: Boolean(emailForm.useSsl),
-      use_starttls: Boolean(emailForm.useStarttls),
       delete_after_fetch: Boolean(emailForm.deleteAfterFetch)
     },
     filter_config: {
