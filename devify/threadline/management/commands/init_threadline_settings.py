@@ -342,13 +342,10 @@ class Command(BaseCommand):
             "mode": "auto_assign",
             "imap_config": {
                 "imap_host": "your-imap-server-hostname",
-                "smtp_ssl_port": 465,
-                "smtp_starttls_port": 587,
                 "imap_ssl_port": 993,
                 "username": "your-email-username",
                 "password": "your-email-password",
                 "use_ssl": True,
-                "use_starttls": False,
                 "delete_after_fetch": False,
             },
             "filter_config": {

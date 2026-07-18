@@ -563,7 +563,6 @@
     "maxAgeDays": "仅抓取最近 N 天",
     "maxAgeDaysPlaceholder": "7",
     "useSsl": "使用 SSL",
-    "useStarttls": "使用 STARTTLS",
     "deleteAfterFetch": "抓取后删除服务器邮件",
     "imapFilters": "筛选规则",
     "imapFiltersPlaceholder": "每行一条，例如 unread、from:someone[at]example.com",
