@@ -57,6 +57,7 @@ def test_auto_merge_strategy_update_resolves_to_update(monkeypatch):
         lambda subscription, email_message: SimpleNamespace(
             id=7,
             external_id="REQ-123",
+            metadata={"github_repo": "cloud2ai/devify"},
         ),
     )
     monkeypatch.setattr(
@@ -73,6 +74,7 @@ def test_auto_merge_strategy_update_resolves_to_update(monkeypatch):
     assert plan["action"] == "update"
     assert plan["source"] == "auto_merge"
     assert plan["reference_external_id"] == "REQ-123"
+    assert plan["reference_github_repo"] == "cloud2ai/devify"
     assert plan["related_issue_keys"] == []
 
 

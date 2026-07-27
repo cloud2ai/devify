@@ -372,13 +372,22 @@ class GitHubIssueRelayAdapter(BaseRelayAdapter):
             "todos": snapshot.get("todos") or [],
         }
         attachments = snapshot.get("attachments") or []
+        delivery_metadata = getattr(delivery, "metadata", None) or {}
+        previous_repo = str(
+            delivery_metadata.get("github_repo")
+            or plan.get("reference_github_repo")
+            or ""
+        ).strip()
+        repository_changed = bool(
+            previous_repo and previous_repo.casefold() != handler.repo.casefold()
+        )
 
         if plan["action"] == NEW_AND_LINK:
             email_data["related_issue_keys"] = plan["related_issue_keys"]
 
         if plan["action"] == UPDATE:
             external_id = delivery.external_id or plan["reference_external_id"]
-            if external_id:
+            if external_id and not repository_changed:
                 try:
                     external_id = handler.update_issue(
                         external_id,
@@ -416,6 +425,7 @@ class GitHubIssueRelayAdapter(BaseRelayAdapter):
             external_url=handler.get_issue_url(external_id),
             metadata={
                 "provider": "github_issue",
+                "github_repo": handler.repo,
                 "relay_strategy": plan["action"],
                 "relay_strategy_source": plan["source"],
                 "relay_related_issue_keys": plan["related_issue_keys"],

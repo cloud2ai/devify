@@ -157,13 +157,20 @@ def test_create_issue_truncates_body_to_github_limit(github_config):
             "title": "Large request",
             "description": "x" * (GITHUB_ISSUE_BODY_MAX_LENGTH + 100),
         },
-        email_data={},
-        attachments=[],
+        email_data={"related_issue_keys": [7]},
+        attachments=[
+            {
+                "filename": "report.pdf",
+                "url": "https://files.devify.example/report.pdf",
+            }
+        ],
     )
 
     body = session.request.call_args.kwargs["json"]["body"]
     assert len(body) == GITHUB_ISSUE_BODY_MAX_LENGTH
-    assert body.endswith("exceeded GitHub's issue body limit.\n")
+    assert "exceeded GitHub's issue body limit" in body
+    assert "[report.pdf](https://files.devify.example/report.pdf)" in body
+    assert "## Related issues\n\n- #7" in body
 
 
 @override_settings(
@@ -269,7 +276,65 @@ def test_adapter_updates_existing_github_issue(monkeypatch, github_config):
     assert result.external_id == "42"
     assert result.external_url.endswith("/issues/42")
     assert result.metadata["provider"] == "github_issue"
+    assert result.metadata["github_repo"] == "cloud2ai/devify"
     assert result.metadata["relay_strategy"] == "update"
+
+
+def test_adapter_creates_new_issue_when_reference_repository_changed(
+    monkeypatch,
+    github_config,
+):
+    update_issue = Mock(return_value="42")
+    create_issue = Mock(return_value="99")
+    monkeypatch.setattr(GitHubIssueHandler, "update_issue", update_issue)
+    monkeypatch.setattr(GitHubIssueHandler, "create_issue", create_issue)
+    monkeypatch.setattr(
+        GitHubIssueHandler,
+        "get_issue_url",
+        lambda self, issue_number: (
+            f"https://github.com/{self.repo}/issues/{issue_number}"
+        ),
+    )
+    event = SimpleNamespace(
+        email_message=SimpleNamespace(subject="Original subject"),
+        email_message_id=7,
+        artifact_snapshot={
+            "summary_title": "Updated title",
+            "summary_content": "Updated body",
+            "attachments": [],
+        },
+    )
+    subscription = SimpleNamespace(
+        target_type="github_issue",
+        config=github_config,
+        strategies={},
+    )
+    delivery = SimpleNamespace(
+        external_id="",
+        metadata={
+            "relay_delivery_plan": {
+                "action": "update",
+                "source": "auto_merge",
+                "reference_external_id": "42",
+                "reference_delivery_id": 1,
+                "reference_github_repo": "cloud2ai/old-repo",
+                "related_issue_keys": [],
+                "linking_supported": True,
+            }
+        },
+    )
+
+    result = GitHubIssueRelayAdapter().deliver(
+        event=event,
+        subscription=subscription,
+        delivery=delivery,
+    )
+
+    update_issue.assert_not_called()
+    create_issue.assert_called_once()
+    assert result.external_id == "99"
+    assert result.external_url == "https://github.com/cloud2ai/devify/issues/99"
+    assert result.metadata["github_repo"] == "cloud2ai/devify"
 
 
 def test_subscription_serializer_validates_github_config_shape(github_config):

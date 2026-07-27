@@ -147,9 +147,7 @@ class GitHubIssueHandler:
         if not title:
             raise ValueError("GitHub issue title is required")
 
-        body = self._truncate_body(
-            self._build_body(issue_data, email_data, attachments)
-        )
+        body = self._build_body(issue_data, email_data, attachments)
         return {
             "title": title[:256],
             "body": body,
@@ -217,8 +215,11 @@ class GitHubIssueHandler:
             else:
                 attachment_lines.append(f"- [{label}]({url})")
 
+        preserved_sections: list[str] = []
         if attachment_lines:
-            body = self._append_section(body, "Attachments", attachment_lines)
+            preserved_sections.append(
+                self._format_section("Attachments", attachment_lines)
+            )
 
         related_issue_keys = email_data.get("related_issue_keys") or []
         related_lines = [
@@ -226,24 +227,38 @@ class GitHubIssueHandler:
             for issue_number in related_issue_keys
         ]
         if related_lines:
-            body = self._append_section(body, "Related issues", related_lines)
+            preserved_sections.append(
+                self._format_section("Related issues", related_lines)
+            )
 
-        return body
+        return self._truncate_body(body, "\n\n".join(preserved_sections))
 
     @staticmethod
-    def _truncate_body(body: str) -> str:
-        if len(body) <= GITHUB_ISSUE_BODY_MAX_LENGTH:
-            return body
+    def _truncate_body(body: str, preserved_suffix: str = "") -> str:
+        separator = "\n\n" if body and preserved_suffix else ""
+        combined_body = f"{body}{separator}{preserved_suffix}"
+        if len(combined_body) <= GITHUB_ISSUE_BODY_MAX_LENGTH:
+            return combined_body
+
+        preserved_tail = f"\n\n{preserved_suffix}" if preserved_suffix else ""
+        content_limit = (
+            GITHUB_ISSUE_BODY_MAX_LENGTH
+            - len(GITHUB_ISSUE_TRUNCATION_NOTICE)
+            - len(preserved_tail)
+        )
+        if content_limit >= 0:
+            return (
+                body[:content_limit] + GITHUB_ISSUE_TRUNCATION_NOTICE + preserved_tail
+            )
 
         content_limit = GITHUB_ISSUE_BODY_MAX_LENGTH - len(
             GITHUB_ISSUE_TRUNCATION_NOTICE
         )
-        return body[:content_limit] + GITHUB_ISSUE_TRUNCATION_NOTICE
+        return combined_body[:content_limit] + GITHUB_ISSUE_TRUNCATION_NOTICE
 
     @staticmethod
-    def _append_section(body: str, heading: str, lines: list[str]) -> str:
-        section = f"## {heading}\n\n" + "\n".join(lines)
-        return f"{body}\n\n{section}".strip() if body else section
+    def _format_section(heading: str, lines: list[str]) -> str:
+        return f"## {heading}\n\n" + "\n".join(lines)
 
     @staticmethod
     def _normalize_language(value: Any) -> str:

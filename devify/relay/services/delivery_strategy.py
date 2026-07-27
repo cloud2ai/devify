@@ -161,6 +161,12 @@ def resolve_delivery_plan(subscription, event, delivery) -> Dict[str, Any]:
     reference_external_id = delivery.external_id or (
         reference_delivery.external_id if reference_delivery else ""
     )
+    reference_metadata = (
+        getattr(reference_delivery, "metadata", None) or {}
+        if reference_delivery
+        else {}
+    )
+    reference_github_repo = str(reference_metadata.get("github_repo") or "").strip()
     related_issue_keys = _collect_related_issue_keys(
         subscription, event.email_message
     )
@@ -202,6 +208,7 @@ def resolve_delivery_plan(subscription, event, delivery) -> Dict[str, Any]:
         "source": source,
         "reference_external_id": reference_external_id,
         "reference_delivery_id": reference_delivery.id if reference_delivery else None,
+        "reference_github_repo": reference_github_repo,
         "related_issue_keys": related_issue_keys,
         "linking_supported": linking_supported,
     }
