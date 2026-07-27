@@ -388,7 +388,7 @@ class GitHubIssueRelayAdapter(BaseRelayAdapter):
             previous_repo and previous_repo.casefold() != handler.repo.casefold()
         )
 
-        if plan["action"] == NEW_AND_LINK:
+        if plan["action"] in {NEW_AND_LINK, UPDATE}:
             email_data["related_issue_references"] = [
                 reference
                 for reference in plan.get("related_issue_references", [])

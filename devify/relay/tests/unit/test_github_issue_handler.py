@@ -266,7 +266,14 @@ def test_adapter_updates_existing_github_issue(monkeypatch, github_config):
                 "source": "retry",
                 "reference_external_id": "42",
                 "reference_delivery_id": 1,
-                "related_issue_keys": [],
+                "related_issue_keys": ["7"],
+                "related_issue_references": [
+                    {
+                        "external_id": "7",
+                        "provider": "github_issue",
+                        "github_repo": "cloud2ai/devify",
+                    }
+                ],
                 "linking_supported": True,
             }
         },
@@ -280,6 +287,14 @@ def test_adapter_updates_existing_github_issue(monkeypatch, github_config):
 
     update_issue.assert_called_once()
     create_issue.assert_not_called()
+    update_email_data = update_issue.call_args.kwargs["email_data"]
+    assert update_email_data["related_issue_references"] == [
+        {
+            "external_id": "7",
+            "provider": "github_issue",
+            "github_repo": "cloud2ai/devify",
+        }
+    ]
     assert result.external_id == "42"
     assert result.external_url.endswith("/issues/42")
     assert result.metadata["provider"] == "github_issue"
