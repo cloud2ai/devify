@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import re
 from collections.abc import Mapping
+from pathlib import Path
 from typing import Any, Dict, List
 from urllib.parse import quote, urlparse
 
@@ -17,6 +18,11 @@ logger = logging.getLogger(__name__)
 GITHUB_API_ROOT = "https://api.github.com"
 GITHUB_WEB_ROOT = "https://github.com"
 REQUEST_TIMEOUT_SECONDS = 15
+GITHUB_ISSUE_BODY_MAX_LENGTH = 65_536
+GITHUB_ISSUE_TRUNCATION_NOTICE = (
+    "\n\n> [!NOTE]\n"
+    "> This issue body was truncated because it exceeded GitHub's issue body limit.\n"
+)
 REPOSITORY_PATTERN = re.compile(
     r"^[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?/[A-Za-z0-9_.-]+$"
 )
@@ -141,7 +147,9 @@ class GitHubIssueHandler:
         if not title:
             raise ValueError("GitHub issue title is required")
 
-        body = self._build_body(issue_data, email_data, attachments)
+        body = self._truncate_body(
+            self._build_body(issue_data, email_data, attachments)
+        )
         return {
             "title": title[:256],
             "body": body,
@@ -223,6 +231,16 @@ class GitHubIssueHandler:
         return body
 
     @staticmethod
+    def _truncate_body(body: str) -> str:
+        if len(body) <= GITHUB_ISSUE_BODY_MAX_LENGTH:
+            return body
+
+        content_limit = GITHUB_ISSUE_BODY_MAX_LENGTH - len(
+            GITHUB_ISSUE_TRUNCATION_NOTICE
+        )
+        return body[:content_limit] + GITHUB_ISSUE_TRUNCATION_NOTICE
+
+    @staticmethod
     def _append_section(body: str, heading: str, lines: list[str]) -> str:
         section = f"## {heading}\n\n" + "\n".join(lines)
         return f"{body}\n\n{section}".strip() if body else section
@@ -246,17 +264,18 @@ class GitHubIssueHandler:
 
         file_path = str(attachment.get("file_path") or "")
         base_url = str(getattr(settings, "ATTACHMENT_BASE_URL", "") or "").rstrip("/")
-        if not file_path or not base_url:
+        storage_dir = str(getattr(settings, "EMAIL_ATTACHMENT_DIR", "") or "")
+        if not file_path or not base_url or not storage_dir:
             return ""
 
-        storage_dir = str(getattr(settings, "EMAIL_ATTACHMENT_DIR", "") or "")
-        prefix = storage_dir.rstrip("/") + "/" if storage_dir else ""
-        relative_path = (
-            file_path[len(prefix) :]
-            if prefix and file_path.startswith(prefix)
-            else file_path.lstrip("/")
-        )
-        return f"{base_url}/attachments/{quote(relative_path, safe='/')}"
+        try:
+            relative_path = (
+                Path(file_path).resolve().relative_to(Path(storage_dir).resolve())
+            )
+        except (OSError, ValueError):
+            return ""
+
+        return f"{base_url}/attachments/{quote(str(relative_path), safe='/')}"
 
     def _request(
         self,

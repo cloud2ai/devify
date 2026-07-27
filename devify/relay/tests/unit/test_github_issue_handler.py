@@ -10,6 +10,9 @@ from relay.serializers import RelaySubscriptionSerializer
 from relay.services.adapters import GitHubIssueRelayAdapter, RelayAdapterRegistry
 from relay.services.drivers.github_issue_handler import GitHubIssueHandler
 from threadline.utils.issues import get_issue_handler
+from threadline.utils.issues.github_issue_handler import (
+    GITHUB_ISSUE_BODY_MAX_LENGTH,
+)
 
 
 @pytest.fixture
@@ -139,6 +142,62 @@ def test_create_issue_embeds_related_issue_references(github_config):
     assert "## Related issues" in body
     assert "- #7" in body
     assert "- #12" in body
+
+
+def test_create_issue_truncates_body_to_github_limit(github_config):
+    session = Mock()
+    session.request.return_value = _response(
+        status_code=201,
+        payload={"number": 44},
+    )
+    handler = GitHubIssueHandler(github_config, session=session)
+
+    handler.create_issue(
+        issue_data={
+            "title": "Large request",
+            "description": "x" * (GITHUB_ISSUE_BODY_MAX_LENGTH + 100),
+        },
+        email_data={},
+        attachments=[],
+    )
+
+    body = session.request.call_args.kwargs["json"]["body"]
+    assert len(body) == GITHUB_ISSUE_BODY_MAX_LENGTH
+    assert body.endswith("exceeded GitHub's issue body limit.\n")
+
+
+@override_settings(
+    EMAIL_ATTACHMENT_DIR="/srv/devify/attachments",
+    ATTACHMENT_BASE_URL="https://files.devify.example",
+)
+def test_create_issue_omits_attachment_paths_outside_public_storage(
+    github_config,
+):
+    session = Mock()
+    session.request.return_value = _response(
+        status_code=201,
+        payload={"number": 45},
+    )
+    handler = GitHubIssueHandler(github_config, session=session)
+
+    handler.create_issue(
+        issue_data={"title": "Test request", "description": "Body"},
+        email_data={},
+        attachments=[
+            {
+                "filename": "temporary.txt",
+                "file_path": "/tmp/temporary.txt",
+            },
+            {
+                "filename": "private.txt",
+                "file_path": ("/srv/devify/attachments/../private/private.txt"),
+            },
+        ],
+    )
+
+    body = session.request.call_args.kwargs["json"]["body"]
+    assert body == "Body"
+    assert "https://files.devify.example" not in body
 
 
 def test_handler_rejects_invalid_repo_and_missing_token():
