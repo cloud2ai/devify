@@ -5,7 +5,7 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 from relay.models import RelaySubscription
-from relay.services.delivery_strategy import resolve_delivery_plan
+from relay.services.delivery_strategy import resolve_delivery_plan, supports_linking
 
 
 def _make_subscription(
@@ -35,6 +35,10 @@ def _make_delivery(*, external_id="", metadata=None) -> SimpleNamespace:
         external_id=external_id,
         metadata=metadata or {},
     )
+
+
+def test_github_issue_target_supports_linking():
+    assert supports_linking(RelaySubscription.TargetType.GITHUB_ISSUE) is True
 
 
 def test_auto_merge_strategy_update_resolves_to_update(monkeypatch):

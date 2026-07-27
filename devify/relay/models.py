@@ -34,6 +34,7 @@ class RelayAppConfig(models.Model):
 class RelaySubscription(models.Model):
     class TargetType(models.TextChoices):
         FEISHU_BITABLE = "feishu_bitable", _("Feishu Bitable")
+        GITHUB_ISSUE = "github_issue", _("GitHub Issue")
         JIRA = "jira", _("Jira")
 
     user = models.ForeignKey(
@@ -208,4 +209,3 @@ class RelayDelivery(models.Model):
 
     def __str__(self) -> str:
         return f"{self.target_type} #{self.id}"
-

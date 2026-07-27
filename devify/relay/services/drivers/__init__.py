@@ -4,10 +4,12 @@ Relay owns the delivery drivers now. Threadline keeps compatibility imports
 only so legacy code paths do not break immediately.
 """
 
+from .github_issue_handler import GitHubIssueHandler
 from .jira_handler import JiraIssueHandler
 
 __all__ = [
     "FeishuBitableIssueHandler",
+    "GitHubIssueHandler",
     "JiraIssueHandler",
 ]
 

@@ -124,7 +124,10 @@ def _has_merge_context(email_message) -> bool:
 
 
 def supports_linking(target_type: str) -> bool:
-    return str(target_type or "").strip().lower() == RelaySubscription.TargetType.JIRA
+    return str(target_type or "").strip().lower() in {
+        RelaySubscription.TargetType.GITHUB_ISSUE,
+        RelaySubscription.TargetType.JIRA,
+    }
 
 
 def resolve_delivery_plan(subscription, event, delivery) -> Dict[str, Any]:

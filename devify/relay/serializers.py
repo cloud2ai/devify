@@ -95,6 +95,24 @@ class RelaySubscriptionSerializer(serializers.ModelSerializer):
         return value
 
     def validate(self, attrs):
+        target_type = attrs.get(
+            "target_type",
+            getattr(self.instance, "target_type", None),
+        )
+        config = attrs.get(
+            "config",
+            getattr(self.instance, "config", {}),
+        )
+        if target_type == RelaySubscription.TargetType.GITHUB_ISSUE:
+            from threadline.utils.issues.github_issue_handler import (
+                validate_github_config,
+            )
+
+            try:
+                validate_github_config(config)
+            except ValueError as exc:
+                raise serializers.ValidationError({"config": str(exc)}) from exc
+
         request = self.context.get("request")
         if (
             self.instance is None
