@@ -387,16 +387,41 @@ class GitHubIssueRelayAdapter(BaseRelayAdapter):
         repository_changed = bool(
             previous_repo and previous_repo.casefold() != handler.repo.casefold()
         )
+        planned_external_id = (
+            delivery.external_id or plan["reference_external_id"]
+            if plan["action"] == UPDATE
+            else ""
+        )
 
         if plan["action"] in {NEW_AND_LINK, UPDATE}:
-            email_data["related_issue_references"] = [
+            related_issue_references = [
                 reference
                 for reference in plan.get("related_issue_references", [])
                 if str(reference.get("provider") or "").casefold() == "github_issue"
             ]
+            if (
+                plan["action"] == UPDATE
+                and planned_external_id
+                and not provider_changed
+                and not repository_changed
+            ):
+                related_issue_references = [
+                    reference
+                    for reference in related_issue_references
+                    if not (
+                        str(reference.get("external_id") or "").strip()
+                        == str(planned_external_id).strip()
+                        and (
+                            not str(reference.get("github_repo") or "").strip()
+                            or str(reference.get("github_repo")).strip().casefold()
+                            == handler.repo.casefold()
+                        )
+                    )
+                ]
+            email_data["related_issue_references"] = related_issue_references
 
         if plan["action"] == UPDATE:
-            external_id = delivery.external_id or plan["reference_external_id"]
+            external_id = planned_external_id
             if external_id and not provider_changed and not repository_changed:
                 try:
                     external_id = handler.update_issue(

@@ -269,10 +269,15 @@ def test_adapter_updates_existing_github_issue(monkeypatch, github_config):
                 "related_issue_keys": ["7"],
                 "related_issue_references": [
                     {
+                        "external_id": "42",
+                        "provider": "github_issue",
+                        "github_repo": "cloud2ai/devify",
+                    },
+                    {
                         "external_id": "7",
                         "provider": "github_issue",
                         "github_repo": "cloud2ai/devify",
-                    }
+                    },
                 ],
                 "linking_supported": True,
             }
@@ -350,8 +355,18 @@ def test_adapter_creates_new_issue_when_reference_target_changed(
                 "reference_delivery_id": 1,
                 "reference_github_repo": reference_repo,
                 "reference_provider": reference_provider,
-                "related_issue_keys": [],
-                "related_issue_references": [],
+                "related_issue_keys": ["42"],
+                "related_issue_references": (
+                    [
+                        {
+                            "external_id": "42",
+                            "provider": "github_issue",
+                            "github_repo": reference_repo,
+                        }
+                    ]
+                    if reference_provider == "github_issue"
+                    else []
+                ),
                 "linking_supported": True,
             }
         },
@@ -365,6 +380,9 @@ def test_adapter_creates_new_issue_when_reference_target_changed(
 
     update_issue.assert_not_called()
     create_issue.assert_called_once()
+    if reference_provider == "github_issue":
+        create_email_data = create_issue.call_args.kwargs["email_data"]
+        assert create_email_data["related_issue_references"][0]["external_id"] == "42"
     assert result.external_id == "99"
     assert result.external_url == "https://github.com/cloud2ai/devify/issues/99"
     assert result.metadata["github_repo"] == "cloud2ai/devify"
