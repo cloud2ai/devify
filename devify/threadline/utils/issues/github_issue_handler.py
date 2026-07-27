@@ -221,11 +221,22 @@ class GitHubIssueHandler:
                 self._format_section("Attachments", attachment_lines)
             )
 
-        related_issue_keys = email_data.get("related_issue_keys") or []
-        related_lines = [
-            f"- #{self._normalize_issue_number(issue_number)}"
-            for issue_number in related_issue_keys
-        ]
+        related_issue_references = email_data.get("related_issue_references")
+        if related_issue_references is None:
+            related_issue_references = [
+                {"external_id": issue_number, "github_repo": self.repo}
+                for issue_number in email_data.get("related_issue_keys") or []
+            ]
+        related_lines: list[str] = []
+        for reference in related_issue_references:
+            issue_number = self._normalize_issue_number(reference.get("external_id"))
+            reference_repo = str(reference.get("github_repo") or "").strip()
+            issue_reference = (
+                f"{reference_repo}#{issue_number}"
+                if reference_repo and reference_repo.casefold() != self.repo.casefold()
+                else f"#{issue_number}"
+            )
+            related_lines.append(f"- {issue_reference}")
         if related_lines:
             preserved_sections.append(
                 self._format_section("Related issues", related_lines)

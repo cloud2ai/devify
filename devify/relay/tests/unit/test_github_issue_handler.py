@@ -157,7 +157,14 @@ def test_create_issue_truncates_body_to_github_limit(github_config):
             "title": "Large request",
             "description": "x" * (GITHUB_ISSUE_BODY_MAX_LENGTH + 100),
         },
-        email_data={"related_issue_keys": [7]},
+        email_data={
+            "related_issue_references": [
+                {
+                    "external_id": 7,
+                    "github_repo": "cloud2ai/old-repo",
+                }
+            ]
+        },
         attachments=[
             {
                 "filename": "report.pdf",
@@ -170,7 +177,7 @@ def test_create_issue_truncates_body_to_github_limit(github_config):
     assert len(body) == GITHUB_ISSUE_BODY_MAX_LENGTH
     assert "exceeded GitHub's issue body limit" in body
     assert "[report.pdf](https://files.devify.example/report.pdf)" in body
-    assert "## Related issues\n\n- #7" in body
+    assert "## Related issues\n\n- cloud2ai/old-repo#7" in body
 
 
 @override_settings(
@@ -280,9 +287,18 @@ def test_adapter_updates_existing_github_issue(monkeypatch, github_config):
     assert result.metadata["relay_strategy"] == "update"
 
 
-def test_adapter_creates_new_issue_when_reference_repository_changed(
+@pytest.mark.parametrize(
+    ("reference_provider", "reference_repo"),
+    [
+        ("github_issue", "cloud2ai/old-repo"),
+        ("jira", ""),
+    ],
+)
+def test_adapter_creates_new_issue_when_reference_target_changed(
     monkeypatch,
     github_config,
+    reference_provider,
+    reference_repo,
 ):
     update_issue = Mock(return_value="42")
     create_issue = Mock(return_value="99")
@@ -317,8 +333,10 @@ def test_adapter_creates_new_issue_when_reference_repository_changed(
                 "source": "auto_merge",
                 "reference_external_id": "42",
                 "reference_delivery_id": 1,
-                "reference_github_repo": "cloud2ai/old-repo",
+                "reference_github_repo": reference_repo,
+                "reference_provider": reference_provider,
                 "related_issue_keys": [],
+                "related_issue_references": [],
                 "linking_supported": True,
             }
         },
