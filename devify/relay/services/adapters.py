@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from collections.abc import Mapping
 from typing import Any, Dict
 
+from relay.services.drivers.github_issue_handler import GitHubIssueHandler
 from relay.services.drivers.jira_handler import JiraIssueHandler
 
 from threadline.utils.issues.error_utils import is_missing_issue_error
@@ -343,9 +344,137 @@ class JiraRelayAdapter(BaseRelayAdapter):
         )
 
 
+class GitHubIssueRelayAdapter(BaseRelayAdapter):
+    def deliver(self, *, event, subscription, delivery) -> RelayAdapterResult:
+        handler = GitHubIssueHandler(subscription.config or {})
+        plan = (
+            (delivery.metadata or {}).get("relay_delivery_plan")
+            if hasattr(delivery, "metadata")
+            else None
+        ) or resolve_delivery_plan(subscription, event, delivery)
+        snapshot = event.artifact_snapshot or {}
+        issue_data = {
+            "title": snapshot.get("summary_title") or event.email_message.subject,
+            "description": snapshot.get("summary_content")
+            or snapshot.get("llm_content")
+            or "",
+        }
+        email_data = {
+            "id": str(event.email_message_id),
+            "subject": event.email_message.subject,
+            "summary_title": snapshot.get("summary_title")
+            or event.email_message.subject,
+            "summary_content": snapshot.get("summary_content") or "",
+            "summary_data": snapshot.get("summary_data") or {},
+            "llm_content": snapshot.get("llm_content") or "",
+            "metadata": snapshot.get("metadata") or {},
+            "language": snapshot.get("language") or "en",
+            "todos": snapshot.get("todos") or [],
+        }
+        attachments = snapshot.get("attachments") or []
+        delivery_metadata = getattr(delivery, "metadata", None) or {}
+        previous_repo = str(
+            delivery_metadata.get("github_repo")
+            or plan.get("reference_github_repo")
+            or ""
+        ).strip()
+        previous_provider = str(
+            delivery_metadata.get("provider") or plan.get("reference_provider") or ""
+        ).strip()
+        provider_changed = bool(
+            previous_provider and previous_provider.casefold() != "github_issue"
+        )
+        repository_changed = bool(
+            previous_repo and previous_repo.casefold() != handler.repo.casefold()
+        )
+        planned_external_id = (
+            delivery.external_id or plan["reference_external_id"]
+            if plan["action"] == UPDATE
+            else ""
+        )
+
+        if plan["action"] in {NEW_AND_LINK, UPDATE}:
+            related_issue_references = [
+                reference
+                for reference in plan.get("related_issue_references", [])
+                if str(reference.get("provider") or "").casefold() == "github_issue"
+            ]
+            if (
+                plan["action"] == UPDATE
+                and planned_external_id
+                and not provider_changed
+                and not repository_changed
+            ):
+                related_issue_references = [
+                    reference
+                    for reference in related_issue_references
+                    if not (
+                        str(reference.get("external_id") or "").strip()
+                        == str(planned_external_id).strip()
+                        and (
+                            not str(reference.get("github_repo") or "").strip()
+                            or str(reference.get("github_repo")).strip().casefold()
+                            == handler.repo.casefold()
+                        )
+                    )
+                ]
+            email_data["related_issue_references"] = related_issue_references
+
+        if plan["action"] == UPDATE:
+            external_id = planned_external_id
+            if external_id and not provider_changed and not repository_changed:
+                try:
+                    external_id = handler.update_issue(
+                        external_id,
+                        issue_data=issue_data,
+                        email_data=email_data,
+                        attachments=attachments,
+                        force=False,
+                    )
+                except Exception as exc:
+                    if not is_missing_issue_error(exc):
+                        raise
+                    external_id = handler.create_issue(
+                        issue_data=issue_data,
+                        email_data=email_data,
+                        attachments=attachments,
+                        force=False,
+                    )
+            else:
+                external_id = handler.create_issue(
+                    issue_data=issue_data,
+                    email_data=email_data,
+                    attachments=attachments,
+                    force=False,
+                )
+        else:
+            external_id = handler.create_issue(
+                issue_data=issue_data,
+                email_data=email_data,
+                attachments=attachments,
+                force=False,
+            )
+
+        return RelayAdapterResult(
+            external_id=external_id,
+            external_url=handler.get_issue_url(external_id),
+            metadata={
+                "provider": "github_issue",
+                "github_repo": handler.repo,
+                "relay_strategy": plan["action"],
+                "relay_strategy_source": plan["source"],
+                "relay_related_issue_keys": plan["related_issue_keys"],
+                "relay_linking_supported": plan["linking_supported"],
+                "uploaded_attachment_keys": [],
+                "attachment_count": len(attachments),
+            },
+        )
+
+
 class RelayAdapterRegistry:
     _adapters = {
         "feishu_bitable": FeishuBitableRelayAdapter,
+        "github_issue": GitHubIssueRelayAdapter,
         "jira": JiraRelayAdapter,
     }
 

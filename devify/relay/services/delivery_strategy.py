@@ -81,7 +81,7 @@ def _latest_successful_delivery(subscription, email_message):
     )
 
 
-def _collect_related_issue_keys(subscription, email_message) -> list[str]:
+def _collect_related_issue_references(subscription, email_message) -> list[dict]:
     cluster = _walk_email_cluster(email_message)
     if not cluster:
         return []
@@ -108,11 +108,27 @@ def _collect_related_issue_keys(subscription, email_message) -> list[str]:
         .order_by("created_at", "id")
     )
 
-    related_issue_keys: list[str] = []
+    related_issue_references: list[dict] = []
+    seen_references: set[tuple[str, str, str]] = set()
     for delivery in deliveries:
-        if delivery.external_id and delivery.external_id not in related_issue_keys:
-            related_issue_keys.append(delivery.external_id)
-    return related_issue_keys
+        external_id = str(delivery.external_id or "").strip()
+        if not external_id:
+            continue
+        metadata = delivery.metadata or {}
+        provider = str(metadata.get("provider") or delivery.target_type or "").strip()
+        github_repo = str(metadata.get("github_repo") or "").strip()
+        identity = (provider.casefold(), github_repo.casefold(), external_id)
+        if identity in seen_references:
+            continue
+        seen_references.add(identity)
+        related_issue_references.append(
+            {
+                "external_id": external_id,
+                "provider": provider,
+                "github_repo": github_repo,
+            }
+        )
+    return related_issue_references
 
 
 def _has_merge_context(email_message) -> bool:
@@ -124,7 +140,10 @@ def _has_merge_context(email_message) -> bool:
 
 
 def supports_linking(target_type: str) -> bool:
-    return str(target_type or "").strip().lower() == RelaySubscription.TargetType.JIRA
+    return str(target_type or "").strip().lower() in {
+        RelaySubscription.TargetType.GITHUB_ISSUE,
+        RelaySubscription.TargetType.JIRA,
+    }
 
 
 def resolve_delivery_plan(subscription, event, delivery) -> Dict[str, Any]:
@@ -155,11 +174,42 @@ def resolve_delivery_plan(subscription, event, delivery) -> Dict[str, Any]:
     reference_delivery = _latest_successful_delivery(
         subscription, event.email_message
     )
+    reference_metadata = (
+        getattr(reference_delivery, "metadata", None) or {}
+        if reference_delivery
+        else {}
+    )
+    reference_github_repo = str(reference_metadata.get("github_repo") or "").strip()
+    reference_provider = str(
+        reference_metadata.get("provider")
+        or getattr(reference_delivery, "target_type", "")
+        or ""
+    ).strip()
+    delivery_metadata = getattr(delivery, "metadata", None) or {}
+    delivery_provider = str(
+        delivery_metadata.get("provider") or getattr(delivery, "target_type", "") or ""
+    ).strip()
     reference_external_id = delivery.external_id or (
         reference_delivery.external_id if reference_delivery else ""
     )
-    related_issue_keys = _collect_related_issue_keys(
+    external_id_provider = (
+        delivery_provider if delivery.external_id else reference_provider
+    )
+    target_provider = str(subscription.target_type or "").strip().casefold()
+    if external_id_provider and external_id_provider.casefold() != target_provider:
+        reference_external_id = ""
+    collected_references = _collect_related_issue_references(
         subscription, event.email_message
+    )
+    related_issue_references = [
+        reference
+        for reference in collected_references
+        if str(reference.get("provider") or "").strip().casefold() == target_provider
+    ]
+    related_issue_keys = list(
+        dict.fromkeys(
+            reference["external_id"] for reference in related_issue_references
+        )
     )
     has_merge_context = _has_merge_context(event.email_message)
     linking_supported = supports_linking(subscription.target_type)
@@ -199,6 +249,9 @@ def resolve_delivery_plan(subscription, event, delivery) -> Dict[str, Any]:
         "source": source,
         "reference_external_id": reference_external_id,
         "reference_delivery_id": reference_delivery.id if reference_delivery else None,
+        "reference_github_repo": reference_github_repo,
+        "reference_provider": reference_provider,
         "related_issue_keys": related_issue_keys,
+        "related_issue_references": related_issue_references,
         "linking_supported": linking_supported,
     }

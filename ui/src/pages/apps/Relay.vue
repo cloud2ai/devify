@@ -680,6 +680,9 @@
                           <option value="jira">
                             {{ t('relay.targetJira') }}
                           </option>
+                          <option value="github_issue">
+                            {{ t('relay.targetGitHub') }}
+                          </option>
                         </select>
                       </div>
                     </div>
@@ -1079,7 +1082,7 @@
                     </div>
 
                     <div
-                      v-else
+                      v-else-if="editorForm.target_type === 'jira'"
                       class="rounded-lg border border-gray-200 bg-gray-50 p-4 space-y-4"
                     >
                       <div>
@@ -1405,6 +1408,11 @@
                         </div>
                       </div>
                     </div>
+
+                    <GitHubIssueConfig
+                      v-else-if="editorForm.target_type === 'github_issue'"
+                      v-model="editorForm.githubConfig"
+                    />
                   </div>
 
                   <p
@@ -1533,6 +1541,9 @@
                       </option>
                       <option value="jira">
                         {{ t('relay.targetJira') }}
+                      </option>
+                      <option value="github_issue">
+                        {{ t('relay.targetGitHub') }}
                       </option>
                     </select>
                   </div>
@@ -1911,7 +1922,7 @@
                 </div>
 
                 <div
-                  v-else
+                  v-else-if="editorForm.target_type === 'jira'"
                   class="rounded-lg border border-gray-200 bg-gray-50 p-4 space-y-4"
                 >
                   <div>
@@ -2230,6 +2241,11 @@
                   </div>
                 </div>
 
+                <GitHubIssueConfig
+                  v-else-if="editorForm.target_type === 'github_issue'"
+                  v-model="editorForm.githubConfig"
+                />
+
                 <p v-if="editorError" class="text-sm text-red-600">
                   {{ editorError }}
                 </p>
@@ -2305,6 +2321,7 @@ import BaseButton from '@/components/ui/BaseButton.vue'
 import BaseCard from '@/components/ui/BaseCard.vue'
 import BaseInput from '@/components/ui/BaseInput.vue'
 import MergeStateBadge from '@/components/ui/MergeStateBadge.vue'
+import GitHubIssueConfig from '@/components/relay/GitHubIssueConfig.vue'
 import { relayApi } from '@/api/relay'
 import { useRelayFormatters } from '@/composables/useRelayFormatters'
 import { useRelayDeliveryList } from '@/composables/useRelayDeliveryList'

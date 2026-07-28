@@ -44,6 +44,12 @@ def get_issue_handler(config: Dict[str, Any]):
         )
 
         handler_class = FeishuBitableIssueHandler
+    elif issue_engine == "github_issue":
+        from relay.services.drivers.github_issue_handler import (
+            GitHubIssueHandler,
+        )
+
+        handler_class = GitHubIssueHandler
     else:
         handler_class = None
 

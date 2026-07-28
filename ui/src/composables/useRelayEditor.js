@@ -61,6 +61,13 @@ export function useRelayEditor({ reloadAll, activeTab }) {
     description_field: 'description'
   })
 
+  const defaultGitHubConfig = () => ({
+    repo: '',
+    token: '',
+    labels_text: '',
+    assignees_text: ''
+  })
+
   const emptyEditorForm = () => ({
     id: null,
     target_type: 'feishu_bitable',
@@ -70,6 +77,7 @@ export function useRelayEditor({ reloadAll, activeTab }) {
     strategies: defaultStrategies(),
     feishuConfig: defaultFeishuConfig(),
     jiraConfig: defaultJiraConfig(),
+    githubConfig: defaultGitHubConfig(),
     fieldMappingRows: [{ source: '', target: '' }]
   })
 
@@ -183,6 +191,15 @@ export function useRelayEditor({ reloadAll, activeTab }) {
               description_field:
                 editorForm.jiraConfig.description_field || 'description'
             }
+          : {},
+      githubConfig:
+        editorForm.target_type === 'github_issue'
+          ? {
+              repo: editorForm.githubConfig.repo || '',
+              token: editorForm.githubConfig.token || '',
+              labels_text: editorForm.githubConfig.labels_text || '',
+              assignees_text: editorForm.githubConfig.assignees_text || ''
+            }
           : {}
     })
   }
@@ -240,6 +257,7 @@ export function useRelayEditor({ reloadAll, activeTab }) {
     const config = sub.config || {}
     const feishuConfig = config.feishu_bitable || {}
     const jiraConfig = config.jira || {}
+    const githubConfig = config.github || {}
     const fieldsConfig = config.fields || {}
     setEditorForm({
       id: sub.id,
@@ -352,6 +370,12 @@ export function useRelayEditor({ reloadAll, activeTab }) {
           jiraConfig.epic_link_prompt ||
           ''
       },
+      githubConfig: {
+        repo: githubConfig.repo || '',
+        token: githubConfig.token || '',
+        labels_text: formatMultilineList(githubConfig.labels || []),
+        assignees_text: formatMultilineList(githubConfig.assignees || [])
+      },
       fieldMappingRows: normalizeFieldMappingRows(
         sub.field_mappings ||
           feishuConfig.field_mappings ||
@@ -368,51 +392,66 @@ export function useRelayEditor({ reloadAll, activeTab }) {
 
   function buildTestPayload() {
     const strategies = {
-      auto_merge_strategy:
-        editorForm.strategies.auto_merge_strategy || 'new',
+      auto_merge_strategy: editorForm.strategies.auto_merge_strategy || 'new',
       manual_merge_strategy:
         editorForm.strategies.manual_merge_strategy || 'linked',
       retry_issue_strategy:
         editorForm.strategies.retry_issue_strategy || 'update'
     }
+    let config
+    if (editorForm.target_type === 'feishu_bitable') {
+      config = {
+        issue_engine: 'feishu_bitable',
+        enable: Boolean(editorForm.enabled),
+        language: editorForm.language || 'Chinese',
+        ...strategies,
+        feishu_bitable: {
+          app_token_type: editorForm.feishuConfig.app_token_type || 'bitable',
+          app_token: editorForm.feishuConfig.app_token || '',
+          table_name: editorForm.feishuConfig.table_name || '',
+          app_id: editorForm.feishuConfig.app_id || '',
+          app_secret: editorForm.feishuConfig.app_secret || '',
+          attachment_field_name:
+            editorForm.feishuConfig.attachment_field_name || '附件',
+          summary_prefix: editorForm.feishuConfig.summary_prefix || '',
+          field_mappings: buildFieldMappingsFromRows(
+            editorForm.fieldMappingRows
+          )
+        }
+      }
+    } else if (editorForm.target_type === 'github_issue') {
+      config = {
+        issue_engine: 'github_issue',
+        enable: Boolean(editorForm.enabled),
+        language: editorForm.language || 'Chinese',
+        ...strategies,
+        github: {
+          repo: editorForm.githubConfig.repo || '',
+          token: editorForm.githubConfig.token || '',
+          labels: parseMultilineList(editorForm.githubConfig.labels_text),
+          assignees: parseMultilineList(editorForm.githubConfig.assignees_text)
+        }
+      }
+    } else {
+      config = {
+        issue_engine: 'jira',
+        enable: Boolean(editorForm.enabled),
+        language: editorForm.language || 'Chinese',
+        ...strategies,
+        jira: {
+          url: editorForm.jiraConfig.url || '',
+          username: editorForm.jiraConfig.username || '',
+          api_token: editorForm.jiraConfig.api_token || ''
+        }
+      }
+    }
+
     return {
       subscription: {
         target_type: editorForm.target_type || 'feishu_bitable',
         name: editorForm.name || '',
         enabled: Boolean(editorForm.enabled),
-        config:
-          editorForm.target_type === 'feishu_bitable'
-            ? {
-                issue_engine: 'feishu_bitable',
-                enable: Boolean(editorForm.enabled),
-                language: editorForm.language || 'Chinese',
-                ...strategies,
-                feishu_bitable: {
-                  app_token_type:
-                    editorForm.feishuConfig.app_token_type || 'bitable',
-                  app_token: editorForm.feishuConfig.app_token || '',
-                  table_name: editorForm.feishuConfig.table_name || '',
-                  app_id: editorForm.feishuConfig.app_id || '',
-                  app_secret: editorForm.feishuConfig.app_secret || '',
-                  attachment_field_name:
-                    editorForm.feishuConfig.attachment_field_name || '附件',
-                  summary_prefix: editorForm.feishuConfig.summary_prefix || '',
-                  field_mappings: buildFieldMappingsFromRows(
-                    editorForm.fieldMappingRows
-                  )
-                }
-              }
-            : {
-                issue_engine: 'jira',
-                enable: Boolean(editorForm.enabled),
-                language: editorForm.language || 'Chinese',
-                ...strategies,
-                jira: {
-                  url: editorForm.jiraConfig.url || '',
-                  username: editorForm.jiraConfig.username || '',
-                  api_token: editorForm.jiraConfig.api_token || ''
-                }
-              },
+        config,
         strategies,
         field_mappings: buildFieldMappingsFromRows(editorForm.fieldMappingRows)
       },
@@ -552,27 +591,42 @@ export function useRelayEditor({ reloadAll, activeTab }) {
             },
             feishu_bitable: {}
           }
-        : {
-            ...baseConfig,
-            jira: {
-              url: editorForm.jiraConfig.url || '',
-              username: editorForm.jiraConfig.username || '',
-              api_token: editorForm.jiraConfig.api_token || ''
-            },
-            feishu_bitable: {
-              app_token_type:
-                editorForm.feishuConfig.app_token_type || 'bitable',
-              app_token: editorForm.feishuConfig.app_token || '',
-              table_name: editorForm.feishuConfig.table_name || '',
-              app_id: editorForm.feishuConfig.app_id || '',
-              app_secret: editorForm.feishuConfig.app_secret || '',
-              attachment_field_name:
-                editorForm.feishuConfig.attachment_field_name || '附件',
-              summary_prefix: editorForm.feishuConfig.summary_prefix || '',
-              field_mappings: fieldMappings
-            },
-            fields: {}
-          }
+        : editorForm.target_type === 'github_issue'
+          ? {
+              ...baseConfig,
+              github: {
+                repo: editorForm.githubConfig.repo || '',
+                token: editorForm.githubConfig.token || '',
+                labels: parseMultilineList(editorForm.githubConfig.labels_text),
+                assignees: parseMultilineList(
+                  editorForm.githubConfig.assignees_text
+                )
+              },
+              jira: {},
+              feishu_bitable: {},
+              fields: {}
+            }
+          : {
+              ...baseConfig,
+              jira: {
+                url: editorForm.jiraConfig.url || '',
+                username: editorForm.jiraConfig.username || '',
+                api_token: editorForm.jiraConfig.api_token || ''
+              },
+              feishu_bitable: {
+                app_token_type:
+                  editorForm.feishuConfig.app_token_type || 'bitable',
+                app_token: editorForm.feishuConfig.app_token || '',
+                table_name: editorForm.feishuConfig.table_name || '',
+                app_id: editorForm.feishuConfig.app_id || '',
+                app_secret: editorForm.feishuConfig.app_secret || '',
+                attachment_field_name:
+                  editorForm.feishuConfig.attachment_field_name || '附件',
+                summary_prefix: editorForm.feishuConfig.summary_prefix || '',
+                field_mappings: fieldMappings
+              },
+              fields: {}
+            }
     const payload = {
       target_type: editorForm.target_type,
       name: editorForm.name,
