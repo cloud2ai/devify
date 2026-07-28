@@ -15,6 +15,7 @@ from relay.services.delivery_strategy import (
     UPDATE,
     resolve_delivery_plan,
 )
+from relay.services.localization import get_delivery_artifact
 
 
 @dataclass
@@ -150,7 +151,11 @@ class FeishuBitableRelayAdapter(BaseRelayAdapter):
             if hasattr(delivery, "metadata")
             else None
         ) or resolve_delivery_plan(subscription, event, delivery)
-        snapshot = event.artifact_snapshot or {}
+        snapshot = get_delivery_artifact(
+            event=event,
+            subscription=subscription,
+            delivery=delivery,
+        )
         title = _apply_feishu_title_prefix(
             subscription,
             snapshot.get("summary_title") or event.email_message.subject,
@@ -243,7 +248,11 @@ class JiraRelayAdapter(BaseRelayAdapter):
             if hasattr(delivery, "metadata")
             else None
         ) or resolve_delivery_plan(subscription, event, delivery)
-        snapshot = event.artifact_snapshot or {}
+        snapshot = get_delivery_artifact(
+            event=event,
+            subscription=subscription,
+            delivery=delivery,
+        )
         issue_data = {
             "title": snapshot.get("summary_title") or event.email_message.subject,
             "description": snapshot.get("summary_content")
@@ -352,7 +361,11 @@ class GitHubIssueRelayAdapter(BaseRelayAdapter):
             if hasattr(delivery, "metadata")
             else None
         ) or resolve_delivery_plan(subscription, event, delivery)
-        snapshot = event.artifact_snapshot or {}
+        snapshot = get_delivery_artifact(
+            event=event,
+            subscription=subscription,
+            delivery=delivery,
+        )
         issue_data = {
             "title": snapshot.get("summary_title") or event.email_message.subject,
             "description": snapshot.get("summary_content")
