@@ -42,6 +42,7 @@ describe('useRelayEditor GitHub Issue target', () => {
   it('builds a GitHub test payload with repo credentials and mappings', () => {
     const { editorForm, buildTestPayload } = createEditor()
     editorForm.target_type = 'github_issue'
+    editorForm.language = 'English'
     editorForm.githubConfig.repo = 'cloud2ai/devify'
     editorForm.githubConfig.token = 'github-token'
     editorForm.githubConfig.labels_text = 'relay\nneeds-review'
@@ -51,12 +52,18 @@ describe('useRelayEditor GitHub Issue target', () => {
 
     expect(payload.subscription.config).toMatchObject({
       issue_engine: 'github_issue',
+      language: 'English',
       github: {
         repo: 'cloud2ai/devify',
         token: 'github-token',
         labels: ['relay', 'needs-review'],
         assignees: ['octocat', 'hubot']
       }
+    })
+    expect(payload.artifact_snapshot).toMatchObject({
+      summary_title: 'devify 测试摘要',
+      summary_content: 'devify 测试描述',
+      language: 'Chinese'
     })
   })
 

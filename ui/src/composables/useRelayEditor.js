@@ -446,6 +446,10 @@ export function useRelayEditor({ reloadAll, activeTab }) {
       }
     }
 
+    const sourceLanguage =
+      editorForm.language === 'English' ? 'Chinese' : 'English'
+    const sourceIsChinese = sourceLanguage === 'Chinese'
+
     return {
       subscription: {
         target_type: editorForm.target_type || 'feishu_bitable',
@@ -456,10 +460,16 @@ export function useRelayEditor({ reloadAll, activeTab }) {
         field_mappings: buildFieldMappingsFromRows(editorForm.fieldMappingRows)
       },
       artifact_snapshot: {
-        summary_title: 'devify test summary',
-        summary_content: 'devify test description',
-        llm_content: 'devify test description',
-        language: editorForm.language || 'Chinese'
+        summary_title: sourceIsChinese
+          ? 'devify 测试摘要'
+          : 'devify test summary',
+        summary_content: sourceIsChinese
+          ? 'devify 测试描述'
+          : 'devify test description',
+        llm_content: sourceIsChinese
+          ? 'devify 测试描述'
+          : 'devify test description',
+        language: sourceLanguage
       }
     }
   }
