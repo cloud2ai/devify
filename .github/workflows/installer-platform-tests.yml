@@ -1,0 +1,34 @@
+name: Installer platform tests
+
+on:
+  push:
+    paths:
+      - 'install.sh'
+      - 'scripts/test-install.sh'
+      - '.github/workflows/installer-platform-tests.yml'
+  pull_request:
+    paths:
+      - 'install.sh'
+      - 'scripts/test-install.sh'
+      - '.github/workflows/installer-platform-tests.yml'
+  workflow_dispatch:
+
+jobs:
+  installer-tests:
+    name: install.sh on ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Syntax check
+        shell: bash
+        run: bash -n install.sh
+
+      - name: Platform smoke tests
+        shell: bash
+        run: bash scripts/test-install.sh

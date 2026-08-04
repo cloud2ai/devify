@@ -8,6 +8,8 @@
 #   - downloads version-consistent release artifacts
 #   - preserves user configuration and data; safe to re-run (idempotent)
 #   - supports github (ghcr.io / GitHub Releases) and cn (ACR / OSS-CDN) channels
+#   - supported platforms: Linux (Ubuntu/Debian/Rocky/Alma/CentOS), macOS,
+#     and Windows via Git Bash (all require Docker; Docker Desktop works)
 #
 # Release artifact layout (must be published by the maintainers per release tag):
 #   devify-<version>.tar.gz
@@ -42,8 +44,21 @@ DEFAULT_ADMIN_PORT=19443
 DEFAULT_SMTP_PORT=25
 REGISTRY_GITHUB="ghcr.io/cloud2ai"
 REGISTRY_CN="registry.cn-beijing.aliyuncs.com/cloud2ai"
-INSTALLER_VERSION="0.1.0"
+INSTALLER_VERSION="0.2.0"
 HEALTH_TIMEOUT=120
+
+# Detect host platform early: macOS and Windows need different defaults and
+# preflight behavior (memory detection, daemon.json, root requirement, paths).
+case "$(uname -s)" in
+  Darwin)                PLATFORM="macos" ;;
+  Linux)                 PLATFORM="linux" ;;
+  MINGW*|MSYS*|CYGWIN*)  PLATFORM="windows" ;;
+  *)                     PLATFORM="unknown" ;;
+esac
+# Git Bash has no privileged /opt; install under the user's home by default.
+if [[ "${PLATFORM}" == "windows" ]]; then
+  DEFAULT_INSTALL_DIR="${HOME}/devify"
+fi
 
 # ---------------------------------------------------------------------------
 # Defaults (overridable via DEVIFY_* environment variables / CLI flags)
@@ -131,6 +146,9 @@ usage() {
   cat <<EOF
 Usage: install.sh [options]
 
+Supported platforms: Linux (Ubuntu/Debian/Rocky/Alma/CentOS), macOS, and
+Windows (Git Bash). All platforms require Docker (Docker Desktop works).
+
 Options:
   -d, --dir DIR          Install directory (default: ${DEFAULT_INSTALL_DIR})
   -p, --port PORT        HTTP port (default: ${DEFAULT_HTTP_PORT})
@@ -179,7 +197,8 @@ confirm() {
     printf '%s [y/N] ' "${prompt}"
     read -r answer || answer="n"
   fi
-  [[ "${answer,,}" == "y" || "${answer,,}" == "yes" ]]
+  answer="$(printf '%s' "${answer}" | tr '[:upper:]' '[:lower:]')"
+  [[ "${answer}" == "y" || "${answer}" == "yes" ]]
 }
 
 prompt_value() {
@@ -197,6 +216,12 @@ prompt_value() {
 # §2 Preflight checks
 # ---------------------------------------------------------------------------
 require_root() {
+  # Git Bash on Windows has no root/sudo and does not need it: Docker Desktop
+  # provides the engine and the default install dir lives under $HOME.
+  if [[ "${PLATFORM}" == "windows" ]]; then
+    log_info "Running on Windows (Git Bash) without root — Docker Desktop provides the engine"
+    return 0
+  fi
   if [[ "$(id -u)" -eq 0 ]]; then return 0; fi
   if command -v sudo >/dev/null 2>&1 && [[ -f "$0" && "$0" != "bash" && "$0" != "-bash" ]]; then
     log_warn "not running as root, re-executing with sudo"
@@ -207,13 +232,17 @@ require_root() {
 
 detect_os() {
   OS_ID="unknown"; OS_NAME="unknown"; SUPPORTED_OS=0
-  if [[ -r /etc/os-release ]]; then
+  if [[ "${PLATFORM}" == "macos" ]]; then
+    OS_ID="macos"; OS_NAME="macOS $(sw_vers -productVersion 2>/dev/null)"
+  elif [[ "${PLATFORM}" == "windows" ]]; then
+    OS_ID="windows"; OS_NAME="Windows (Git Bash)"
+  elif [[ -r /etc/os-release ]]; then
     OS_ID=$(. /etc/os-release; printf '%s' "${ID:-unknown}")
     OS_NAME=$(. /etc/os-release; printf '%s' "${PRETTY_NAME:-unknown}")
+    case "${OS_ID}" in
+      ubuntu|debian|rocky|alma|centos) SUPPORTED_OS=1 ;;
+    esac
   fi
-  case "${OS_ID}" in
-    ubuntu|debian|rocky|alma|centos) SUPPORTED_OS=1 ;;
-  esac
   log_info "OS: ${OS_NAME} (${OS_ID})"
   if [[ "${SUPPORTED_OS}" == "0" ]]; then
     log_warn "OS '${OS_ID}' is not in the supported list (Ubuntu/Debian/Rocky/Alma/CentOS); continuing only if Docker is already available"
@@ -231,7 +260,22 @@ detect_arch() {
 
 check_memory() {
   local mem_kb=0 mem_gb=0
-  mem_kb="$(awk '/MemTotal/ {print $2}' /proc/meminfo 2>/dev/null || echo 0)"
+  case "${PLATFORM}" in
+    macos)
+      mem_kb="$(( $(sysctl -n hw.memsize 2>/dev/null || echo 0) / 1024 ))"
+      ;;
+    windows)
+      if command -v wmic >/dev/null 2>&1; then
+        mem_kb="$(wmic OS get TotalVisibleMemorySize /value 2>/dev/null | sed -n 's/.*=\([0-9][0-9]*\).*/\1/p' | head -n1)"
+      else
+        log_warn "cannot detect memory on Windows (wmic unavailable); skipping the memory check"
+        return 0
+      fi
+      ;;
+    *) mem_kb="$(awk '/MemTotal/ {print $2}' /proc/meminfo 2>/dev/null || echo 0)" ;;
+  esac
+  mem_kb="${mem_kb:-0}"
+  [[ "${mem_kb}" =~ ^[0-9]+$ ]] || mem_kb=0
   mem_gb=$((mem_kb / 1024 / 1024))
   log_info "Memory: ${mem_gb} GB"
   if ((mem_gb < 1)); then
@@ -274,8 +318,9 @@ detect_channel() {
     fi
     log_info "Auto-detected channel: ${CHANNEL}"
   fi
-  case "${CHANNEL,,}" in
-    github|cn) CHANNEL="${CHANNEL,,}" ;;
+  CHANNEL="$(printf '%s' "${CHANNEL}" | tr '[:upper:]' '[:lower:]')"
+  case "${CHANNEL}" in
+    github|cn) ;;
     *) abort "invalid channel '${CHANNEL}' (supported: github, cn)" ;;
   esac
   if [[ -z "${REGISTRY}" ]]; then
@@ -318,7 +363,8 @@ check_docker() {
       log_warn "Docker ${DOCKER_VERSION} is older than 20.10; upgrade recommended"
     fi
   fi
-  docker info >/dev/null 2>&1 || abort "docker daemon is not running; start it and re-run the installer"
+  docker info >/dev/null 2>&1 \
+    || abort "docker daemon is not running; start it (Docker Desktop on ${OS_NAME}) and re-run the installer"
   log_ok "Docker daemon is running"
   configure_docker_mirror
 }
@@ -326,6 +372,10 @@ check_docker() {
 configure_docker_mirror() {
   [[ -n "${DOCKER_MIRROR}" ]] || return 0
   log_info "Configuring Docker Hub mirror: ${DOCKER_MIRROR}"
+  if [[ "${PLATFORM}" != "linux" ]]; then
+    log_warn "Docker Desktop on ${OS_NAME} does not read /etc/docker/daemon.json; configure the mirror in Docker Desktop settings (registry-mirrors) manually"
+    return 0
+  fi
   mkdir -p /etc/docker
   if [[ -f /etc/docker/daemon.json ]]; then
     if command -v python3 >/dev/null 2>&1; then
@@ -359,7 +409,8 @@ install_docker() {
       || abort "Docker is required; install it manually and re-run the installer"
   fi
   if [[ "${SUPPORTED_OS}" != "1" ]]; then
-    abort "cannot auto-install Docker on unsupported OS '${OS_ID}'; install Docker manually and re-run"
+    install_docker_desktop
+    return 0
   fi
   log_info "Installing Docker..."
   local script_urls=() url="" ok=0
@@ -384,6 +435,32 @@ install_docker() {
   command -v docker >/dev/null 2>&1 || abort "Docker installation completed but 'docker' is not on PATH"
   log_ok "Docker installed: $(docker --version)"
   configure_docker_mirror
+}
+
+install_docker_desktop() {
+  case "${PLATFORM}" in
+    macos)
+      if command -v brew >/dev/null 2>&1; then
+        log_info "Installing Docker Desktop via Homebrew..."
+        brew install --cask docker \
+          || abort "Homebrew install failed; install Docker Desktop manually from https://www.docker.com/products/docker-desktop/ and re-run the installer"
+        log_warn "Docker Desktop installed via Homebrew — open Docker.app once to finish setup, then re-run the installer"
+      else
+        log_warn "Homebrew is not installed; install it from https://brew.sh or use the official installer"
+        abort "install Docker Desktop manually from https://www.docker.com/products/docker-desktop/ and re-run the installer"
+      fi
+      ;;
+    windows)
+      if command -v winget >/dev/null 2>&1; then
+        log_info "Installing Docker Desktop via winget..."
+        winget install -e --id Docker.DockerDesktop --accept-package-agreements --accept-source-agreements || true
+      fi
+      abort "install Docker Desktop manually from https://www.docker.com/products/docker-desktop/ and re-run the installer"
+      ;;
+    *)
+      abort "cannot auto-install Docker on unsupported OS '${OS_ID}'; install Docker manually and re-run"
+      ;;
+  esac
 }
 
 install_docker_distro() {
@@ -417,6 +494,9 @@ check_compose() {
 }
 
 install_compose_plugin() {
+  if [[ "${PLATFORM}" != "linux" ]]; then
+    abort "Docker Compose plugin not found; Docker Desktop includes it — update Docker Desktop or install Compose manually"
+  fi
   case "${OS_ID}" in
     ubuntu|debian)
       apt-get update -y >/dev/null
@@ -441,14 +521,24 @@ configure() {
   DATA_DIR="${DATA_DIR%/}"
 
   if [[ -z "${DOMAIN}" ]]; then
-    DOMAIN="$(hostname -I 2>/dev/null | awk '{print $1}')"
+    if [[ "${PLATFORM}" == "macos" ]]; then
+      DOMAIN="$(ipconfig getifaddr en0 2>/dev/null || ipconfig getifaddr en1 2>/dev/null || true)"
+    elif [[ "${PLATFORM}" == "windows" ]]; then
+      DOMAIN="$(ipconfig 2>/dev/null | awk '/IPv4/ {print $NF; exit}' || true)"
+    else
+      DOMAIN="$(hostname -I 2>/dev/null | awk '{print $1}' || true)"
+    fi
     [[ -z "${DOMAIN}" ]] && DOMAIN="$(hostname -f 2>/dev/null || hostname)"
     [[ -z "${DOMAIN}" ]] && DOMAIN="127.0.0.1"
   fi
   [[ "${DOMAIN}" =~ ^[A-Za-z0-9._:-]+$ ]] || abort "invalid domain/host: ${DOMAIN}"
 
   if [[ -z "${TIMEZONE}" ]]; then
-    TIMEZONE="$(cat /etc/timezone 2>/dev/null || true)"
+    if [[ "${PLATFORM}" == "macos" ]]; then
+      TIMEZONE="$(readlink /etc/localtime 2>/dev/null | sed 's|.*/zoneinfo/||')"
+    else
+      TIMEZONE="$(cat /etc/timezone 2>/dev/null || true)"
+    fi
     [[ -z "${TIMEZONE}" ]] && TIMEZONE="UTC"
   fi
   if [[ -z "${ADMIN_EMAIL}" ]]; then ADMIN_EMAIL="admin@${DOMAIN}"; fi
@@ -469,6 +559,18 @@ configure() {
 # ---------------------------------------------------------------------------
 port_in_use() {
   local port="$1"
+  case "${PLATFORM}" in
+    macos)
+      if command -v lsof >/dev/null 2>&1; then
+        lsof -nP -iTCP:"${port}" -sTCP:LISTEN >/dev/null 2>&1
+        return $?
+      fi
+      ;;
+    windows)
+      netstat -ano 2>/dev/null | awk -v p=":${port}$" '$1 ~ /^TCP/ && $4 == "LISTENING" && $2 ~ p { found=1 } END { exit !found }'
+      return $?
+      ;;
+  esac
   if command -v ss >/dev/null 2>&1; then
     ss -ltnH 2>/dev/null | awk -v p=":${port}$" '$4 ~ p { found=1 } END { exit !found }'
   elif command -v netstat >/dev/null 2>&1; then
@@ -847,7 +949,15 @@ run_compose() {
   export DEVIFY_ENV_FILE="${INSTALL_DIR}/.env"
   export DEVIFY_RUNTIME_ROOT="${DATA_DIR}"
   export DEVIFY_NGINX_CERTS_DIR="${INSTALL_DIR}/docker/nginx/certs"
-  "${COMPOSE_CMD[@]}" --project-directory "${INSTALL_DIR}" -f "${INSTALL_DIR}/docker-compose.yml" "$@" \
+  local project_dir="${INSTALL_DIR}"
+  if [[ "${PLATFORM}" == "windows" ]] && command -v cygpath >/dev/null 2>&1; then
+    # Git Bash passes MSYS paths; the native Docker CLI needs Windows paths.
+    project_dir="$(cygpath -w "${INSTALL_DIR}")"
+    DEVIFY_ENV_FILE="$(cygpath -w "${DEVIFY_ENV_FILE}")"
+    DEVIFY_RUNTIME_ROOT="$(cygpath -w "${DEVIFY_RUNTIME_ROOT}")"
+    DEVIFY_NGINX_CERTS_DIR="$(cygpath -w "${DEVIFY_NGINX_CERTS_DIR}")"
+  fi
+  "${COMPOSE_CMD[@]}" --project-directory "${project_dir}" -f "${project_dir}/docker-compose.yml" "$@" \
     2>&1 | tee -a "${LOG_FILE}"
 }
 
@@ -937,6 +1047,7 @@ write_install_info() {
 
 show_summary() {
   log_step "Installation summary"
+  log_info "  Platform:     ${OS_NAME} (${PLATFORM})"
   log_info "  Version:      v${VERSION}"
   log_info "  Channel:      ${CHANNEL} (registry: ${REGISTRY})"
   log_info "  Install dir:  ${INSTALL_DIR}"
@@ -999,16 +1110,17 @@ main() {
     esac
   done
 
-  mkdir -p "${INSTALL_DIR}/logs"
-  LOG_FILE="${INSTALL_DIR}/logs/install.log"
-  log_line "=== install.sh v${INSTALLER_VERSION} started ($(date -u '+%Y-%m-%dT%H:%M:%SZ')) ==="
-  log_line "argv: $*"
-
   trap 'log_line "=== install failed at line ${LINENO} (exit $?) ==="' ERR
   trap '[[ -n "${TMP_DIR}" ]] && rm -rf "${TMP_DIR}"' EXIT
 
   # §2 Preflight
   require_root "$@"
+
+  mkdir -p "${INSTALL_DIR}/logs"
+  LOG_FILE="${INSTALL_DIR}/logs/install.log"
+  log_line "=== install.sh v${INSTALLER_VERSION} started ($(date -u '+%Y-%m-%dT%H:%M:%SZ')) ==="
+  log_line "argv: $*"
+
   detect_os
   detect_arch
   check_memory
