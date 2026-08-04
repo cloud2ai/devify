@@ -102,10 +102,12 @@ for cand in python3 python; do
 done
 if [[ -n "${PY}" ]]; then
   PORT=18765
-  SERVER_LOG="${TMPDIR:-/tmp}/devify-test-http-$$.log"
+  SERVER_LOG="${TMPDIR:-/tmp}/devify-test-socket-$$.log"
   (
     sleep 2
-    exec "${PY}" -m http.server "${PORT}"
+    exec "${PY}" -c \
+      'import socket, sys, time; sock = socket.socket(); sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1); sock.bind(("127.0.0.1", int(sys.argv[1]))); sock.listen(1); time.sleep(30)' \
+      "${PORT}"
   ) >"${SERVER_LOG}" 2>&1 &
   SRV_PID=$!
   port_ready=0
@@ -123,9 +125,9 @@ if [[ -n "${PY}" ]]; then
   else
     fail "missed listening port ${PORT}"
     if kill -0 "${SRV_PID}" 2>/dev/null; then
-      printf 'diagnostic: HTTP server process %s is still running\n' "${SRV_PID}"
+      printf 'diagnostic: socket server process %s is still running\n' "${SRV_PID}"
     else
-      printf 'diagnostic: HTTP server process %s exited before the port check\n' "${SRV_PID}"
+      printf 'diagnostic: socket server process %s exited before the port check\n' "${SRV_PID}"
     fi
     if command -v lsof >/dev/null 2>&1; then
       printf 'diagnostic: lsof path: %s\n' "$(command -v lsof)"
