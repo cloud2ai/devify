@@ -374,6 +374,8 @@ class GitHubIssueRelayAdapter(BaseRelayAdapter):
         }
         email_data = {
             "id": str(event.email_message_id),
+            "sender": getattr(event.email_message, "sender", "") or "",
+            "recipients": getattr(event.email_message, "recipients", "") or "",
             "subject": event.email_message.subject,
             "summary_title": snapshot.get("summary_title")
             or event.email_message.subject,

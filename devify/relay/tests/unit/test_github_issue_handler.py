@@ -144,6 +144,85 @@ def test_create_issue_embeds_related_issue_references(github_config):
     assert "- #12" in body
 
 
+def test_create_issue_appends_email_source_labels(github_config):
+    session = Mock()
+    session.request.return_value = _response(
+        status_code=201,
+        payload={"number": 50},
+    )
+    handler = GitHubIssueHandler(github_config, session=session)
+
+    handler.create_issue(
+        issue_data={"title": "Source labels", "description": "Body"},
+        email_data={
+            "sender": "Alice <alice@example.com>",
+            "recipients": "Bob <bob@example.com>, ops@example.com",
+        },
+        attachments=[],
+    )
+
+    labels = session.request.call_args.kwargs["json"]["labels"]
+    assert labels == [
+        "relay",
+        "needs-review",
+        "sender:alice@example.com",
+        "recipient:bob@example.com",
+        "recipient:ops@example.com",
+    ]
+
+
+def test_create_issue_sanitizes_deduplicates_and_truncates_source_labels():
+    config = {
+        "github": {
+            "repo": "cloud2ai/devify",
+            "token": "test-token",
+            "labels": ["sender:alice@example.com"],
+        }
+    }
+    session = Mock()
+    session.request.return_value = _response(
+        status_code=201,
+        payload={"number": 51},
+    )
+    handler = GitHubIssueHandler(config, session=session)
+
+    long_address = "a" * 60 + "@example.com"
+    handler.create_issue(
+        issue_data={"title": "Labels", "description": "Body"},
+        email_data={
+            "sender": "Alice <alice@example.com>",
+            "recipients": f"ops@example.com, {long_address}",
+        },
+        attachments=[],
+    )
+
+    labels = session.request.call_args.kwargs["json"]["labels"]
+    assert labels == [
+        "sender:alice@example.com",
+        "recipient:ops@example.com",
+        ("recipient:" + long_address)[:50],
+    ]
+    assert all(len(label) <= 50 for label in labels)
+
+
+def test_update_issue_keeps_email_source_labels(github_config):
+    session = Mock()
+    session.request.return_value = _response(
+        payload={"number": 42},
+    )
+    handler = GitHubIssueHandler(github_config, session=session)
+
+    handler.update_issue(
+        "42",
+        issue_data={"title": "Updated title", "description": "Updated body"},
+        email_data={"sender": "Alice <alice@example.com>"},
+        attachments=[],
+    )
+
+    labels = session.request.call_args.kwargs["json"]["labels"]
+    assert "sender:alice@example.com" in labels
+
+
 def test_create_issue_truncates_body_to_github_limit(github_config):
     session = Mock()
     session.request.return_value = _response(
@@ -245,7 +324,11 @@ def test_adapter_updates_existing_github_issue(monkeypatch, github_config):
         ),
     )
     event = SimpleNamespace(
-        email_message=SimpleNamespace(subject="Original subject"),
+        email_message=SimpleNamespace(
+            subject="Original subject",
+            sender="alice@example.com",
+            recipients="inbox@example.com",
+        ),
         email_message_id=7,
         artifact_snapshot={
             "summary_title": "Updated title",
@@ -293,6 +376,8 @@ def test_adapter_updates_existing_github_issue(monkeypatch, github_config):
     update_issue.assert_called_once()
     create_issue.assert_not_called()
     update_email_data = update_issue.call_args.kwargs["email_data"]
+    assert update_email_data["sender"] == "alice@example.com"
+    assert update_email_data["recipients"] == "inbox@example.com"
     assert update_email_data["related_issue_references"] == [
         {
             "external_id": "7",
