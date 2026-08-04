@@ -102,10 +102,11 @@ for cand in python3 python; do
 done
 if [[ -n "${PY}" ]]; then
   PORT=18765
+  SERVER_LOG="${TMPDIR:-/tmp}/devify-test-http-$$.log"
   (
     sleep 2
     exec "${PY}" -m http.server "${PORT}"
-  ) >/dev/null 2>&1 &
+  ) >"${SERVER_LOG}" 2>&1 &
   SRV_PID=$!
   port_ready=0
   port_attempt=0
@@ -121,6 +122,20 @@ if [[ -n "${PY}" ]]; then
     ok "detects listening port ${PORT}"
   else
     fail "missed listening port ${PORT}"
+    if kill -0 "${SRV_PID}" 2>/dev/null; then
+      printf 'diagnostic: HTTP server process %s is still running\n' "${SRV_PID}"
+    else
+      printf 'diagnostic: HTTP server process %s exited before the port check\n' "${SRV_PID}"
+    fi
+    if command -v lsof >/dev/null 2>&1; then
+      printf 'diagnostic: lsof path: %s\n' "$(command -v lsof)"
+      lsof -nP -iTCP -sTCP:LISTEN 2>&1 | grep -F ":${PORT}" || true
+    else
+      printf 'diagnostic: lsof is unavailable\n'
+    fi
+    if [[ -s "${SERVER_LOG}" ]]; then
+      sed 's/^/diagnostic: server: /' "${SERVER_LOG}"
+    fi
   fi
   if port_in_use "$((PORT + 1))"; then
     fail "false positive on free port $((PORT + 1))"
@@ -129,6 +144,7 @@ if [[ -n "${PY}" ]]; then
   fi
   kill "${SRV_PID}" 2>/dev/null || true
   wait "${SRV_PID}" 2>/dev/null || true
+  rm -f "${SERVER_LOG}"
 else
   ok "python not available; skipping live-port check"
 fi

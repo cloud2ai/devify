@@ -2,6 +2,8 @@ name: Installer platform tests
 
 on:
   push:
+    branches:
+      - main
     paths:
       - 'install.sh'
       - 'scripts/test-install.sh'
