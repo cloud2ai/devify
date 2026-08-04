@@ -95,7 +95,7 @@ services:
     command: celery-beat
 
   mysql:
-    image: mariadb:11.6
+    image: registry.cn-beijing.aliyuncs.com/oneprolabs/mariadb:11.6
     container_name: devify-mariadb-dev
     restart: unless-stopped
     logging: *default-logging
@@ -117,7 +117,7 @@ services:
       start_period: 30s
 
   redis:
-    image: redis:alpine
+    image: registry.cn-beijing.aliyuncs.com/oneprolabs/redis:alpine
     container_name: devify-redis-dev
     restart: unless-stopped
     logging: *default-logging
@@ -153,7 +153,7 @@ services:
       - devify_network
 
   haraka:
-    image: instrumentisto/haraka:latest
+    image: registry.cn-beijing.aliyuncs.com/oneprolabs/instrumentisto/haraka:latest
     container_name: devify-haraka-dev
     restart: unless-stopped
     logging: *default-logging
@@ -197,7 +197,7 @@ services:
         condition: service_started
 
   nginx:
-    image: nginx:latest
+    image: registry.cn-beijing.aliyuncs.com/oneprolabs/nginx:latest
     container_name: devify-nginx-dev
     restart: unless-stopped
     logging: *default-logging
