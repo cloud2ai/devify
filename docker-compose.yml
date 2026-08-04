@@ -20,7 +20,7 @@ services:
       dockerfile: Dockerfile
       args:
         DEV_MODE: "0"
-        APT_MIRROR_URL: http://archive.ubuntu.com/ubuntu
+        APT_MIRROR_URL: https://deb.debian.org/debian
         PIP_INDEX_URL: https://pypi.org/simple
         PIP_TRUSTED_HOST: pypi.org
     env_file:
