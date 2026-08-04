@@ -102,10 +102,22 @@ for cand in python3 python; do
 done
 if [[ -n "${PY}" ]]; then
   PORT=18765
-  "${PY}" -m http.server "${PORT}" >/dev/null 2>&1 &
+  (
+    sleep 2
+    exec "${PY}" -m http.server "${PORT}"
+  ) >/dev/null 2>&1 &
   SRV_PID=$!
-  sleep 1
-  if port_in_use "${PORT}"; then
+  port_ready=0
+  port_attempt=0
+  while ((port_attempt < 20)); do
+    if port_in_use "${PORT}"; then
+      port_ready=1
+      break
+    fi
+    port_attempt=$((port_attempt + 1))
+    sleep 0.5
+  done
+  if ((port_ready)); then
     ok "detects listening port ${PORT}"
   else
     fail "missed listening port ${PORT}"
@@ -116,6 +128,7 @@ if [[ -n "${PY}" ]]; then
     ok "free port $((PORT + 1)) not flagged"
   fi
   kill "${SRV_PID}" 2>/dev/null || true
+  wait "${SRV_PID}" 2>/dev/null || true
 else
   ok "python not available; skipping live-port check"
 fi
