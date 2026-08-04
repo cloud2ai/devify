@@ -23,10 +23,12 @@ GITHUB_ISSUE_TRUNCATION_NOTICE = (
     "\n\n> [!NOTE]\n"
     "> This issue body was truncated because it exceeded GitHub's issue body limit.\n"
 )
+GITHUB_LABEL_MAX_LENGTH = 50
 REPOSITORY_PATTERN = re.compile(
     r"^[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?/[A-Za-z0-9_.-]+$"
 )
 IMAGE_PLACEHOLDER_PATTERN = re.compile(r"\[IMAGE:\s*([^\]]+)\]")
+EMAIL_ADDRESS_PATTERN = re.compile(r"<([^<>]+)>")
 
 
 def _string_list(value: Any, *, field_name: str) -> list[str]:
@@ -151,9 +153,52 @@ class GitHubIssueHandler:
         return {
             "title": title[:256],
             "body": body,
-            "labels": self.labels,
+            "labels": self._build_labels(email_data),
             "assignees": self.assignees,
         }
+
+    def _build_labels(self, email_data: Mapping[str, Any]) -> List[str]:
+        labels = list(self.labels)
+        known = {label.casefold() for label in labels}
+        for source_label in self._email_source_labels(email_data):
+            if source_label.casefold() not in known:
+                labels.append(source_label)
+                known.add(source_label.casefold())
+        return labels
+
+    def _email_source_labels(self, email_data: Mapping[str, Any]) -> List[str]:
+        labels: list[str] = []
+        sender = self._extract_email_address(email_data.get("sender"))
+        if sender:
+            labels.append(self._source_label("sender", sender))
+        recipients = str(email_data.get("recipients") or "").strip()
+        for recipient in recipients.split(","):
+            address = self._extract_email_address(recipient)
+            if address:
+                labels.append(self._source_label("recipient", address))
+        return [label for label in labels if label]
+
+    @classmethod
+    def _source_label(cls, prefix: str, value: str) -> str:
+        token = cls._label_token(value)
+        if not token:
+            return ""
+        return f"{prefix}:{token}"[:GITHUB_LABEL_MAX_LENGTH]
+
+    @staticmethod
+    def _label_token(value: str) -> str:
+        token = re.sub(r"[^A-Za-z0-9 _.:/@+-]", "-", str(value or "")).strip(" -_")
+        return token[:GITHUB_LABEL_MAX_LENGTH]
+
+    @staticmethod
+    def _extract_email_address(value: Any) -> str:
+        text = str(value or "").strip()
+        angle_match = EMAIL_ADDRESS_PATTERN.search(text)
+        if angle_match:
+            return angle_match.group(1).strip()
+        if "@" in text:
+            return text
+        return ""
 
     def _build_body(
         self,
