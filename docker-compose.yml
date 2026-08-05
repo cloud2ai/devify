@@ -20,7 +20,7 @@ services:
       dockerfile: Dockerfile
       args:
         DEV_MODE: "0"
-        APT_MIRROR_URL: http://archive.ubuntu.com/ubuntu
+        APT_MIRROR_URL: https://deb.debian.org/debian
         PIP_INDEX_URL: https://pypi.org/simple
         PIP_TRUSTED_HOST: pypi.org
     env_file:
@@ -118,7 +118,7 @@ services:
 
   # Recommend to use nginx proxy manager to manage the outside access
   nginx:
-    image: nginx:latest
+    image: registry.cn-beijing.aliyuncs.com/oneprolabs/nginx:latest
     container_name: devify-nginx
     restart: unless-stopped
     logging: *default-logging
@@ -147,7 +147,7 @@ services:
       start_period: 30s
 
   mysql:
-    image: mariadb:11.6
+    image: registry.cn-beijing.aliyuncs.com/oneprolabs/mariadb:11.6
     container_name: devify-mariadb
     restart: unless-stopped
     logging: *default-logging
@@ -168,7 +168,7 @@ services:
       start_period: 30s
 
   redis:
-    image: redis:alpine
+    image: registry.cn-beijing.aliyuncs.com/oneprolabs/redis:alpine
     container_name: devify-redis
     restart: unless-stopped
     logging: *default-logging
@@ -186,7 +186,7 @@ services:
       start_period: 10s
 
   haraka:
-    image: instrumentisto/haraka:latest
+    image: registry.cn-beijing.aliyuncs.com/oneprolabs/haraka:latest
     container_name: devify-haraka
     restart: unless-stopped
     logging: *default-logging
