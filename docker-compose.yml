@@ -186,7 +186,7 @@ services:
       start_period: 10s
 
   haraka:
-    image: registry.cn-beijing.aliyuncs.com/oneprolabs/instrumentisto/haraka:latest
+    image: registry.cn-beijing.aliyuncs.com/oneprolabs/haraka:latest
     container_name: devify-haraka
     restart: unless-stopped
     logging: *default-logging
