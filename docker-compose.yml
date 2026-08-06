@@ -11,7 +11,7 @@ x-logging: &default-logging
 
 services:
   devify-api:
-    image: registry.cn-beijing.aliyuncs.com/cloud2ai/devify:latest
+    image: registry.cn-beijing.aliyuncs.com/oneprolabs/devify:latest
     container_name: devify-api
     restart: unless-stopped
     logging: *default-logging
@@ -47,7 +47,7 @@ services:
       start_period: 60s
 
   devify-worker:
-    image: registry.cn-beijing.aliyuncs.com/cloud2ai/devify:latest
+    image: registry.cn-beijing.aliyuncs.com/oneprolabs/devify:latest
     container_name: devify-worker
     restart: unless-stopped
     stop_grace_period: 60s
@@ -72,7 +72,7 @@ services:
     command: celery
 
   devify-scheduler:
-    image: registry.cn-beijing.aliyuncs.com/cloud2ai/devify:latest
+    image: registry.cn-beijing.aliyuncs.com/oneprolabs/devify:latest
     container_name: devify-scheduler
     restart: unless-stopped
     stop_grace_period: 30s
@@ -93,7 +93,7 @@ services:
     command: celery-beat
 
   devify-ui:
-    image: registry.cn-beijing.aliyuncs.com/cloud2ai/devify-ui:latest
+    image: registry.cn-beijing.aliyuncs.com/oneprolabs/devify-ui:latest
     build:
       context: ./ui
       dockerfile: Dockerfile

@@ -43,7 +43,7 @@ DEFAULT_HTTPS_PORT=10443
 DEFAULT_ADMIN_PORT=19443
 DEFAULT_SMTP_PORT=25
 REGISTRY_GITHUB="ghcr.io/cloud2ai"
-REGISTRY_CN="registry.cn-beijing.aliyuncs.com/cloud2ai"
+REGISTRY_CN="registry.cn-beijing.aliyuncs.com/oneprolabs"
 INSTALLER_VERSION="0.2.0"
 HEALTH_TIMEOUT=120
 
@@ -875,7 +875,7 @@ patch_compose() {
   local host_list="${INSTALL_DIR}/docker/haraka/config/host_list.prod"
 
   # registry: cn ACR image refs -> channel registry
-  sed_inplace "${compose}" -E "s|(image:[[:space:]]*)registry\.cn-beijing\.aliyuncs\.com/cloud2ai|\1${REGISTRY}|g"
+  sed_inplace "${compose}" -E "s|(image:[[:space:]]*)registry\.cn-beijing\.aliyuncs\.com/oneprolabs/(${APP_NAME}(-ui)?)|\1${REGISTRY}/\2|g"
   # pin version-consistent image tags
   sed_inplace "${compose}" -E "s|(image:[[:space:]]*[^ ]+/${APP_NAME}(-ui)?):latest|\1:${IMAGE_TAG}|g"
   # redis authentication

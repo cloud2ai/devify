@@ -37,7 +37,7 @@ services:
     extends:
       file: docker-compose.yml
       service: devify-api
-    image: registry.cn-beijing.aliyuncs.com/cloud2ai/devify:${DEVIFY_IMAGE_TAG:-latest}
+    image: registry.cn-beijing.aliyuncs.com/oneprolabs/devify:${DEVIFY_IMAGE_TAG:-latest}
     container_name: devify-api-blue
     profiles: ["blue"]
     depends_on:
@@ -48,7 +48,7 @@ services:
     extends:
       file: docker-compose.yml
       service: devify-api
-    image: registry.cn-beijing.aliyuncs.com/cloud2ai/devify:${DEVIFY_IMAGE_TAG:-latest}
+    image: registry.cn-beijing.aliyuncs.com/oneprolabs/devify:${DEVIFY_IMAGE_TAG:-latest}
     container_name: devify-api-green
     profiles: ["green"]
     depends_on:
@@ -59,7 +59,7 @@ services:
     extends:
       file: docker-compose.yml
       service: devify-ui
-    image: registry.cn-beijing.aliyuncs.com/cloud2ai/devify-ui:${DEVIFY_IMAGE_TAG:-latest}
+    image: registry.cn-beijing.aliyuncs.com/oneprolabs/devify-ui:${DEVIFY_IMAGE_TAG:-latest}
     container_name: devify-ui-blue
     profiles: ["blue"]
 
@@ -67,7 +67,7 @@ services:
     extends:
       file: docker-compose.yml
       service: devify-ui
-    image: registry.cn-beijing.aliyuncs.com/cloud2ai/devify-ui:${DEVIFY_IMAGE_TAG:-latest}
+    image: registry.cn-beijing.aliyuncs.com/oneprolabs/devify-ui:${DEVIFY_IMAGE_TAG:-latest}
     container_name: devify-ui-green
     profiles: ["green"]
 
