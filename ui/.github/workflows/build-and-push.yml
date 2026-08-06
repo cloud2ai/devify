@@ -36,7 +36,7 @@ jobs:
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=semver,pattern={{major}}
-            type=semver,pattern=latest
+            type=raw,value=latest
 
       - name: Build and push Docker image
         id: build

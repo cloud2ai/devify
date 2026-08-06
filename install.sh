@@ -7,7 +7,9 @@
 #   - Docker Compose based; NEVER clones the Git repository
 #   - downloads install files directly from the Git repository tag
 #   - preserves user configuration and data; safe to re-run (idempotent)
-#   - supports github (ghcr.io / GitHub repo) and cn (ACR / OSS-CDN) channels
+#   - supports github (GitHub repo / download source) and cn (ACR / OSS-CDN) channels;
+#     application images are always pulled from the Aliyun ACR registry where they
+#     are published (see .github/workflows/build_and_deploy.yml)
 #   - supported platforms: Linux (Ubuntu/Debian/Rocky/Alma/CentOS), macOS,
 #     and Windows via Git Bash (all require Docker; Docker Desktop works)
 #
@@ -25,16 +27,36 @@ APP_NAME="devify"
 APP_TITLE="Devify"
 GITHUB_REPO="cloud2ai/devify"
 GITHUB_API="https://api.github.com/repos/${GITHUB_REPO}"
-GITHUB_ARCHIVE_BASE="https://github.com/${GITHUB_REPO}/archive"
+GITHUB_RAW_BASE="https://raw.githubusercontent.com/${GITHUB_REPO}"
+GITEE_REPO="${GITHUB_REPO}"
+GITEE_API="https://gitee.com/api/v5/repos/${GITEE_REPO}"
+GITEE_RAW_BASE="https://gitee.com/${GITEE_REPO}/raw"
 DEFAULT_INSTALL_DIR="/opt/${APP_NAME}"
 DEFAULT_HTTP_PORT=8080
 DEFAULT_HTTPS_PORT=10443
 DEFAULT_ADMIN_PORT=19443
 DEFAULT_SMTP_PORT=25
-REGISTRY_GITHUB="ghcr.io/cloud2ai"
+REGISTRY_GITHUB="registry.cn-beijing.aliyuncs.com/oneprolabs"
 REGISTRY_CN="registry.cn-beijing.aliyuncs.com/oneprolabs"
 INSTALLER_VERSION="0.2.0"
 HEALTH_TIMEOUT=120
+
+# Files fetched directly from the source repository tag (GitHub or Gitee).
+# Only what the deployed docker-compose.yml actually mounts/needs is included;
+# READMEs, dev-only configs and build-time/maintenance scripts are skipped.
+RELEASE_FILES=(
+  docker-compose.yml
+  env.sample
+  docker/haraka/config/host_list.prod
+  docker/haraka/config/plugins.prod
+  docker/haraka/config/redis.ini
+  docker/haraka/config/tls.ini
+  docker/haraka/plugins/raw_email_saver.js
+  docker/mysql/etc/my.cnf
+  docker/mysql/initdb.d/000-create-databases.sql
+  docker/mysql/initdb.d/001-create-tables.sql
+  docker/nginx/default.conf
+)
 
 # Detect host platform early: macOS and Windows need different defaults and
 # preflight behavior (memory detection, daemon.json, root requirement, paths).
@@ -70,6 +92,7 @@ SMTP_PORT_OVERRIDE=0
 
 HTTPS_PORT="${DEVIFY_HTTPS_PORT:-${DEFAULT_HTTPS_PORT}}"
 CHANNEL="${DEVIFY_CHANNEL:-}"
+DOWNLOAD_SOURCE="${DEVIFY_DOWNLOAD_SOURCE:-}"
 VERSION="${DEVIFY_VERSION:-}"
 REGISTRY="${DEVIFY_REGISTRY:-}"
 DATA_DIR="${DEVIFY_DATA_DIR:-}"
@@ -82,16 +105,17 @@ HTTPS="${DEVIFY_HTTPS:-false}"
 ADMIN_USERNAME="${DEVIFY_ADMIN_USERNAME:-admin}"
 ADMIN_EMAIL="${DEVIFY_ADMIN_EMAIL:-}"
 EMAIL_DOMAIN="${DEVIFY_EMAIL_DOMAIN:-}"
+ASSUME_YES=0
 [[ "${DEVIFY_YES:-}" == "1" ]] && ASSUME_YES=1
 INSTALL_DOCKER=0
 [[ "${DEVIFY_INSTALL_DOCKER:-}" == "1" ]] && INSTALL_DOCKER=1
 DOCKER_MIRROR="${DEVIFY_DOCKER_MIRROR:-}"
 FORCE=0
 ADVANCED=0
+SOURCE_DIR=""
 
 SCHEME="http"
 PORT_SUFFIX=""
-TMP_DIR=""
 LOG_FILE=""
 COMPOSE_CMD=()
 EXISTING=0
@@ -140,7 +164,11 @@ Options:
   -d, --dir DIR          Install directory (default: ${DEFAULT_INSTALL_DIR})
   -p, --port PORT        HTTP port (default: ${DEFAULT_HTTP_PORT})
   -c, --channel CH       Distribution channel: github | cn (default: auto-detect)
+      --download-source SRC  Download source for release files: github | gitee
+                         (default: auto-detect)
   -v, --version VER      Release version to install (default: latest)
+      --source DIR       Use a local repository directory instead of downloading the
+                         release archive (e.g. --source /path/to/devify-repo)
   -r, --registry REG     Override Docker registry
       --domain HOST      Public hostname / IP
       --data-dir DIR     Data directory (advanced)
@@ -158,9 +186,9 @@ Options:
   -h, --help             Show this help
 
 Environment overrides: DEVIFY_INSTALL_DIR, DEVIFY_HTTP_PORT, DEVIFY_CHANNEL,
-DEVIFY_VERSION, DEVIFY_REGISTRY, DEVIFY_DATA_DIR, DEVIFY_TIMEZONE,
-DEVIFY_DOMAIN, DEVIFY_HTTPS, DEVIFY_ADMIN_PORT, DEVIFY_SMTP_PORT,
-DEVIFY_INSTALL_DOCKER=1, DEVIFY_DOCKER_MIRROR,
+DEVIFY_DOWNLOAD_SOURCE, DEVIFY_VERSION, DEVIFY_REGISTRY, DEVIFY_DATA_DIR,
+DEVIFY_TIMEZONE, DEVIFY_DOMAIN, DEVIFY_HTTPS, DEVIFY_ADMIN_PORT,
+DEVIFY_SMTP_PORT, DEVIFY_INSTALL_DOCKER=1, DEVIFY_DOCKER_MIRROR,
 DEVIFY_YES=1
 EOF
 }
@@ -271,10 +299,15 @@ check_memory() {
 }
 
 check_disk() {
-  local free_kb=0 free_gb=0
-  free_kb="$(df -Pk "${INSTALL_DIR}" 2>/dev/null | awk 'NR==2 {print $4}' || echo 0)"
+  local check_dir="${INSTALL_DIR}" free_kb=0 free_gb=0
+  # the target dir may not exist yet; fall back to the nearest existing ancestor
+  while [[ ! -d "${check_dir}" && "${check_dir}" != "/" ]]; do
+    check_dir="$(dirname "${check_dir}")"
+  done
+  free_kb="$(df -Pk "${check_dir}" 2>/dev/null | awk 'NR==2 {print $4}')"
+  free_kb="${free_kb:-0}"
   free_gb=$((free_kb / 1024 / 1024))
-  log_info "Disk space on ${INSTALL_DIR}: ${free_gb} GB free"
+  log_info "Disk space on ${check_dir} (target ${INSTALL_DIR}): ${free_gb} GB free"
   if ((free_gb < 5)); then
     abort "insufficient disk space (${free_gb} GB free); at least 5 GB required (20 GB recommended)"
   elif ((free_gb < 20)); then
@@ -288,6 +321,17 @@ check_tools() {
     command -v "${tool}" >/dev/null 2>&1 || abort "required tool not found: ${tool}"
   done
   log_ok "Required tools present (curl, tar, gzip, openssl)"
+}
+
+# Ask for the install directory before the disk-space check so the check runs
+# against the directory the user actually chose.
+prompt_install_dir() {
+  if [[ "${INSTALL_DIR_OVERRIDE}" != "1" && "${ASSUME_YES}" != "1" && -t 0 ]]; then
+    prompt_value INSTALL_DIR "Install directory" "${INSTALL_DIR}"
+  fi
+  INSTALL_DIR="${INSTALL_DIR%/}"
+  [[ -z "${DATA_DIR}" ]] && DATA_DIR="${INSTALL_DIR}"
+  DATA_DIR="${DATA_DIR%/}"
 }
 
 # ---------------------------------------------------------------------------
@@ -314,9 +358,36 @@ detect_channel() {
   log_info "Channel: ${CHANNEL} | Registry: ${REGISTRY}"
 }
 
+detect_download_source() {
+  if [[ -n "${DOWNLOAD_SOURCE}" ]]; then
+    DOWNLOAD_SOURCE="$(printf '%s' "${DOWNLOAD_SOURCE}" | tr '[:upper:]' '[:lower:]')"
+    case "${DOWNLOAD_SOURCE}" in
+      github|gitee) ;;
+      *) abort "invalid download source '${DOWNLOAD_SOURCE}' (supported: github, gitee)" ;;
+    esac
+    log_info "Download source: ${DOWNLOAD_SOURCE} (explicit)"
+    return 0
+  fi
+  log_info "Detecting download source (github or gitee)..."
+  if curl -fsSI --max-time 8 -o /dev/null https://github.com >/dev/null 2>&1; then
+    DOWNLOAD_SOURCE="github"
+  elif curl -fsSI --max-time 8 -o /dev/null https://gitee.com >/dev/null 2>&1; then
+    DOWNLOAD_SOURCE="gitee"
+  else
+    DOWNLOAD_SOURCE="github"
+    log_warn "could not reach github.com or gitee.com; assuming github"
+  fi
+  log_info "Detected download source: ${DOWNLOAD_SOURCE}"
+}
+
 check_network() {
-  log_info "Checking network connectivity (channel: ${CHANNEL})..."
-  local url="https://github.com/${GITHUB_REPO}"
+  log_info "Checking network connectivity (source: ${DOWNLOAD_SOURCE})..."
+  local url=""
+  if [[ "${DOWNLOAD_SOURCE}" == "gitee" ]]; then
+    url="https://gitee.com/${GITEE_REPO}"
+  else
+    url="https://github.com/${GITHUB_REPO}"
+  fi
   curl -fsSI --max-time 10 -o /dev/null "${url}" \
     || abort "no connectivity to ${url}; check the network"
   log_ok "network OK (${url})"
@@ -491,10 +562,6 @@ install_compose_plugin() {
 # §4 Interactive configuration
 # ---------------------------------------------------------------------------
 configure() {
-  if [[ "${INSTALL_DIR_OVERRIDE}" != "1" && "${ASSUME_YES}" != "1" && -t 0 ]]; then
-    prompt_value INSTALL_DIR "Install directory" "${INSTALL_DIR}"
-  fi
-  INSTALL_DIR="${INSTALL_DIR%/}"
   [[ -z "${DATA_DIR}" ]] && DATA_DIR="${INSTALL_DIR}"
   DATA_DIR="${DATA_DIR%/}"
 
@@ -634,14 +701,29 @@ detect_existing() {
 # ---------------------------------------------------------------------------
 resolve_version() {
   if [[ -z "${VERSION}" ]]; then
-    if [[ "${EXISTING}" == "1" && -n "${INSTALLED_VERSION}" ]]; then
+    if [[ -n "${SOURCE_DIR}" ]]; then
+      # prefer the local repository tag so no GitHub API call is needed
+      local v=""
+      v="$(git -C "${SOURCE_DIR}" describe --tags --abbrev=0 2>/dev/null || true)"
+      v="${v#v}"
+      if [[ -n "${v}" ]]; then
+        VERSION="${v}"
+        log_info "Using version v${VERSION} from local repository ${SOURCE_DIR}"
+      fi
+    fi
+    if [[ -z "${VERSION}" && "${EXISTING}" == "1" && -n "${INSTALLED_VERSION}" ]]; then
       VERSION="${INSTALLED_VERSION#v}"
       log_info "Reusing installed version v${VERSION} (rerun)"
     else
       log_info "Resolving latest release version..."
-      local api=""
-      api="$(curl -fsSL --max-time 20 "${GITHUB_API}/repos/${GITHUB_REPO}/tags?per_page=1" 2>/dev/null \
-        | sed -n 's/.*"name": *"\([^"]*\)".*/\1/p' | head -n 1 || true)"
+      local api="" api_url=""
+      if [[ "${DOWNLOAD_SOURCE}" == "gitee" ]]; then
+        api_url="${GITEE_API}/tags?per_page=1&sort=updated&direction=desc"
+      else
+        api_url="${GITHUB_API}/tags?per_page=1"
+      fi
+      api="$(curl -fsSL --max-time 20 "${api_url}" 2>/dev/null \
+        | grep -oE '"name": *"[^"]*"' | head -n 1 | sed -E 's/.*"name": *"([^"]*)".*/\1/' || true)"
       [[ -z "${api}" ]] && abort "could not resolve the latest release tag; pass --version explicitly"
       VERSION="${api#v}"
       log_info "Latest release: v${VERSION}"
@@ -655,36 +737,52 @@ resolve_version() {
   fi
 }
 
-download_files() {
-  log_step "Downloading release files"
-  TMP_DIR="$(mktemp -d)"
-  mkdir -p "${TMP_DIR}/extract"
-  local archive_url="${GITHUB_ARCHIVE_BASE}/refs/tags/v${VERSION}.tar.gz"
-  log_info "Downloading ${archive_url}"
-  curl -fL --retry 3 --retry-delay 2 --max-time 300 -o "${TMP_DIR}/archive.tar.gz" "${archive_url}" \
-    || abort "failed to download release files; check the version and network"
-
-  tar -xzf "${TMP_DIR}/archive.tar.gz" -C "${TMP_DIR}/extract" \
-    || abort "failed to extract release archive"
-
-  # GitHub archive extracts to <repo>-v<VERSION>/ (e.g. devify-v1.2.3/)
-  EXTRACT_SRC="${TMP_DIR}/extract/${APP_NAME}-v${VERSION}"
-  if [[ ! -d "${EXTRACT_SRC}" ]]; then
-    EXTRACT_SRC="$(find "${TMP_DIR}/extract" -maxdepth 1 -mindepth 1 -type d | head -1)"
+release_raw_url() {
+  local rel="$1"
+  if [[ "${DOWNLOAD_SOURCE}" == "gitee" ]]; then
+    printf '%s/%s/%s' "${GITEE_RAW_BASE}" "${TAG}" "${rel}"
+  else
+    printf '%s/%s/%s' "${GITHUB_RAW_BASE}" "${TAG}" "${rel}"
   fi
-  [[ -d "${EXTRACT_SRC}" ]] || abort "release archive extracted to unexpected directory structure"
-  [[ -f "${EXTRACT_SRC}/docker-compose.yml" ]] || abort "release archive missing docker-compose.yml"
-  log_ok "Release files v${VERSION} downloaded"
 }
 
-install_artifact_files() {
+fetch_release_files() {
   log_step "Installing release files"
-  cp -f "${EXTRACT_SRC}/docker-compose.yml" "${INSTALL_DIR}/docker-compose.yml"
-  [[ -f "${EXTRACT_SRC}/env.sample" ]] && cp -f "${EXTRACT_SRC}/env.sample" "${INSTALL_DIR}/env.sample"
-  if [[ -d "${EXTRACT_SRC}/docker" ]]; then
-    # tar-pipe copy preserves files already present in the target (e.g. user certs)
-    (cd "${EXTRACT_SRC}" && tar -cf - docker 2>/dev/null) | (cd "${INSTALL_DIR}" && tar -xf -)
-  fi
+  local rel="" src="" url="" dir="" http=""
+  for rel in "${RELEASE_FILES[@]}"; do
+    dir="${INSTALL_DIR}/$(dirname "${rel}")"
+    mkdir -p "${dir}"
+    if [[ -n "${SOURCE_DIR}" ]]; then
+      src="${SOURCE_DIR%/}/${rel}"
+      [[ -f "${src}" ]] || abort "source directory ${SOURCE_DIR} is missing ${rel}"
+      cp -f "${src}" "${INSTALL_DIR}/${rel}"
+    else
+      url="$(release_raw_url "${rel}")"
+      log_info "Downloading ${url}"
+      http="$(curl -sSL --retry 3 --retry-delay 2 --max-time 120 -o "${INSTALL_DIR}/${rel}" -w '%{http_code}' "${url}" 2>/dev/null || true)"
+      if [[ "${http}" != "200" ]]; then
+        rm -f "${INSTALL_DIR}/${rel}"
+        if [[ "${http}" == "404" ]]; then
+          if [[ "${rel}" == "docker-compose.yml" ]]; then
+            if [[ "${DOWNLOAD_SOURCE}" == "gitee" ]]; then
+              abort "failed to download ${rel} (${url}): tag ${TAG} not found on gitee — the mirror has not synced version ${VERSION}; sync it from GitHub or use --download-source github / an available --version"
+            fi
+            abort "failed to download ${rel} (${url}): tag ${TAG} does not contain ${rel} (HTTP 404)"
+          fi
+          if [[ "${DOWNLOAD_SOURCE}" == "gitee" ]]; then
+            log_warn "skipping ${rel}: not present in tag ${TAG} on gitee (the mirror may not have synced version ${VERSION})"
+          else
+            log_warn "skipping ${rel}: not present in tag ${TAG} (HTTP 404)"
+          fi
+        elif [[ "${rel}" == "docker-compose.yml" ]]; then
+          abort "failed to download ${rel} (${url}): network error (HTTP ${http:-timeout}); check the version and network"
+        else
+          log_warn "skipping ${rel}: network error while downloading (HTTP ${http:-timeout})"
+        fi
+      fi
+    fi
+  done
+  # clear placeholder certs while keeping user-provided ones (generated in §9)
   find "${INSTALL_DIR}/docker/nginx/certs" -type f ! -name '*.crt' ! -name '*.key' -delete 2>/dev/null || true
   chmod 600 "${INSTALL_DIR}/docker/nginx/certs"/* 2>/dev/null || true
   log_ok "Release files installed"
@@ -894,40 +992,136 @@ create_dirs() {
 # Docker Compose lifecycle
 # ---------------------------------------------------------------------------
 run_compose() {
+  compose_prepare
+  "${COMPOSE_CMD[@]}" --project-directory "${COMPOSE_PROJECT_DIR}" -f "${COMPOSE_PROJECT_DIR}/docker-compose.yml" "$@" \
+    2>&1 | tee -a "${LOG_FILE}"
+}
+
+run_compose_quiet() {
+  compose_prepare
+  "${COMPOSE_CMD[@]}" --project-directory "${COMPOSE_PROJECT_DIR}" -f "${COMPOSE_PROJECT_DIR}/docker-compose.yml" "$@"
+}
+
+compose_prepare() {
   export DEVIFY_ENV_FILE="${INSTALL_DIR}/.env"
   export DEVIFY_RUNTIME_ROOT="${DATA_DIR}"
   export DEVIFY_NGINX_CERTS_DIR="${INSTALL_DIR}/docker/nginx/certs"
-  local project_dir="${INSTALL_DIR}"
+  COMPOSE_PROJECT_DIR="${INSTALL_DIR}"
   if [[ "${PLATFORM}" == "windows" ]] && command -v cygpath >/dev/null 2>&1; then
     # Git Bash passes MSYS paths; the native Docker CLI needs Windows paths.
-    project_dir="$(cygpath -w "${INSTALL_DIR}")"
+    COMPOSE_PROJECT_DIR="$(cygpath -w "${INSTALL_DIR}")"
     DEVIFY_ENV_FILE="$(cygpath -w "${DEVIFY_ENV_FILE}")"
     DEVIFY_RUNTIME_ROOT="$(cygpath -w "${DEVIFY_RUNTIME_ROOT}")"
     DEVIFY_NGINX_CERTS_DIR="$(cygpath -w "${DEVIFY_NGINX_CERTS_DIR}")"
   fi
-  "${COMPOSE_CMD[@]}" --project-directory "${project_dir}" -f "${project_dir}/docker-compose.yml" "$@" \
-    2>&1 | tee -a "${LOG_FILE}"
+}
+
+pull_one() {
+  local img="$1" rc=0
+  if [[ -t 1 ]]; then
+    docker pull "${img}" 2>&1 | tee -a "${LOG_FILE:-/dev/null}" | docker_pull_progress "${img}" || rc=$?
+  else
+    docker pull "${img}" >>"${LOG_FILE:-/dev/null}" 2>&1 || rc=$?
+  fi
+  return "${rc}"
+}
+
+docker_pull_progress() {
+  # Collapses docker pull's layer progress into a single self-updating line
+  # (bash 3.2 safe: no associative arrays; macOS ships bash 3.2).
+  local img="${1##*/}" line="" frac="" msg="" prev=""
+  local total=0 ready=0 done=0
+  [[ -t 1 ]] || { cat >/dev/null 2>&1 || true; return 0; }
+  while IFS= read -r line; do
+    line="${line//$'\r'/}"
+    case "${line}" in
+      *": Pulling fs layer") total=$((total + 1));;
+      *": Layer already exists") total=$((total + 1)); ready=$((ready + 1));;
+      *": Download complete") ready=$((ready + 1));;
+      *": Pull complete") done=$((done + 1));;
+    esac
+    frac=""
+    if [[ "${line}" =~ \:[[:space:]]*(Downloading|Extracting)[[:space:]]*\[[^]]*\][[:space:]]*([0-9][0-9.]*[kMG]?B/[0-9][0-9.]*[kMG]?B) ]]; then
+      frac="${BASH_REMATCH[2]}"
+    fi
+    msg="${img}: ${ready}/${total} layers ready"
+    ((done > 0)) && msg+=", ${done} complete"
+    [[ -n "${frac}" ]] && msg+=" (${frac})"
+    printf '\r\033[K%s' "${msg}"
+    prev=1
+  done
+  [[ -n "${prev}" ]] && printf '\r\033[K'
+  return 0
 }
 
 pull_images() {
   log_step "Pulling container images (registry: ${REGISTRY})"
   run_compose config --quiet || abort "invalid docker-compose configuration; see ${LOG_FILE}"
-  local attempt=1 max_attempts=3
-  until run_compose pull; do
-    if ((attempt >= max_attempts)); then
-      abort "docker compose pull failed after ${max_attempts} attempts; check network access to the registry (see ${LOG_FILE})"
-    fi
-    log_warn "docker compose pull failed (attempt ${attempt}/${max_attempts}); retrying in 10s"
-    sleep 10
-    attempt=$((attempt + 1))
+
+  local -a images=() img=""
+  while IFS= read -r img; do
+    [[ -n "${img}" ]] && images+=("${img}")
+  done < <(run_compose_quiet config --images 2>/dev/null | sort -u)
+
+  local total="${#images[@]}" idx=1 attempt=1 max_attempts=3
+  if ((total == 0)); then
+    log_warn "no container images to pull"
+    return 0
+  fi
+  for img in "${images[@]}"; do
+    attempt=1
+    while :; do
+      if pull_one "${img}"; then
+        break
+      fi
+      if ((attempt >= max_attempts)); then
+        abort "failed to pull ${img} after ${max_attempts} attempts; check network access to the registry (see ${LOG_FILE})"
+      fi
+      log_warn "pull of ${img} failed (attempt ${attempt}/${max_attempts}); retrying in 10s"
+      sleep 10
+      attempt=$((attempt + 1))
+    done
+    log_ok "[${idx}/${total}] pulled ${img}"
+    idx=$((idx + 1))
   done
-  log_ok "Images pulled"
+  log_ok "All ${total} images pulled"
+}
+
+_spinner_pid=""
+_spinner_on=0
+
+spinner_start() {
+  [[ -t 1 ]] || return 0
+  _spinner_on=1
+  (
+    local label="$1" chars='/-\|' i=0 c=""
+    while :; do
+      c="${chars:$((i % 4)):1}"
+      printf '\r\033[K%s %s' "${label}" "${c}"
+      i=$((i + 1))
+      sleep 0.2
+    done
+  ) &
+  _spinner_pid=$!
+}
+
+spinner_stop() {
+  [[ "${_spinner_on}" == "1" ]] || return 0
+  kill "${_spinner_pid}" 2>/dev/null || true
+  wait "${_spinner_pid}" 2>/dev/null || true
+  printf '\r\033[K'
+  _spinner_on=0
 }
 
 start_stack() {
   log_step "Starting Docker Compose stack"
   local attempt=1 max_attempts=6
-  until run_compose up -d --no-build --remove-orphans; do
+  if [[ -t 1 ]]; then
+    log_info "Starting stack (details logged to ${LOG_FILE})"
+    spinner_start "Starting Docker Compose stack"
+  fi
+  until run_compose_quiet up -d --no-build --remove-orphans >>"${LOG_FILE}" 2>&1; do
+    spinner_stop
     if ((attempt >= max_attempts)); then
       log_error "docker compose up failed after ${max_attempts} attempts"
       log_error "container status:"
@@ -939,8 +1133,12 @@ start_stack() {
     log_warn "docker compose up failed (attempt ${attempt}/${max_attempts}); retrying in 30s (dependencies may still be converging)"
     sleep 30
     attempt=$((attempt + 1))
+    spinner_start "Starting Docker Compose stack"
   done
+  spinner_stop
   log_ok "Stack started"
+  log_info "Container status:"
+  run_compose_quiet ps --format 'table {{.Name}}\t{{.Status}}' || true
 }
 
 # ---------------------------------------------------------------------------
@@ -1036,7 +1234,9 @@ main() {
       -d|--dir) INSTALL_DIR="${2:?--dir requires an argument}"; INSTALL_DIR_OVERRIDE=1; shift 2 ;;
       -p|--port) HTTP_PORT="${2:?--port requires an argument}"; HTTP_PORT_OVERRIDE=1; shift 2 ;;
       -c|--channel) CHANNEL="$2"; shift 2 ;;
+      --download-source) DOWNLOAD_SOURCE="$2"; shift 2 ;;
       -v|--version) VERSION="$2"; shift 2 ;;
+      --source) SOURCE_DIR="$2"; shift 2 ;;
       -r|--registry) REGISTRY="$2"; shift 2 ;;
       --domain) DOMAIN="$2"; DOMAIN_OVERRIDE=1; shift 2 ;;
       --data-dir) DATA_DIR="$2"; shift 2 ;;
@@ -1058,19 +1258,20 @@ main() {
   done
 
   trap 'log_line "=== install failed at line ${LINENO} (exit $?) ==="' ERR
-  trap '[[ -n "${TMP_DIR}" ]] && rm -rf "${TMP_DIR}"' EXIT
 
   # §2 Preflight
   require_root "$@"
+
+  detect_os
+  detect_arch
+  check_memory
+  prompt_install_dir
 
   mkdir -p "${INSTALL_DIR}/logs"
   LOG_FILE="${INSTALL_DIR}/logs/install.log"
   log_line "=== install.sh v${INSTALLER_VERSION} started ($(date -u '+%Y-%m-%dT%H:%M:%SZ')) ==="
   log_line "argv: $*"
 
-  detect_os
-  detect_arch
-  check_memory
   check_disk
   check_tools
 
@@ -1079,7 +1280,12 @@ main() {
 
   # §2/§9 channel + network + docker
   detect_channel
-  check_network
+  detect_download_source
+  if [[ -n "${SOURCE_DIR}" ]]; then
+    log_info "Skipping download-source reachability check (using local source ${SOURCE_DIR})"
+  else
+    check_network
+  fi
   check_docker
   check_compose
 
@@ -1095,8 +1301,10 @@ main() {
 
   # §5/§6/§8/§9/§10
   create_dirs
-  download_files
-  install_artifact_files
+  if [[ -n "${SOURCE_DIR}" ]]; then
+    log_info "Using local release files from ${SOURCE_DIR%/}"
+  fi
+  fetch_release_files
   generate_env
   patch_compose
   generate_certs
