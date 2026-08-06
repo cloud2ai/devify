@@ -5,23 +5,11 @@
 # Implements INSTALL_SPEC.md (RFC v1.0):
 #   - one-command install via `curl ... | bash`
 #   - Docker Compose based; NEVER clones the Git repository
-#   - downloads version-consistent release artifacts
+#   - downloads install files directly from the Git repository tag
 #   - preserves user configuration and data; safe to re-run (idempotent)
-#   - supports github (ghcr.io / GitHub Releases) and cn (ACR / OSS-CDN) channels
+#   - supports github (ghcr.io / GitHub repo) and cn (ACR / OSS-CDN) channels
 #   - supported platforms: Linux (Ubuntu/Debian/Rocky/Alma/CentOS), macOS,
 #     and Windows via Git Bash (all require Docker; Docker Desktop works)
-#
-# Release artifact layout (must be published by the maintainers per release tag):
-#   devify-<version>.tar.gz
-#   |-- VERSION                      # e.g. "v1.2.0"
-#   |-- docker-compose.yml
-#   |-- env.sample
-#   |-- docker/
-#   |   |-- nginx/{default.conf,certs/}
-#   |   |-- mysql/{etc,initdb.d,scripts}/
-#   |   `-- haraka/{config,plugins}/
-#   `-- (optional extras)
-#   devify-<version>.tar.gz.sha256   # optional checksum file
 #
 # Usage:
 #   curl -fsSL https://raw.githubusercontent.com/cloud2ai/devify/main/install.sh | sudo bash
@@ -37,6 +25,7 @@ APP_NAME="devify"
 APP_TITLE="Devify"
 GITHUB_REPO="cloud2ai/devify"
 GITHUB_API="https://api.github.com/repos/${GITHUB_REPO}"
+GITHUB_ARCHIVE_BASE="https://github.com/${GITHUB_REPO}/archive"
 DEFAULT_INSTALL_DIR="/opt/${APP_NAME}"
 DEFAULT_HTTP_PORT=8080
 DEFAULT_HTTPS_PORT=10443
@@ -93,8 +82,6 @@ HTTPS="${DEVIFY_HTTPS:-false}"
 ADMIN_USERNAME="${DEVIFY_ADMIN_USERNAME:-admin}"
 ADMIN_EMAIL="${DEVIFY_ADMIN_EMAIL:-}"
 EMAIL_DOMAIN="${DEVIFY_EMAIL_DOMAIN:-}"
-CN_DOWNLOAD_BASE="${DEVIFY_CN_DOWNLOAD_BASE:-}"
-ASSUME_YES=0
 [[ "${DEVIFY_YES:-}" == "1" ]] && ASSUME_YES=1
 INSTALL_DOCKER=0
 [[ "${DEVIFY_INSTALL_DOCKER:-}" == "1" ]] && INSTALL_DOCKER=1
@@ -164,8 +151,6 @@ Options:
       --admin-email EMAIL Initial admin email
       --email-domain D   Inbound email domain (advanced)
       --https            Configure for HTTPS behind a TLS reverse proxy (advanced)
-      --cn-base URL      CN channel artifact base URL (advanced)
-      --install-docker   Automatically install Docker if missing
       --docker-mirror URL Configure a Docker Hub registry mirror (recommended for cn)
       --advanced         Ask advanced questions interactively
   -y, --yes              Non-interactive: accept defaults, no prompts
@@ -175,7 +160,7 @@ Options:
 Environment overrides: DEVIFY_INSTALL_DIR, DEVIFY_HTTP_PORT, DEVIFY_CHANNEL,
 DEVIFY_VERSION, DEVIFY_REGISTRY, DEVIFY_DATA_DIR, DEVIFY_TIMEZONE,
 DEVIFY_DOMAIN, DEVIFY_HTTPS, DEVIFY_ADMIN_PORT, DEVIFY_SMTP_PORT,
-DEVIFY_CN_DOWNLOAD_BASE, DEVIFY_INSTALL_DOCKER=1, DEVIFY_DOCKER_MIRROR,
+DEVIFY_INSTALL_DOCKER=1, DEVIFY_DOCKER_MIRROR,
 DEVIFY_YES=1
 EOF
 }
@@ -331,16 +316,9 @@ detect_channel() {
 
 check_network() {
   log_info "Checking network connectivity (channel: ${CHANNEL})..."
-  local url=""
-  if [[ "${CHANNEL}" == "github" || -z "${CN_DOWNLOAD_BASE}" ]]; then
-    url="https://github.com/${GITHUB_REPO}"
-    curl -fsSI --max-time 10 -o /dev/null "${url}" \
-      || abort "no connectivity to ${url}; check the network or select a different channel (--channel cn)"
-  else
-    url="${CN_DOWNLOAD_BASE}"
-    curl -fsSI --max-time 10 -o /dev/null "${url}" \
-      || abort "no connectivity to CN distribution base ${url}"
-  fi
+  local url="https://github.com/${GITHUB_REPO}"
+  curl -fsSI --max-time 10 -o /dev/null "${url}" \
+    || abort "no connectivity to ${url}; check the network"
   log_ok "network OK (${url})"
 }
 
@@ -662,12 +640,9 @@ resolve_version() {
     else
       log_info "Resolving latest release version..."
       local api=""
-      api="$(curl -fsSL --max-time 20 "${GITHUB_API}/releases/latest" 2>/dev/null \
-        | sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p' | head -n 1 || true)"
-      if [[ -z "${api}" && "${CHANNEL}" == "cn" && -n "${CN_DOWNLOAD_BASE}" ]]; then
-        api="$(curl -fsSL --max-time 20 "${CN_DOWNLOAD_BASE}/latest" 2>/dev/null | tr -d '[:space:]' | head -c 64 || true)"
-      fi
-      [[ -z "${api}" ]] && abort "could not resolve the latest release version (no GitHub release / CN base configured); pass --version explicitly"
+      api="$(curl -fsSL --max-time 20 "${GITHUB_API}/repos/${GITHUB_REPO}/tags?per_page=1" 2>/dev/null \
+        | sed -n 's/.*"name": *"\([^"]*\)".*/\1/p' | head -n 1 || true)"
+      [[ -z "${api}" ]] && abort "could not resolve the latest release tag; pass --version explicitly"
       VERSION="${api#v}"
       log_info "Latest release: v${VERSION}"
     fi
@@ -680,62 +655,35 @@ resolve_version() {
   fi
 }
 
-artifact_url() {
-  if [[ "${CHANNEL}" == "cn" && -n "${CN_DOWNLOAD_BASE}" ]]; then
-    printf '%s/devify-%s.tar.gz' "${CN_DOWNLOAD_BASE%/}" "${VERSION}"
-  else
-    if [[ "${CHANNEL}" == "cn" ]]; then
-      log_warn "CN distribution base not configured (set --cn-base or DEVIFY_CN_DOWNLOAD_BASE); falling back to GitHub Releases"
-    fi
-    printf 'https://github.com/%s/releases/download/%s/devify-%s.tar.gz' "${GITHUB_REPO}" "${TAG}" "${VERSION}"
-  fi
-}
-
-download_artifact() {
-  log_step "Downloading release artifact"
+download_files() {
+  log_step "Downloading release files"
   TMP_DIR="$(mktemp -d)"
   mkdir -p "${TMP_DIR}/extract"
-  local url="" expected="" actual=""
-  url="$(artifact_url)"
-  log_info "Downloading ${url}"
-  curl -fL --retry 3 --retry-delay 2 --max-time 300 -o "${TMP_DIR}/artifact.tar.gz" "${url}" \
-    || abort "failed to download release artifact; check the version/channel and network"
+  local archive_url="${GITHUB_ARCHIVE_BASE}/refs/tags/v${VERSION}.tar.gz"
+  log_info "Downloading ${archive_url}"
+  curl -fL --retry 3 --retry-delay 2 --max-time 300 -o "${TMP_DIR}/archive.tar.gz" "${archive_url}" \
+    || abort "failed to download release files; check the version and network"
 
-  if curl -fsSL --max-time 20 -o "${TMP_DIR}/artifact.sha256" "${url}.sha256" >/dev/null 2>&1; then
-    expected="$(awk '{print $1}' "${TMP_DIR}/artifact.sha256" | tr -d '[:space:]' || true)"
-    if command -v sha256sum >/dev/null 2>&1; then
-      actual="$(sha256sum "${TMP_DIR}/artifact.tar.gz" | awk '{print $1}')"
-    else
-      actual="$(shasum -a 256 "${TMP_DIR}/artifact.tar.gz" | awk '{print $1}')"
-    fi
-    [[ -n "${expected}" && "${expected}" == "${actual}" ]] \
-      || abort "release artifact checksum verification failed"
-    log_ok "Checksum verified"
-  else
-    log_warn "no checksum file available; skipping verification"
-  fi
+  tar -xzf "${TMP_DIR}/archive.tar.gz" -C "${TMP_DIR}/extract" \
+    || abort "failed to extract release archive"
 
-  tar -xzf "${TMP_DIR}/artifact.tar.gz" -C "${TMP_DIR}/extract" \
-    || abort "failed to extract release artifact"
-
-  local artifact_version=""
-  artifact_version="$(cat "${TMP_DIR}/extract/VERSION" 2>/dev/null | tr -d '[:space:]' || true)"
-  if [[ -z "${artifact_version}" ]]; then
-    abort "release artifact is missing the VERSION file; artifact layout is invalid"
+  # GitHub archive extracts to <repo>-v<VERSION>/ (e.g. devify-v1.2.3/)
+  EXTRACT_SRC="${TMP_DIR}/extract/${APP_NAME}-v${VERSION}"
+  if [[ ! -d "${EXTRACT_SRC}" ]]; then
+    EXTRACT_SRC="$(find "${TMP_DIR}/extract" -maxdepth 1 -mindepth 1 -type d | head -1)"
   fi
-  if [[ "${artifact_version#v}" != "${VERSION}" ]]; then
-    abort "release artifact version mismatch: requested ${TAG}, artifact contains ${artifact_version} (installer and release version must stay consistent)"
-  fi
-  log_ok "Artifact v${VERSION} downloaded and verified"
+  [[ -d "${EXTRACT_SRC}" ]] || abort "release archive extracted to unexpected directory structure"
+  [[ -f "${EXTRACT_SRC}/docker-compose.yml" ]] || abort "release archive missing docker-compose.yml"
+  log_ok "Release files v${VERSION} downloaded"
 }
 
 install_artifact_files() {
   log_step "Installing release files"
-  cp -f "${TMP_DIR}/extract/docker-compose.yml" "${INSTALL_DIR}/docker-compose.yml"
-  [[ -f "${TMP_DIR}/extract/env.sample" ]] && cp -f "${TMP_DIR}/extract/env.sample" "${INSTALL_DIR}/env.sample"
-  if [[ -d "${TMP_DIR}/extract/docker" ]]; then
+  cp -f "${EXTRACT_SRC}/docker-compose.yml" "${INSTALL_DIR}/docker-compose.yml"
+  [[ -f "${EXTRACT_SRC}/env.sample" ]] && cp -f "${EXTRACT_SRC}/env.sample" "${INSTALL_DIR}/env.sample"
+  if [[ -d "${EXTRACT_SRC}/docker" ]]; then
     # tar-pipe copy preserves files already present in the target (e.g. user certs)
-    (cd "${TMP_DIR}/extract" && tar -cf - docker 2>/dev/null) | (cd "${INSTALL_DIR}" && tar -xf -)
+    (cd "${EXTRACT_SRC}" && tar -cf - docker 2>/dev/null) | (cd "${INSTALL_DIR}" && tar -xf -)
   fi
   find "${INSTALL_DIR}/docker/nginx/certs" -type f ! -name '*.crt' ! -name '*.key' -delete 2>/dev/null || true
   chmod 600 "${INSTALL_DIR}/docker/nginx/certs"/* 2>/dev/null || true
@@ -1099,7 +1047,6 @@ main() {
       --admin-email) ADMIN_EMAIL="$2"; shift 2 ;;
       --email-domain) EMAIL_DOMAIN="$2"; shift 2 ;;
       --https) HTTPS="true"; shift ;;
-      --cn-base) CN_DOWNLOAD_BASE="$2"; shift 2 ;;
       --install-docker) INSTALL_DOCKER=1; shift ;;
       --docker-mirror) DOCKER_MIRROR="$2"; shift 2 ;;
       --advanced) ADVANCED=1; shift ;;
@@ -1148,7 +1095,7 @@ main() {
 
   # §5/§6/§8/§9/§10
   create_dirs
-  download_artifact
+  download_files
   install_artifact_files
   generate_env
   patch_compose
