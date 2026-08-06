@@ -92,7 +92,11 @@ SMTP_PORT_OVERRIDE=0
 
 HTTPS_PORT="${DEVIFY_HTTPS_PORT:-${DEFAULT_HTTPS_PORT}}"
 CHANNEL="${DEVIFY_CHANNEL:-}"
+GITHUB_REACHABLE_PENDING=1
+GITHUB_REACHABLE=0
 DOWNLOAD_SOURCE="${DEVIFY_DOWNLOAD_SOURCE:-}"
+DOWNLOAD_SOURCE_EXPLICIT=0
+[[ -n "${DEVIFY_DOWNLOAD_SOURCE:-}" ]] && DOWNLOAD_SOURCE_EXPLICIT=1
 VERSION="${DEVIFY_VERSION:-}"
 REGISTRY="${DEVIFY_REGISTRY:-}"
 DATA_DIR="${DEVIFY_DATA_DIR:-}"
@@ -113,6 +117,7 @@ DOCKER_MIRROR="${DEVIFY_DOCKER_MIRROR:-}"
 FORCE=0
 ADVANCED=0
 SOURCE_DIR=""
+INSTALL_ARGS=()
 
 SCHEME="http"
 PORT_SUFFIX=""
@@ -120,9 +125,12 @@ LOG_FILE=""
 COMPOSE_CMD=()
 EXISTING=0
 INSTALLED_VERSION=""
+PORTS_FROM_EXISTING=0
 ENV_EXISTS=0
 ENV_REDIS_PASSWORD=""
 ADMIN_PASSWORD=""
+SHA256SUMS_CONTENT=""
+SHA256SUMS_FETCHED=0
 
 # ---------------------------------------------------------------------------
 # Colored logging helpers (INSTALL_SPEC §20)
@@ -238,7 +246,7 @@ require_root() {
   if [[ "$(id -u)" -eq 0 ]]; then return 0; fi
   if command -v sudo >/dev/null 2>&1 && [[ -f "$0" && "$0" != "bash" && "$0" != "-bash" ]]; then
     log_warn "not running as root, re-executing with sudo"
-    exec sudo -E bash "$0" "$@"
+    exec sudo -E bash "$0" "${INSTALL_ARGS[@]}"
   fi
   abort "install.sh must run as root (or via sudo). e.g. sudo bash install.sh"
 }
@@ -275,7 +283,14 @@ check_memory() {
   local mem_kb=0 mem_gb=0
   case "${PLATFORM}" in
     macos)
-      mem_kb="$(( $(sysctl -n hw.memsize 2>/dev/null || echo 0) / 1024 ))"
+      # available memory = (free + inactive + speculative) * page size
+      local pagesize=0 pf=0 pi=0 ps=0
+      pagesize="$(sysctl -n hw.pagesize 2>/dev/null || echo 4096)"
+      pf="$(vm_stat 2>/dev/null | awk '/Pages free/ {print $3}' | tr -d '.')"
+      pi="$(vm_stat 2>/dev/null | awk '/Pages inactive/ {print $3}' | tr -d '.')"
+      ps="$(vm_stat 2>/dev/null | awk '/Pages speculative/ {print $3}' | tr -d '.')"
+      pf="${pf:-0}"; pi="${pi:-0}"; ps="${ps:-0}"
+      mem_kb="$(( (pf + pi + ps) * pagesize / 1024 ))"
       ;;
     windows)
       if command -v wmic >/dev/null 2>&1; then
@@ -285,7 +300,7 @@ check_memory() {
         return 0
       fi
       ;;
-    *) mem_kb="$(awk '/MemTotal/ {print $2}' /proc/meminfo 2>/dev/null || echo 0)" ;;
+    *) mem_kb="$(awk '/MemAvailable/ {print $2}' /proc/meminfo 2>/dev/null || echo 0)" ;;
   esac
   mem_kb="${mem_kb:-0}"
   [[ "${mem_kb}" =~ ^[0-9]+$ ]] || mem_kb=0
@@ -337,15 +352,27 @@ prompt_install_dir() {
 # ---------------------------------------------------------------------------
 # §2/§9 Channel detection & network connectivity
 # ---------------------------------------------------------------------------
+# Cache whether GitHub is reachable; used by both channel and download-source
+# detection to avoid probing the host twice.
+probe_github_reachable() {
+  if [[ "${GITHUB_REACHABLE_PENDING}" == "1" ]]; then
+    if curl -fsSI --max-time 8 -o /dev/null https://github.com >/dev/null 2>&1; then
+      GITHUB_REACHABLE=1
+    else
+      GITHUB_REACHABLE=0
+    fi
+    GITHUB_REACHABLE_PENDING=0
+  fi
+}
+
 detect_channel() {
   if [[ -z "${CHANNEL}" ]]; then
-    log_info "Detecting install channel..."
-    if curl -fsSI --max-time 8 -o /dev/null https://github.com >/dev/null 2>&1; then
+    probe_github_reachable
+    if [[ "${GITHUB_REACHABLE}" == "1" ]]; then
       CHANNEL="github"
     else
       CHANNEL="cn"
     fi
-    log_info "Auto-detected channel: ${CHANNEL}"
   fi
   CHANNEL="$(printf '%s' "${CHANNEL}" | tr '[:upper:]' '[:lower:]')"
   case "${CHANNEL}" in
@@ -355,7 +382,6 @@ detect_channel() {
   if [[ -z "${REGISTRY}" ]]; then
     if [[ "${CHANNEL}" == "github" ]]; then REGISTRY="${REGISTRY_GITHUB}"; else REGISTRY="${REGISTRY_CN}"; fi
   fi
-  log_info "Channel: ${CHANNEL} | Registry: ${REGISTRY}"
 }
 
 detect_download_source() {
@@ -365,11 +391,10 @@ detect_download_source() {
       github|gitee) ;;
       *) abort "invalid download source '${DOWNLOAD_SOURCE}' (supported: github, gitee)" ;;
     esac
-    log_info "Download source: ${DOWNLOAD_SOURCE} (explicit)"
     return 0
   fi
-  log_info "Detecting download source (github or gitee)..."
-  if curl -fsSI --max-time 8 -o /dev/null https://github.com >/dev/null 2>&1; then
+  probe_github_reachable
+  if [[ "${GITHUB_REACHABLE}" == "1" ]]; then
     DOWNLOAD_SOURCE="github"
   elif curl -fsSI --max-time 8 -o /dev/null https://gitee.com >/dev/null 2>&1; then
     DOWNLOAD_SOURCE="gitee"
@@ -377,22 +402,7 @@ detect_download_source() {
     DOWNLOAD_SOURCE="github"
     log_warn "could not reach github.com or gitee.com; assuming github"
   fi
-  log_info "Detected download source: ${DOWNLOAD_SOURCE}"
 }
-
-check_network() {
-  log_info "Checking network connectivity (source: ${DOWNLOAD_SOURCE})..."
-  local url=""
-  if [[ "${DOWNLOAD_SOURCE}" == "gitee" ]]; then
-    url="https://gitee.com/${GITEE_REPO}"
-  else
-    url="https://github.com/${GITHUB_REPO}"
-  fi
-  curl -fsSI --max-time 10 -o /dev/null "${url}" \
-    || abort "no connectivity to ${url}; check the network"
-  log_ok "network OK (${url})"
-}
-
 # ---------------------------------------------------------------------------
 # §2/§3/§10 Docker & Docker Compose
 # ---------------------------------------------------------------------------
@@ -566,12 +576,14 @@ configure() {
   DATA_DIR="${DATA_DIR%/}"
 
   if [[ -z "${DOMAIN}" ]]; then
-    if [[ "${PLATFORM}" == "macos" ]]; then
-      DOMAIN="$(ipconfig getifaddr en0 2>/dev/null || ipconfig getifaddr en1 2>/dev/null || true)"
+    if [[ "${PLATFORM}" == "linux" ]]; then
+      # prefer the IP that owns the default route (avoids docker0/veth addresses)
+      DOMAIN="$(ip route get 1.1.1.1 2>/dev/null | awk '{for (i=1;i<=NF;i++) if ($i=="src") print $(i+1)}' | head -n1)"
+      [[ -z "${DOMAIN}" ]] && DOMAIN="$(hostname -I 2>/dev/null | awk '{print $1}' || true)"
     elif [[ "${PLATFORM}" == "windows" ]]; then
       DOMAIN="$(ipconfig 2>/dev/null | awk '/IPv4/ {print $NF; exit}' || true)"
     else
-      DOMAIN="$(hostname -I 2>/dev/null | awk '{print $1}' || true)"
+      DOMAIN="$(ipconfig getifaddr en0 2>/dev/null || ipconfig getifaddr en1 2>/dev/null || true)"
     fi
     [[ -z "${DOMAIN}" ]] && DOMAIN="$(hostname -f 2>/dev/null || hostname)"
     [[ -z "${DOMAIN}" ]] && DOMAIN="127.0.0.1"
@@ -641,7 +653,10 @@ resolve_ports() {
   [[ -n "${SMTP_PORT}" ]] || SMTP_PORT="${DEFAULT_SMTP_PORT}"
 
   validate_port "${HTTP_PORT}" || abort "invalid HTTP port: ${HTTP_PORT}"
-  if port_in_use "${HTTP_PORT}"; then
+  validate_port "${HTTPS_PORT}" || abort "invalid HTTPS port: ${HTTPS_PORT}"
+  validate_port "${ADMIN_PORT}" || abort "invalid admin port: ${ADMIN_PORT}"
+  validate_port "${SMTP_PORT}" || abort "invalid SMTP port: ${SMTP_PORT}"
+  if [[ "${PORTS_FROM_EXISTING}" != "1" ]] && port_in_use "${HTTP_PORT}"; then
     if [[ "${ASSUME_YES}" != "1" && -t 0 ]]; then
       while port_in_use "${HTTP_PORT}"; do
         prompt_value HTTP_PORT "Port ${HTTP_PORT} is in use; enter a free port" "$((HTTP_PORT + 1))"
@@ -655,15 +670,15 @@ resolve_ports() {
     fi
   fi
 
-  if port_in_use "${HTTPS_PORT}"; then
+  if [[ "${PORTS_FROM_EXISTING}" != "1" ]] && port_in_use "${HTTPS_PORT}"; then
     HTTPS_PORT="$(next_free_port "$((HTTPS_PORT + 1))")"
     log_warn "HTTPS port in use; using ${HTTPS_PORT} instead"
   fi
-  if port_in_use "${ADMIN_PORT}"; then
+  if [[ "${PORTS_FROM_EXISTING}" != "1" ]] && port_in_use "${ADMIN_PORT}"; then
     ADMIN_PORT="$(next_free_port "$((ADMIN_PORT + 1))")"
     log_warn "admin port in use; using ${ADMIN_PORT} instead"
   fi
-  if port_in_use "${SMTP_PORT}"; then
+  if [[ "${PORTS_FROM_EXISTING}" != "1" ]] && port_in_use "${SMTP_PORT}"; then
     SMTP_PORT="$(next_free_port "$((SMTP_PORT + 1))")"
     log_warn "SMTP port in use; using ${SMTP_PORT} instead"
   fi
@@ -681,18 +696,20 @@ resolve_ports() {
 # §7/§19 Existing installation detection
 # ---------------------------------------------------------------------------
 detect_existing() {
-  EXISTING=0; INSTALLED_VERSION=""
+  EXISTING=0; INSTALLED_VERSION=""; PORTS_FROM_EXISTING=0
   [[ -f "${INSTALL_DIR}/docker-compose.yml" ]] || return 0
   EXISTING=1
   log_warn "Existing installation detected at ${INSTALL_DIR}"
   if [[ -f "${INSTALL_DIR}/install-info.env" ]]; then
     INSTALLED_VERSION="$(grep -E '^DEVIFY_VERSION=' "${INSTALL_DIR}/install-info.env" | tail -n1 | cut -d= -f2- || true)"
     [[ -n "${INSTALLED_VERSION}" ]] && log_info "Installed version: ${INSTALLED_VERSION}"
-    [[ "${HTTP_PORT_OVERRIDE}" == "0" ]] && HTTP_PORT="$(grep -E '^DEVIFY_HTTP_PORT=' "${INSTALL_DIR}/install-info.env" | tail -n1 | cut -d= -f2- || true)"
+    local ports_found=0
+    [[ "${HTTP_PORT_OVERRIDE}" == "0" ]] && { HTTP_PORT="$(grep -E '^DEVIFY_HTTP_PORT=' "${INSTALL_DIR}/install-info.env" | tail -n1 | cut -d= -f2- || true)"; [[ -n "${HTTP_PORT}" ]] && ports_found=1; }
     [[ "${ADMIN_PORT_OVERRIDE}" == "0" ]] && ADMIN_PORT="$(grep -E '^DEVIFY_ADMIN_PORT=' "${INSTALL_DIR}/install-info.env" | tail -n1 | cut -d= -f2- || true)"
     [[ "${SMTP_PORT_OVERRIDE}" == "0" ]] && SMTP_PORT="$(grep -E '^DEVIFY_SMTP_PORT=' "${INSTALL_DIR}/install-info.env" | tail -n1 | cut -d= -f2- || true)"
     [[ "${DOMAIN_OVERRIDE}" == "0" ]] && DOMAIN="$(grep -E '^DEVIFY_DOMAIN=' "${INSTALL_DIR}/install-info.env" | tail -n1 | cut -d= -f2- || true)"
     [[ "${DOMAIN_OVERRIDE}" == "0" && -n "${DOMAIN}" ]] && DOMAIN_OVERRIDE=1
+    if ((ports_found)); then PORTS_FROM_EXISTING=1; fi
   fi
 }
 
@@ -716,16 +733,13 @@ resolve_version() {
       log_info "Reusing installed version v${VERSION} (rerun)"
     else
       log_info "Resolving latest release version..."
-      local api="" api_url=""
-      if [[ "${DOWNLOAD_SOURCE}" == "gitee" ]]; then
-        api_url="${GITEE_API}/tags?per_page=1&sort=updated&direction=desc"
-      else
-        api_url="${GITHUB_API}/tags?per_page=1"
-      fi
-      api="$(curl -fsSL --max-time 20 "${api_url}" 2>/dev/null \
-        | grep -oE '"name": *"[^"]*"' | head -n 1 | sed -E 's/.*"name": *"([^"]*)".*/\1/' || true)"
+      local api="" url
+      for url in "${GITHUB_API}/tags?per_page=1" "${GITEE_API}/tags?per_page=1&sort=updated&direction=desc"; do
+        api="$(curl -fsSL --max-time 20 "${url}" 2>/dev/null \
+          | grep -oE '"name": *"[^"]*"' | head -n 1 | sed -E 's/.*"name": *"([^"]*)".*/\1/' || true)"
+        [[ -n "${api}" ]] && { VERSION="${api#v}"; [[ "${url}" == "${GITEE_API}"* && "${DOWNLOAD_SOURCE_EXPLICIT}" != "1" ]] && DOWNLOAD_SOURCE="gitee"; break; }
+      done
       [[ -z "${api}" ]] && abort "could not resolve the latest release tag; pass --version explicitly"
-      VERSION="${api#v}"
       log_info "Latest release: v${VERSION}"
     fi
   fi
@@ -746,9 +760,65 @@ release_raw_url() {
   fi
 }
 
+# Download a single release file from the configured source, transparently
+# falling back to gitee when the github transfer is slow or fails. Sets the
+# global LAST_HTTP to the code of the winning/last attempt. Returns 0 once a
+# source either succeeds (200) or reports the file missing (404).
+download_release_file() {
+  local rel="$1" url="" code="" out="${INSTALL_DIR}/${rel}"
+  url="$(release_raw_url "${rel}")"
+  # --speed-limit/--speed-time abort curl when a transfer crawls below 400KB/s
+  # for 15s straight, surfacing a slow mirror instead of blocking silently.
+  code="$(curl -sSL --retry 2 --retry-delay 2 \
+    --speed-limit 409600 --speed-time 15 --max-time 600 \
+    -o "${out}" -w '%{http_code}' "${url}" 2>/dev/null || true)"
+  if [[ "${code}" == "200" ]] || [[ "${code}" == "404" ]]; then
+    LAST_HTTP="${code}"
+    [[ "${code}" == "200" ]] && verify_release_file "${rel}" "${out}"
+    return 0
+  fi
+  # slow/failed from github -> switch the whole run to gitee and retry once
+  if [[ "${DOWNLOAD_SOURCE}" != "gitee" ]]; then
+    log_warn "github download of ${rel} is slow/failed (HTTP ${code:-timeout}); switching to gitee"
+    DOWNLOAD_SOURCE="gitee"
+    rm -f "${out}"
+    url="${GITEE_RAW_BASE}/${TAG}/${rel}"
+    code="$(curl -sSL --retry 2 --retry-delay 2 \
+      --speed-limit 409600 --speed-time 15 --max-time 120 \
+      -o "${out}" -w '%{http_code}' "${url}" 2>/dev/null || true)"
+    LAST_HTTP="${code}"
+    [[ "${code}" == "200" ]] && verify_release_file "${rel}" "${out}"
+    return 0
+  fi
+  LAST_HTTP="${code}"; return 1
+}
+
+# Verify a downloaded release file against the SHA256SUMS manifest published in
+# the tag, when one exists. No manifest (or no entry for the file) -> OK.
+verify_release_file() {
+  local rel="$1" out="$2" line="" expected="" actual="" url=""
+  if [[ -z "${SHA256SUMS_CONTENT}" ]]; then
+    if [[ "${SHA256SUMS_FETCHED}" == "1" ]]; then return 0; fi
+    SHA256SUMS_FETCHED=1
+    url="$(release_raw_url "SHA256SUMS")"
+    SHA256SUMS_CONTENT="$(curl -fsSL --max-time 20 "${url}" 2>/dev/null || true)"
+    [[ -z "${SHA256SUMS_CONTENT}" ]] && return 0
+    log_info "Verifying downloaded files against SHA256SUMS"
+  fi
+  line="$(printf '%s\n' "${SHA256SUMS_CONTENT}" | awk -v r="${rel}" '$2 == r {print; exit}')"
+  [[ -z "${line}" ]] && return 0
+  expected="${line%% *}"
+  actual="$(openssl dgst -sha256 "${out}" 2>/dev/null | awk '{print $NF}' || true)"
+  if [[ "${actual}" != "${expected}" ]]; then
+    rm -f "${out}"
+    abort "checksum mismatch for ${rel}: expected ${expected}, got ${actual:-<empty>}; corrupted download"
+  fi
+}
+
 fetch_release_files() {
   log_step "Installing release files"
-  local rel="" src="" url="" dir="" http=""
+  local rel="" src="" url="" dir="" http="" done=0
+  local total="${#RELEASE_FILES[@]}"
   for rel in "${RELEASE_FILES[@]}"; do
     dir="${INSTALL_DIR}/$(dirname "${rel}")"
     mkdir -p "${dir}"
@@ -756,10 +826,10 @@ fetch_release_files() {
       src="${SOURCE_DIR%/}/${rel}"
       [[ -f "${src}" ]] || abort "source directory ${SOURCE_DIR} is missing ${rel}"
       cp -f "${src}" "${INSTALL_DIR}/${rel}"
+      done=$((done + 1))
     else
-      url="$(release_raw_url "${rel}")"
-      log_info "Downloading ${url}"
-      http="$(curl -sSL --retry 3 --retry-delay 2 --max-time 120 -o "${INSTALL_DIR}/${rel}" -w '%{http_code}' "${url}" 2>/dev/null || true)"
+      download_release_file "${rel}" || true
+      http="${LAST_HTTP}"
       if [[ "${http}" != "200" ]]; then
         rm -f "${INSTALL_DIR}/${rel}"
         if [[ "${http}" == "404" ]]; then
@@ -779,9 +849,15 @@ fetch_release_files() {
         else
           log_warn "skipping ${rel}: network error while downloading (HTTP ${http:-timeout})"
         fi
+      else
+        done=$((done + 1))
       fi
     fi
+    if [[ -t 1 ]]; then
+      printf '\r%sDownloading config files: %s/%s%s' "${c_cyan}" "${done}" "${total}" "${c_reset}"
+    fi
   done
+  [[ -t 1 ]] && printf '\n'
   # clear placeholder certs while keeping user-provided ones (generated in §9)
   find "${INSTALL_DIR}/docker/nginx/certs" -type f ! -name '*.crt' ! -name '*.key' -delete 2>/dev/null || true
   chmod 600 "${INSTALL_DIR}/docker/nginx/certs"/* 2>/dev/null || true
@@ -1115,7 +1191,7 @@ spinner_stop() {
 
 start_stack() {
   log_step "Starting Docker Compose stack"
-  local attempt=1 max_attempts=6
+  local attempt=1 max_attempts=6 backoff=30
   if [[ -t 1 ]]; then
     log_info "Starting stack (details logged to ${LOG_FILE})"
     spinner_start "Starting Docker Compose stack"
@@ -1130,8 +1206,9 @@ start_stack() {
       run_compose logs --tail=100 --no-color || true
       abort "docker compose up failed; see ${LOG_FILE} and the container logs above"
     fi
-    log_warn "docker compose up failed (attempt ${attempt}/${max_attempts}); retrying in 30s (dependencies may still be converging)"
-    sleep 30
+    log_info "dependencies still warming up; retrying in ${backoff}s (attempt ${attempt}/${max_attempts})"
+    sleep "${backoff}"
+    ((backoff < 120)) && backoff=$((backoff * 2))
     attempt=$((attempt + 1))
     spinner_start "Starting Docker Compose stack"
   done
@@ -1227,6 +1304,7 @@ final_summary() {
 # Main
 # ---------------------------------------------------------------------------
 main() {
+  INSTALL_ARGS=("$@")
   local arg=""
   while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -1234,7 +1312,7 @@ main() {
       -d|--dir) INSTALL_DIR="${2:?--dir requires an argument}"; INSTALL_DIR_OVERRIDE=1; shift 2 ;;
       -p|--port) HTTP_PORT="${2:?--port requires an argument}"; HTTP_PORT_OVERRIDE=1; shift 2 ;;
       -c|--channel) CHANNEL="$2"; shift 2 ;;
-      --download-source) DOWNLOAD_SOURCE="$2"; shift 2 ;;
+      --download-source) DOWNLOAD_SOURCE="$2"; DOWNLOAD_SOURCE_EXPLICIT=1; shift 2 ;;
       -v|--version) VERSION="$2"; shift 2 ;;
       --source) SOURCE_DIR="$2"; shift 2 ;;
       -r|--registry) REGISTRY="$2"; shift 2 ;;
@@ -1260,7 +1338,7 @@ main() {
   trap 'log_line "=== install failed at line ${LINENO} (exit $?) ==="' ERR
 
   # §2 Preflight
-  require_root "$@"
+  require_root "${INSTALL_ARGS[@]}"
 
   detect_os
   detect_arch
@@ -1278,14 +1356,9 @@ main() {
   # §7 existing installation
   detect_existing
 
-  # §2/§9 channel + network + docker
+  # §2/§9 channel + docker
   detect_channel
   detect_download_source
-  if [[ -n "${SOURCE_DIR}" ]]; then
-    log_info "Skipping download-source reachability check (using local source ${SOURCE_DIR})"
-  else
-    check_network
-  fi
   check_docker
   check_compose
 
