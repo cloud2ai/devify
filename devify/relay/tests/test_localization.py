@@ -185,7 +185,7 @@ def test_relay_adapters_use_delivery_localized_title_content_and_language(
     captured = {}
 
     class FakeHandler:
-        repo = "cloud2ai/devify"
+        repo = "oneprolabs/devify"
 
         def __init__(self, config):
             self.config = config

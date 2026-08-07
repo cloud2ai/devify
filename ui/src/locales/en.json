@@ -188,7 +188,7 @@
     "githubConfigTitle": "GitHub Issue config",
     "githubConfigHelp": "Use a fine-grained personal access token with Issues write access to the target repository.",
     "githubRepo": "Repository",
-    "githubRepoPlaceholder": "e.g. cloud2ai/devify",
+    "githubRepoPlaceholder": "e.g. oneprolabs/devify",
     "githubRepoHelp": "Enter the repository in owner/name format.",
     "githubToken": "Personal access token",
     "githubTokenPlaceholder": "Enter a fine-grained GitHub token",

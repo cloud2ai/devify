@@ -60,7 +60,7 @@ def test_auto_merge_strategy_update_resolves_to_update(monkeypatch):
             external_id="REQ-123",
             metadata={
                 "provider": "github_issue",
-                "github_repo": "cloud2ai/devify",
+                "github_repo": "oneprolabs/devify",
             },
         ),
     )
@@ -78,7 +78,7 @@ def test_auto_merge_strategy_update_resolves_to_update(monkeypatch):
     assert plan["action"] == "update"
     assert plan["source"] == "auto_merge"
     assert plan["reference_external_id"] == "REQ-123"
-    assert plan["reference_github_repo"] == "cloud2ai/devify"
+    assert plan["reference_github_repo"] == "oneprolabs/devify"
     assert plan["reference_provider"] == "github_issue"
     assert plan["related_issue_keys"] == []
 

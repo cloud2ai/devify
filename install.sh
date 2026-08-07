@@ -14,7 +14,7 @@
 #     and Windows via Git Bash (all require Docker; Docker Desktop works)
 #
 # Usage:
-#   curl -fsSL https://raw.githubusercontent.com/cloud2ai/devify/main/install.sh | sudo bash
+#   curl -fsSL https://raw.githubusercontent.com/oneprolabs/devify/main/install.sh | sudo bash
 #   sudo bash install.sh [options]   # see --help
 # =============================================================================
 
@@ -25,10 +25,10 @@ set -Eeuo pipefail
 # ---------------------------------------------------------------------------
 APP_NAME="devify"
 APP_TITLE="Devify"
-GITHUB_REPO="cloud2ai/devify"
+GITHUB_REPO="oneprolabs/devify"
 GITHUB_API="https://api.github.com/repos/${GITHUB_REPO}"
 GITHUB_RAW_BASE="https://raw.githubusercontent.com/${GITHUB_REPO}"
-GITEE_REPO="${GITHUB_REPO}"
+GITEE_REPO="oneprolabs/devify"
 GITEE_API="https://gitee.com/api/v5/repos/${GITEE_REPO}"
 GITEE_RAW_BASE="https://gitee.com/${GITEE_REPO}/raw"
 DEFAULT_INSTALL_DIR="/opt/${APP_NAME}"

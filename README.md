@@ -7,13 +7,13 @@
 [![Django](https://img.shields.io/badge/backend-Django-092E20.svg?logo=django)](devify/)
 [![Vue 3](https://img.shields.io/badge/frontend-Vue%203-4FC08D.svg?logo=vuedotjs&logoColor=white)](ui/)
 [![Docker](https://img.shields.io/badge/deploy-Docker%20Compose-2496ED.svg?logo=docker&logoColor=white)](docker-compose.yml)
-[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/cloud2ai/devify/pulls)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/oneprolabs/devify/pulls)
 
 **Enterprise-grade AI-powered conversation intelligence and data application platform**
 
 Turn fragmented conversations — chat records, email threads, screenshots — into structured summaries and reusable data, then deliver them to JIRA, knowledge bases, and workflow automation.
 
-[Quick Start](#-quick-start) · [Documentation](#-documentation) · [How It Works](#-how-devify-works) · [Recommended Providers](#-recommended-llm-providers) · [Self-Hosting](#-self-hosting-requirements) · [SaaS Edition](https://aimychats.com)
+[Quick Start](#-quick-start) · [One-command Installation](#-one-command-installation) · [Documentation](#-documentation) · [How It Works](#-how-devify-works) · [Recommended Providers](#-recommended-llm-providers) · [Self-Hosting](#-self-hosting-requirements) · [SaaS Edition](https://aimychats.com)
 
 English | [中文](README_ZH.md)
 
@@ -216,6 +216,70 @@ docker compose up -d
 
 The production compose file includes the full application stack: API, worker,
 scheduler, UI, MySQL, Redis, Nginx, and Haraka.
+
+### One-command Installation
+
+For a production-style self-hosted installation, `install.sh` downloads the
+release files directly, generates the initial configuration and secrets, pulls
+the Docker images, starts the complete stack, and verifies `/health`. It does
+not clone the Git repository.
+
+Requirements:
+
+- Docker with Compose (Docker Desktop is supported on macOS and Windows)
+- Linux: Ubuntu, Debian, Rocky, Alma, or CentOS; Windows: Git Bash
+- `amd64` or `arm64` CPU architecture
+- At least 2 GB available memory and 5 GB free disk space (4 GB RAM and 20 GB
+  disk are recommended)
+
+Run the installer on Linux or macOS:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/oneprolabs/devify/main/install.sh | sudo bash
+```
+
+On Windows, run the equivalent command from Git Bash; Docker Desktop must be
+installed and running:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/oneprolabs/devify/main/install.sh | bash
+```
+
+For networks with limited GitHub access, use the China distribution channel:
+
+```bash
+curl -fsSL https://gitee.com/oneprolabs/devify/raw/main/install.sh | sudo bash -s -- \
+  --channel cn --download-source gitee
+```
+
+Both GitHub and Gitee use `oneprolabs/devify` as the source repository.
+
+The installer automatically selects an available download source and the
+Aliyun ACR image registry. To install Docker automatically on supported Linux
+distributions, add `--install-docker`. Use `--yes` for a non-interactive run:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/oneprolabs/devify/main/install.sh | \
+  sudo bash -s -- --channel cn --yes
+```
+
+Common options include `--dir /srv/devify`, `--port 8080`,
+`--admin-port 19443`, `--smtp-port 25`, `--domain dev.example.com`, and
+`--version 1.2.3`. Run `install.sh --help` for the complete list.
+
+After installation:
+
+- Main site: `http://<host>:8080`
+- Admin panel: `https://<host>:19443/admin` (self-signed certificate)
+- Configuration: `<install-dir>/.env`
+- Installation details and the initial admin password:
+  `<install-dir>/install-info.env`
+
+The default installation directory is `/opt/devify` on Linux/macOS and
+`$HOME/devify` on Windows Git Bash. Re-running the installer is safe: existing
+`.env` configuration and application data are preserved. Outbound email uses
+the console backend by default; configure SMTP in `.env` before relying on
+email notifications.
 
 ### Haraka Inbound Email
 

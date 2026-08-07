@@ -20,7 +20,7 @@ def github_config():
     return {
         "issue_engine": "github_issue",
         "github": {
-            "repo": "cloud2ai/devify",
+            "repo": "oneprolabs/devify",
             "token": "test-token",
             "labels": ["relay", "needs-review"],
             "assignees": ["octocat"],
@@ -48,7 +48,7 @@ def test_create_issue_posts_structured_markdown_and_public_attachment_urls(
         status_code=201,
         payload={
             "number": 42,
-            "html_url": "https://github.com/cloud2ai/devify/issues/42",
+            "html_url": "https://github.com/oneprolabs/devify/issues/42",
         },
     )
     handler = GitHubIssueHandler(github_config, session=session)
@@ -78,7 +78,7 @@ def test_create_issue_posts_structured_markdown_and_public_attachment_urls(
     request = session.request.call_args
     assert request.args == (
         "POST",
-        "https://api.github.com/repos/cloud2ai/devify/issues",
+        "https://api.github.com/repos/oneprolabs/devify/issues",
     )
     assert request.kwargs["timeout"] == 15
     assert request.kwargs["headers"]["Authorization"] == "Bearer test-token"
@@ -102,7 +102,7 @@ def test_update_issue_patches_the_existing_issue(github_config):
     session.request.return_value = _response(
         payload={
             "number": 42,
-            "html_url": "https://github.com/cloud2ai/devify/issues/42",
+            "html_url": "https://github.com/oneprolabs/devify/issues/42",
         }
     )
     handler = GitHubIssueHandler(github_config, session=session)
@@ -118,7 +118,7 @@ def test_update_issue_patches_the_existing_issue(github_config):
     request = session.request.call_args
     assert request.args == (
         "PATCH",
-        "https://api.github.com/repos/cloud2ai/devify/issues/42",
+        "https://api.github.com/repos/oneprolabs/devify/issues/42",
     )
     assert request.kwargs["json"]["title"] == "Updated title"
     assert request.kwargs["json"]["body"] == "Updated body"
@@ -174,7 +174,7 @@ def test_create_issue_appends_email_source_labels(github_config):
 def test_create_issue_sanitizes_deduplicates_and_truncates_source_labels():
     config = {
         "github": {
-            "repo": "cloud2ai/devify",
+            "repo": "oneprolabs/devify",
             "token": "test-token",
             "labels": ["sender:alice@example.com"],
         }
@@ -296,11 +296,11 @@ def test_create_issue_omits_attachment_paths_outside_public_storage(
 def test_handler_rejects_invalid_repo_and_missing_token():
     with pytest.raises(ValueError, match="owner/name"):
         GitHubIssueHandler(
-            {"github": {"repo": "https://github.com/cloud2ai/devify", "token": "x"}}
+            {"github": {"repo": "https://github.com/oneprolabs/devify", "token": "x"}}
         )
 
     with pytest.raises(ValueError, match="token"):
-        GitHubIssueHandler({"github": {"repo": "cloud2ai/devify", "token": ""}})
+        GitHubIssueHandler({"github": {"repo": "oneprolabs/devify", "token": ""}})
 
 
 def test_factory_and_registry_resolve_github_target(github_config):
@@ -320,7 +320,7 @@ def test_adapter_updates_existing_github_issue(monkeypatch, github_config):
         GitHubIssueHandler,
         "get_issue_url",
         lambda self, issue_number: (
-            f"https://github.com/cloud2ai/devify/issues/{issue_number}"
+            f"https://github.com/oneprolabs/devify/issues/{issue_number}"
         ),
     )
     event = SimpleNamespace(
@@ -354,12 +354,12 @@ def test_adapter_updates_existing_github_issue(monkeypatch, github_config):
                     {
                         "external_id": "42",
                         "provider": "github_issue",
-                        "github_repo": "cloud2ai/devify",
+                        "github_repo": "oneprolabs/devify",
                     },
                     {
                         "external_id": "7",
                         "provider": "github_issue",
-                        "github_repo": "cloud2ai/devify",
+                        "github_repo": "oneprolabs/devify",
                     },
                 ],
                 "linking_supported": True,
@@ -382,13 +382,13 @@ def test_adapter_updates_existing_github_issue(monkeypatch, github_config):
         {
             "external_id": "7",
             "provider": "github_issue",
-            "github_repo": "cloud2ai/devify",
+            "github_repo": "oneprolabs/devify",
         }
     ]
     assert result.external_id == "42"
     assert result.external_url.endswith("/issues/42")
     assert result.metadata["provider"] == "github_issue"
-    assert result.metadata["github_repo"] == "cloud2ai/devify"
+    assert result.metadata["github_repo"] == "oneprolabs/devify"
     assert result.metadata["relay_strategy"] == "update"
 
 
@@ -469,8 +469,8 @@ def test_adapter_creates_new_issue_when_reference_target_changed(
         create_email_data = create_issue.call_args.kwargs["email_data"]
         assert create_email_data["related_issue_references"][0]["external_id"] == "42"
     assert result.external_id == "99"
-    assert result.external_url == "https://github.com/cloud2ai/devify/issues/99"
-    assert result.metadata["github_repo"] == "cloud2ai/devify"
+    assert result.external_url == "https://github.com/oneprolabs/devify/issues/99"
+    assert result.metadata["github_repo"] == "oneprolabs/devify"
 
 
 def test_subscription_serializer_validates_github_config_shape(github_config):
@@ -489,7 +489,7 @@ def test_subscription_serializer_validates_github_config_shape(github_config):
             "name": "GitHub",
             "config": {
                 "github": {
-                    "repo": "cloud2ai/devify",
+                    "repo": "oneprolabs/devify",
                     "token": "token",
                     "labels": "relay",
                 }
