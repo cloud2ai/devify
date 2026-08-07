@@ -43,7 +43,7 @@ describe('useRelayEditor GitHub Issue target', () => {
     const { editorForm, buildTestPayload } = createEditor()
     editorForm.target_type = 'github_issue'
     editorForm.language = 'English'
-    editorForm.githubConfig.repo = 'cloud2ai/devify'
+    editorForm.githubConfig.repo = 'oneprolabs/devify'
     editorForm.githubConfig.token = 'github-token'
     editorForm.githubConfig.labels_text = 'relay\nneeds-review'
     editorForm.githubConfig.assignees_text = 'octocat\nhubot'
@@ -54,7 +54,7 @@ describe('useRelayEditor GitHub Issue target', () => {
       issue_engine: 'github_issue',
       language: 'English',
       github: {
-        repo: 'cloud2ai/devify',
+        repo: 'oneprolabs/devify',
         token: 'github-token',
         labels: ['relay', 'needs-review'],
         assignees: ['octocat', 'hubot']
@@ -80,7 +80,7 @@ describe('useRelayEditor GitHub Issue target', () => {
       config: {
         language: 'English',
         github: {
-          repo: 'cloud2ai/devify',
+          repo: 'oneprolabs/devify',
           token: 'github-token',
           labels: ['relay', 'bug'],
           assignees: ['octocat']
@@ -89,7 +89,7 @@ describe('useRelayEditor GitHub Issue target', () => {
     })
 
     expect(editorForm.githubConfig).toEqual({
-      repo: 'cloud2ai/devify',
+      repo: 'oneprolabs/devify',
       token: 'github-token',
       labels_text: 'relay\nbug',
       assignees_text: 'octocat'
@@ -101,7 +101,7 @@ describe('useRelayEditor GitHub Issue target', () => {
     const { editorForm, persistEditor } = createEditor()
     editorForm.target_type = 'github_issue'
     editorForm.name = 'Devify GitHub'
-    editorForm.githubConfig.repo = 'cloud2ai/devify'
+    editorForm.githubConfig.repo = 'oneprolabs/devify'
     editorForm.githubConfig.token = 'github-token'
     editorForm.githubConfig.labels_text = 'relay\nfeature'
     editorForm.githubConfig.assignees_text = 'octocat'
@@ -114,7 +114,7 @@ describe('useRelayEditor GitHub Issue target', () => {
         config: expect.objectContaining({
           issue_engine: 'github_issue',
           github: {
-            repo: 'cloud2ai/devify',
+            repo: 'oneprolabs/devify',
             token: 'github-token',
             labels: ['relay', 'feature'],
             assignees: ['octocat']

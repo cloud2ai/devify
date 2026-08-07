@@ -7,7 +7,7 @@
 [![Django](https://img.shields.io/badge/backend-Django-092E20.svg?logo=django)](devify/)
 [![Vue 3](https://img.shields.io/badge/frontend-Vue%203-4FC08D.svg?logo=vuedotjs&logoColor=white)](ui/)
 [![Docker](https://img.shields.io/badge/deploy-Docker%20Compose-2496ED.svg?logo=docker&logoColor=white)](docker-compose.yml)
-[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/cloud2ai/devify/pulls)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/oneprolabs/devify/pulls)
 
 **企业级 AI 对话智能与数据应用平台**
 

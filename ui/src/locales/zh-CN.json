@@ -188,7 +188,7 @@
     "githubConfigTitle": "GitHub Issue 配置",
     "githubConfigHelp": "请使用对目标仓库拥有 Issues 写权限的细粒度个人访问 Token。",
     "githubRepo": "仓库",
-    "githubRepoPlaceholder": "例如 cloud2ai/devify",
+    "githubRepoPlaceholder": "例如 oneprolabs/devify",
     "githubRepoHelp": "请使用 owner/name 格式填写仓库。",
     "githubToken": "个人访问 Token",
     "githubTokenPlaceholder": "输入细粒度 GitHub Token",
